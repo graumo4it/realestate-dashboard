@@ -1,0 +1,28 @@
+:root {
+  /* Цвета */
+  --color-ink:          #0D1B2A;
+  --color-ink-light:    #3D4F60;
+  --color-muted:        #7A8B9A;
+  --color-accent:       #E8341C;
+  --color-accent-hover: #C4240E;
+  --color-bg:           #F2F4F7;
+  --color-surface:      #FFFFFF;
+  --color-border:       #DDE2E8;
+  --color-positive:     #0E7C56;
+  --color-negative:     #C0392B;
+  --color-positive-bg:  #E8F5F0;
+  --color-negative-bg:  #FDECEA;
+
+  /* Типографика */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body:    'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+
+  /* Размеры */
+  --radius:    6px;
+  --radius-lg: 12px;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.10);
+  --max-w:     1280px;
+  --sidebar-w: 240px;
+}

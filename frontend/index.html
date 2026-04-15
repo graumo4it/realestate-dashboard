@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Статистика рынка жилой недвижимости России</title>
+  <meta name="description" content="Интерактивные дашборды рынка жилой недвижимости: ипотека, цены, ввод жилья, спрос — данные ЦБ РФ, Росстат, ДОМ.РФ"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/variables.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+  <style>
+    .last-updates { margin-bottom: 48px; }
+    .category-card-icon span { font-size: 1.1rem; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_total">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
+    <div class="header-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="Поиск показателей…"/>
+    </div>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Открытые данные · Россия</div>
+    <h1>Статистика рынка<br/>жилой недвижимости</h1>
+    <p>Данные ЦБ РФ, Росстата, ДОМ.РФ, Росреестра и Домклик в одном месте.
+       Более 110 показателей с 2011 года.</p>
+    <div class="hero-meta" id="hero-meta">
+      <div class="hero-meta-item"><strong id="stat-indicators">—</strong>показателей</div>
+      <div class="hero-meta-item"><strong id="stat-sources">7</strong>источников</div>
+      <div class="hero-meta-item"><strong>2011–2026</strong>горизонт</div>
+    </div>
+  </div>
+</section>
+
+<!-- Main -->
+<main class="page-main">
+  <div class="page-wrap">
+
+    <!-- Разделы -->
+    <div>
+      <div class="section-title">Разделы статистики</div>
+      <div class="category-grid" id="category-grid">
+        <!-- Skeleton -->
+        ${Array(8).fill('<div class="skeleton" style="height:160px;border-radius:12px"></div>').join('')}
+      </div>
+    </div>
+
+    <!-- Последние обновления -->
+    <div class="last-updates">
+      <div class="section-title">Обновление данных</div>
+      <table class="updates-table">
+        <thead>
+          <tr>
+            <th>Источник</th>
+            <th>Последнее обновление</th>
+            <th>Строк загружено</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody id="updates-body">
+          <tr><td colspan="4" class="skeleton" style="height:40px"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div>Данные: Банк России, Росстат, ДОМ.РФ, Домклик, Росреестр, ЕМИСС &nbsp;·&nbsp;
+  Не является инвестиционной рекомендацией</div>
+</footer>
+
+<script>
+window.API_BASE = 'http://localhost:8000/api';
+</script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/sparkline.js"></script>
+<script>
+const CATEGORY_ICONS = {
+  macro: '📊', supply_volume: '🏗️', supply_per_capita: '👤',
+  housing_stock: '🏘️', under_construction: '🔨', apartments: '🏠',
+  concentration: '📈', prices: '💰', demand: '🔑',
+  mortgage_total: '🏦', mortgage_primary: '🆕', mortgage_secondary: '📋',
+  mortgage_debt: '⚠️', mortgage_domclick: '🖥️', mortgage_frankrg: '📰',
+  mortgage_subsidy: '🎯', mortgage_igs: '🌳',
+};
+
+async function loadPage() {
+  // Категории
+  const categories = await api.categories();
+  document.getElementById('stat-indicators').textContent =
+    categories.reduce((s, c) => s + (c.indicators_count || 0), 0);
+
+  const grid = document.getElementById('category-grid');
+  grid.innerHTML = categories.map(c => `
+    <a href="category.html?code=${c.code}" class="category-card">
+      <div class="category-card-icon"><span>${CATEGORY_ICONS[c.code] || '📊'}</span></div>
+      <h3>${c.name}</h3>
+      <p class="category-card-count">${c.indicators_count} показателей</p>
+    </a>
+  `).join('');
+
+  // Обновления
+  const updates = await api.lastUpdate();
+  const now = Date.now();
+  document.getElementById('updates-body').innerHTML = updates.map(u => {
+    const ts = u.last_updated ? new Date(u.last_updated) : null;
+    const age = ts ? (now - ts.getTime()) / 86400000 : Infinity;
+    const fresh = age < 3;
+    const dateStr = ts ? ts.toLocaleDateString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : 'Нет данных';
+    return `<tr>
+      <td><strong>${u.source_name}</strong></td>
+      <td>${dateStr}</td>
+      <td style="font-family:var(--font-mono)">${u.rows_upserted != null ? u.rows_upserted.toLocaleString('ru-RU') : '—'}</td>
+      <td><span class="status-dot ${ts ? (fresh ? 'fresh' : '') : ''}"></span>${ts ? (fresh ? 'Актуально' : 'Устарело') : 'Нет данных'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Search
+const searchInput = document.getElementById('search-input');
+let timer;
+searchInput.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const q = searchInput.value.trim();
+    document.getElementById('search-results')?.remove();
+    if (q.length < 2) return;
+    const results = await api.search(q);
+    if (!results.length) return;
+    const div = document.createElement('div');
+    div.id = 'search-results';
+    div.style.cssText = `position:absolute;top:100%;left:0;right:0;background:#fff;
+      border:1px solid var(--color-border);border-radius:var(--radius);
+      box-shadow:var(--shadow-md);z-index:200;max-height:320px;overflow-y:auto;`;
+    div.innerHTML = results.map(r => `
+      <a href="chart.html?code=${r.code}" style="display:flex;gap:12px;align-items:center;
+         padding:10px 16px;border-bottom:1px solid var(--color-border);font-size:.83rem;color:var(--color-ink);"
+         onmouseover="this.style.background='var(--color-bg)'" onmouseout="this.style.background=''">
+        <span style="font-family:var(--font-mono);font-size:.72rem;color:var(--color-muted);background:var(--color-bg);padding:2px 6px;border-radius:3px">${r.code}</span>
+        <span style="flex:1">${r.name}</span>
+        <span style="font-size:.72rem;color:var(--color-muted)">${r.category_name || ''}</span>
+      </a>
+    `).join('');
+    const wrap = document.querySelector('.header-search');
+    wrap.style.position = 'relative';
+    wrap.appendChild(div);
+    document.addEventListener('click', e => { if (!wrap.contains(e.target)) div.remove(); }, { once: true });
+  }, 300);
+});
+
+loadPage().catch(console.error);
+</script>
+</body>
+</html>
