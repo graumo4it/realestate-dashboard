@@ -1,74 +1,40 @@
 """
-Миграция данных из Excel → PostgreSQL
-Файл: Статистика_рынка_жилой_недвижимости_России_*.xlsx
+migration/excel_to_db.py
+
+Одноразовый импорт данных из Excel-файла в PostgreSQL.
+Использование: python migration/excel_to_db.py
+
+Требует .env файл с: DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+Excel-файл ожидается в: migration/data/<имя файла>.xlsx
 """
 
 import os
 import re
 import sys
+import math
 import logging
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
+import numpy as np
 import openpyxl
 import pandas as pd
 import psycopg2
-from psycopg2.extras import execute_values
+import psycopg2.extras
 from dotenv import load_dotenv
 
-load_dotenv()
+# ─── Загрузка .env ───────────────────────────────────────────────────────────
+load_dotenv(Path(__file__).parent.parent / ".env")
 
+# ─── Логирование ─────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
+    format="%(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 log = logging.getLogger(__name__)
 
-# ─── Конфигурация подключения ────────────────────────────────────────────────
-
-DB_CONFIG = {
-    "host":     os.getenv("DB_HOST", "localhost"),
-    "port":     int(os.getenv("DB_PORT", 5432)),
-    "dbname":   os.getenv("DB_NAME", "realestate"),
-    "user":     os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", ""),
-}
-
-# ─── Маппинг листов Excel ────────────────────────────────────────────────────
-
-SHEET_META = {
-    # sheet_name: (category_code, source_code, pattern, period_type, periodicity)
-    "1.1-1.3 Макроданные":            ("macro",              "rosstat", "C",       "period",        "annual"),
-    "2.1-2.5 Объем ввода жилья":      ("supply_volume",      "rosstat", "B-cum",   "period",        "monthly"),
-    "2.6-2.8 Объем ввода на душу":    ("supply_per_capita",  "rosstat", "B-cum",   "period",        "monthly"),
-    "2.9-2.13 Жилфонд":               ("housing_stock",      "rosstat", "C",       "point_in_time", "annual"),
-    "3.1-3.7 Строящ жилье (основные)":("under_construction", "domrf",   "A",       "point_in_time", "monthly"),
-    "3.13-3.16 Квартирография":       ("apartments",         "domrf",   "A",       "point_in_time", "monthly"),
-    "3.17-3.19 Ур-нь конк-ции Дом.рф":("concentration",     "domrf",   "A",       "point_in_time", "monthly"),
-    "4.1 Цены (Дом.рф)":              ("prices",             "domrf",   "B-simple","period",        "monthly"),
-    "4.4-4.5 Цены (Росстат)":         ("prices",             "rosstat", "B-simple","period",        "monthly"),
-    "4.8-4.9 Цены на паркинг Дом.рф": ("prices",            "domrf",   "B-simple","period",        "monthly"),
-    "5.1-5.2 Спрос (Росреестр)":      ("demand",             "rosreestr","B-cum",  "period",        "monthly"),
-    "5.3-5.4 Активность спроса":      ("demand",             "rosreestr","B-simple","period",       "monthly"),
-    "5.8-5.9 Спрос (Дом.рф)":         ("demand",            "domrf",   "B-simple","period",        "monthly"),
-    "5.10-5.11 Доступность жилья":    ("demand",             "rosstat", "C",       "period",        "annual"),
-    "5.12-5.15 Уровень потребности":  ("demand",             "rosstat", "C",       "period",        "annual"),
-    "5.20-5.22 Спрос паркинг Дом.рф": ("demand",            "domrf",   "B-simple","period",        "monthly"),
-    "6.1-6.6 Ипотека всего (БР)":     ("mortgage_total",     "cbr",     "B-cum",   "period",        "monthly"),
-    "6.7-6.12 Ипотека первич (БР)":   ("mortgage_primary",   "cbr",     "B-cum",   "period",        "monthly"),
-    "6.13-6.18 Ипотека вторич (БР)":  ("mortgage_secondary", "cbr",     "B-cum",   "period",        "monthly"),
-    "6.19-6.27 Ипотека (задолжен)":   ("mortgage_debt",      "cbr",     "A",       "point_in_time", "monthly"),
-    "6.28-6.34 Ипотека (Домклик)":    ("mortgage_domclick",  "domclick","B-simple","period",        "monthly"),
-    "6.35 Ипотека (Frank RG)":        ("mortgage_frankrg",   "cbr",     "B-simple","period",        "monthly"),
-    "6.36-6.45 Господдержка всего":   ("mortgage_subsidy",   "cbr",     "B-simple","period",        "monthly"),
-    "6.46-6.55 Господдержка ДДУ":     ("mortgage_subsidy",   "cbr",     "B-simple","period",        "monthly"),
-    "6.56-6.65 Доля ГП ДДУ":          ("mortgage_subsidy",   "cbr",     "B-simple","period",        "monthly"),
-    "6.66-6.67 Доля ипотеки в ДДУ":   ("mortgage_subsidy",   "cbr",     "B-simple","period",        "monthly"),
-    "6.70-6.75 Ипотека ИЖС всего БР": ("mortgage_igs",       "cbr",     "B-cum",   "period",        "monthly"),
-    "6.76-6.81 Ипотека ИЖС созд БР":  ("mortgage_igs",       "cbr",     "B-cum",   "period",        "monthly"),
-    "6.82-6.87 Ипотека ИЖС покуп БР": ("mortgage_igs",       "cbr",     "B-cum",   "period",        "monthly"),
-}
+# ─── Константы ───────────────────────────────────────────────────────────────
 
 MONTH_MAP = {
     "январь": 1,  "февраль": 2,  "март": 3,    "апрель": 4,
@@ -76,442 +42,948 @@ MONTH_MAP = {
     "сентябрь": 9,"октябрь": 10, "ноябрь": 11, "декабрь": 12,
 }
 
+# Строки первого столбца, которые нужно пропускать (не данные)
+SKIP_ROW_LABELS = {
+    "итого", "динамика", "динамика (к предыдущему периоду)",
+    "динамика (к соответствующему периоду прошлого года)",
+    "абсолютные значение", "абсолютные значения",
+    "источник данных:", "источник данных",
+    "дата последнего обновления:", "дата последнего обновления",
+    "к содержанию", "месяц", "дата", "год", "квартал",
+    "за год", "среднее га год", "среднее за год",
+    "январь-март", "январь-июнь", "январь-сентябрь", "январь-декабрь",
+    "-",
+}
+
+# Маппинг листов → паттерн
+# Имя листа «6.56-6.65 Доля ГП ДДУ » содержит пробел в конце — учитываем через strip()
+SHEET_PATTERN = {
+    "1.1-1.3 Макроданные":                  "C",
+    "2.1-2.5 Объем ввода жилья":            "B-cum",
+    "2.6-2.8 Объем ввода на душу":          "B-cum",
+    "2.9-2.13 Жилфонд":                     "C",
+    "3.1-3.7 Строящ жилье (основные)":      "A",
+    "3.13-3.16 Квартирография":             "A",
+    "3.17-3.19 Ур-нь конк-ции Дом.рф":     "A",
+    "4.1 Цены (Дом.рф)":                    "B-simple",
+    "4.4-4.5 Цены (Росстат)":               "C",
+    "4.8-4.9 Цены на паркинг Дом.рф":      "B-simple",
+    "5.1-5.2 Спрос (Росреестр)":           "B-cum",
+    "5.3-5.4 Активность спроса":            "C",
+    "5.8-5.9 Спрос (Дом.рф)":              "B-simple",
+    "5.10-5.11 Доступность жилья":          "C",
+    "5.12-5.15 Уровень потребности":        "C",
+    "5.20-5.22 Спрос паркинг Дом.рф":      "B-simple",
+    "6.1-6.6 Ипотека всего (БР)":          "B-cum",
+    "6.7-6.12 Ипотека первич (БР)":        "B-cum",
+    "6.13-6.18 Ипотека вторич (БР)":       "B-cum",
+    "6.19-6.27 Ипотека (задолжен)":        "A",
+    "6.28-6.34 Ипотека (Домклик)":         "B-simple",
+    "6.35 Ипотека (Frank RG)":             "A",
+    "6.36-6.45 Господдержка всего":         "B-simple",
+    "6.46-6.55 Господдержка ДДУ":          "B-simple",
+    "6.56-6.65 Доля ГП ДДУ":              "B-simple",  # реальное имя с пробелом в конце
+    "6.66-6.67 Доля ипотеки в ДДУ":       "C",
+    "6.70-6.75 Ипотека ИЖС всего БР":      "B-cum",
+    "6.76-6.81 Ипотека ИЖС созд БР":       "B-cum",
+    "6.82-6.87 Ипотека ИЖС покуп БР":      "B-cum",
+}
+
+# Маппинг листов → category_code
+SHEET_CATEGORY = {
+    "1.1-1.3 Макроданные":                  "macro",
+    "2.1-2.5 Объем ввода жилья":            "supply_volume",
+    "2.6-2.8 Объем ввода на душу":          "supply_per_capita",
+    "2.9-2.13 Жилфонд":                     "housing_stock",
+    "3.1-3.7 Строящ жилье (основные)":      "under_construction",
+    "3.13-3.16 Квартирография":             "apartments",
+    "3.17-3.19 Ур-нь конк-ции Дом.рф":     "concentration",
+    "4.1 Цены (Дом.рф)":                    "prices",
+    "4.4-4.5 Цены (Росстат)":               "prices",
+    "4.8-4.9 Цены на паркинг Дом.рф":      "prices",
+    "5.1-5.2 Спрос (Росреестр)":           "demand",
+    "5.3-5.4 Активность спроса":            "demand",
+    "5.8-5.9 Спрос (Дом.рф)":              "demand",
+    "5.10-5.11 Доступность жилья":          "demand",
+    "5.12-5.15 Уровень потребности":        "demand",
+    "5.20-5.22 Спрос паркинг Дом.рф":      "demand",
+    "6.1-6.6 Ипотека всего (БР)":          "mortgage_total",
+    "6.7-6.12 Ипотека первич (БР)":        "mortgage_primary",
+    "6.13-6.18 Ипотека вторич (БР)":       "mortgage_secondary",
+    "6.19-6.27 Ипотека (задолжен)":        "mortgage_debt",
+    "6.28-6.34 Ипотека (Домклик)":         "mortgage_domclick",
+    "6.35 Ипотека (Frank RG)":             "mortgage_frankrg",
+    "6.36-6.45 Господдержка всего":         "mortgage_subsidy",
+    "6.46-6.55 Господдержка ДДУ":          "mortgage_subsidy",
+    "6.56-6.65 Доля ГП ДДУ":              "mortgage_subsidy",
+    "6.66-6.67 Доля ипотеки в ДДУ":       "mortgage_subsidy",
+    "6.70-6.75 Ипотека ИЖС всего БР":      "mortgage_igs",
+    "6.76-6.81 Ипотека ИЖС созд БР":       "mortgage_igs",
+    "6.82-6.87 Ипотека ИЖС покуп БР":      "mortgage_igs",
+}
+
+# Маппинг листов → source_code
+SHEET_SOURCE = {
+    "1.1-1.3 Макроданные":                  "rosstat",
+    "2.1-2.5 Объем ввода жилья":            "rosstat",
+    "2.6-2.8 Объем ввода на душу":          "rosstat",
+    "2.9-2.13 Жилфонд":                     "rosstat",
+    "3.1-3.7 Строящ жилье (основные)":      "domrf",
+    "3.13-3.16 Квартирография":             "domrf",
+    "3.17-3.19 Ур-нь конк-ции Дом.рф":     "domrf",
+    "4.1 Цены (Дом.рф)":                    "domrf",
+    "4.4-4.5 Цены (Росстат)":               "rosstat",
+    "4.8-4.9 Цены на паркинг Дом.рф":      "domrf",
+    "5.1-5.2 Спрос (Росреестр)":           "rosreestr",
+    "5.3-5.4 Активность спроса":            "rosreestr",
+    "5.8-5.9 Спрос (Дом.рф)":              "domrf",
+    "5.10-5.11 Доступность жилья":          "rosstat",
+    "5.12-5.15 Уровень потребности":        "rosstat",
+    "5.20-5.22 Спрос паркинг Дом.рф":      "domrf",
+    "6.1-6.6 Ипотека всего (БР)":          "cbr",
+    "6.7-6.12 Ипотека первич (БР)":        "cbr",
+    "6.13-6.18 Ипотека вторич (БР)":       "cbr",
+    "6.19-6.27 Ипотека (задолжен)":        "cbr",
+    "6.28-6.34 Ипотека (Домклик)":         "domclick",
+    "6.35 Ипотека (Frank RG)":             "cbr",
+    "6.36-6.45 Господдержка всего":         "cbr",
+    "6.46-6.55 Господдержка ДДУ":          "cbr",
+    "6.56-6.65 Доля ГП ДДУ":              "cbr",
+    "6.66-6.67 Доля ипотеки в ДДУ":       "cbr",
+    "6.70-6.75 Ипотека ИЖС всего БР":      "cbr",
+    "6.76-6.81 Ипотека ИЖС созд БР":       "cbr",
+    "6.82-6.87 Ипотека ИЖС покуп БР":      "cbr",
+}
+
+# Начальные данные для таблицы sources
+SOURCES_SEED = [
+    ("cbr",       "Банк России",  "https://cbr.ru",              "monthly"),
+    ("emiss",     "ЕМИСС",        "https://www.fedstat.ru",       "monthly"),
+    ("domrf",     "ДОМ.РФ",       "https://наш.дом.рф",          "daily"),
+    ("rosstat",   "Росстат",      "https://rosstat.gov.ru",       "monthly"),
+    ("domclick",  "Домклик",      "https://domclick.ru",          "daily"),
+    ("sberindex", "Сбериндекс",   "https://sberindex.ru",         "daily"),
+    ("rosreestr", "Росреестр",    "https://rosreestr.gov.ru",     "monthly"),
+]
+
+# Начальные данные для таблицы categories
+CATEGORIES_SEED = [
+    ("macro",              "Макроданные",             1),
+    ("supply_volume",      "Объём ввода жилья",       2),
+    ("supply_per_capita",  "Ввод жилья на душу",      3),
+    ("housing_stock",      "Жилищный фонд",           4),
+    ("under_construction", "Строящееся жильё",        5),
+    ("apartments",         "Квартирография",          6),
+    ("concentration",      "Уровень концентрации",    7),
+    ("prices",             "Цены",                    8),
+    ("demand",             "Спрос",                   9),
+    ("mortgage_total",     "Ипотека (всего)",        10),
+    ("mortgage_primary",   "Ипотека (первичный)",    11),
+    ("mortgage_secondary", "Ипотека (вторичный)",    12),
+    ("mortgage_debt",      "Ипотека (задолженность)",13),
+    ("mortgage_domclick",  "Ипотека (Домклик)",      14),
+    ("mortgage_frankrg",   "Ипотека (Frank RG)",     15),
+    ("mortgage_subsidy",   "Господдержка",           16),
+    ("mortgage_igs",       "Ипотека ИЖС",            17),
+]
+
+
 # ─── Вспомогательные функции ─────────────────────────────────────────────────
 
-def get_visible_sheets(filepath: str) -> list[str]:
-    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
-    visible = [
-        name for name in wb.sheetnames
-        if wb[name].sheet_state == "visible" and name != "Содержание"
-    ]
-    wb.close()
-    return visible
-
-
-def extract_indicator_code(text: str) -> str | None:
-    """Извлекает код вида '6.1' из строки заголовка блока."""
-    m = re.match(r"^(\d+\.\d+)\s", str(text).strip())
-    return m.group(1) if m else None
-
-
-def extract_unit(text: str) -> str:
-    """Извлекает единицу измерения из названия показателя."""
-    patterns = [
-        r"\(([^)]*(?:руб\.|кв\. ?м|ед\.|%|млн|млрд|тыс\.|лет|чел)[^)]*)\)",
-        r",\s*(млн руб\.|тыс\. кв\. м|тыс\. ед\.|%|руб\.|кв\. м|ед\.)",
-    ]
-    for p in patterns:
-        m = re.search(p, str(text), re.IGNORECASE)
-        if m:
-            return m.group(1).strip()
-    return ""
-
-
-def parse_value(v) -> float | None:
-    """Парсит ячейку в float, возвращает None для 'х' и пустых."""
+def to_float(v) -> float | None:
+    """
+    Конвертирует любое значение (включая np.float64, str, None) в Python float.
+    Возвращает None для пустых/некорректных значений.
+    """
     if v is None:
         return None
-    s = str(v).strip()
-    if s in ("", "х", "x", "-", "н/д", "н.д.", "…", "..."):
+    # numpy scalar → python float
+    if isinstance(v, (np.floating, np.integer)):
+        f = float(v)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+    if isinstance(v, (int, float)):
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return float(v)
+    if isinstance(v, pd.Timestamp):
         return None
+    s = str(v).strip()
+    if s in ("х", "x", "X", "Х", "-", "–", "н/д", "", "nan", "NaN", "None"):
+        return None
+    # убираем пробелы как разделители тысяч
+    s = s.replace("\xa0", "").replace(" ", "").replace(",", ".")
     try:
-        return float(str(v).replace(" ", "").replace(",", "."))
+        f = float(s)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
     except (ValueError, TypeError):
         return None
 
 
-def is_dynamic_col(col_header: str) -> bool:
-    """Колонки с '/' в заголовке — это динамика, пропускаем."""
-    return "/" in str(col_header)
+def cell_str(v) -> str:
+    """Возвращает строковое представление ячейки (без NaN)."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and math.isnan(v):
+        return ""
+    if isinstance(v, pd.Timestamp):
+        return ""
+    return str(v).strip()
 
 
-def month_to_date(month_str: str, year: int) -> date | None:
-    m = MONTH_MAP.get(str(month_str).strip().lower())
+def is_year(v) -> bool:
+    """
+    Проверяет, является ли значение целым годом (2000–2035).
+    Дробные значения вида 2011.6 отклоняются — это данные, а не год.
+    """
+    try:
+        f = float(str(v).strip())
+        if f != int(f):          # отклоняем дробные: 2011.6, 2007.554
+            return False
+        y = int(f)
+        return 2000 <= y <= 2035
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
+def is_dynamic_col(v) -> bool:
+    """Колонки динамики вида '2024/2023' или 'к соответствующему...'."""
+    s = cell_str(v)
+    return "/" in s or s.lower().startswith("к соответствующему") or s.lower().startswith("динамика")
+
+
+def extract_code(text: str) -> str | None:
+    """
+    Извлекает код показателя вида '6.1' или '6.67.1' из начала строки.
+    Требует после кода пробел и нецифровой символ — это исключает даты вида '01.01.2014'.
+    """
+    if not isinstance(text, str):
+        return None
+    m = re.match(r"^\s*(\d{1,2}\.\d{1,3}(?:\.\d{1,2})?[а-яёa-z]?)\s+\D", text.strip())
+    return m.group(1) if m else None
+
+
+def extract_unit(name: str) -> str:
+    """Пытается найти единицу измерения в конце названия (в скобках или по ключевым словам)."""
+    if not isinstance(name, str):
+        return ""
+    # последние скобки
+    m = re.search(r"\(([^)]+)\)\s*$", name)
     if m:
-        return date(year, m, 1)
+        return m.group(1).strip()
+    for kw in ["млн.руб.", "млн руб.", "тыс. руб.", "руб.", "тыс. кв. м", "кв. м",
+               "тыс. ед.", "ед.", "%", "лет", "п.п.", "тыс.", "млн."]:
+        if kw in name:
+            return kw
+    return ""
+
+
+def make_label(d: date, periodicity: str) -> str:
+    months_ru = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                 "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+    if periodicity == "annual":
+        return str(d.year)
+    return f"{months_ru[d.month]} {d.year}"
+
+
+def to_date(v) -> date | None:
+    """
+    Конвертирует Timestamp / datetime / date / строку вида "01.01.2014" в date.
+    """
+    if isinstance(v, pd.Timestamp):
+        return v.date()
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    parts = cell_str(v).split()
+    if not parts:
+        return None
+    s = parts[0]
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
     return None
 
-# ─── Парсеры по паттернам ────────────────────────────────────────────────────
 
-def parse_pattern_A(df: pd.DataFrame) -> list[dict]:
+# ─── Поиск блоков показателей ────────────────────────────────────────────────
+
+def find_indicator_rows(df: pd.DataFrame) -> list[tuple[int, str, str]]:
     """
-    ПАТТЕРН A: данные на дату (point_in_time), первый столбец = datetime.
-    Листы: 3.x, 6.19-6.27
+    Сканирует DataFrame и находит все строки, начинающие блок показателя.
+    Признак: ячейка col[0] начинается с кода вида 'N.M '.
+    Возвращает список (row_index, code, full_name).
     """
-    records = []
-    # Ищем блоки: строки-заголовки с кодом показателя
-    header_rows = []
-    for idx, row in df.iterrows():
-        first = str(row.iloc[0]).strip() if row.iloc[0] is not None else ""
-        code = extract_indicator_code(first)
+    results = []
+    nrows = df.shape[0]
+    for i in range(nrows):
+        v = df.iloc[i, 0]
+        s = cell_str(v)
+        code = extract_code(s)
         if code:
-            header_rows.append((idx, code, first))
-
-    for i, (h_idx, code, title) in enumerate(header_rows):
-        # Строка заголовков столбцов
-        col_row_idx = h_idx + 1
-        if col_row_idx >= len(df):
-            continue
-        col_headers = df.iloc[col_row_idx].tolist()
-
-        # Определяем годовые столбцы (числа, без '/')
-        year_cols = {}
-        for j, h in enumerate(col_headers):
-            if j == 0:
-                continue
-            try:
-                y = int(float(str(h)))
-                if 2011 <= y <= 2030 and not is_dynamic_col(str(h)):
-                    year_cols[j] = y
-            except (ValueError, TypeError):
-                pass
-
-        # Строки данных
-        data_start = col_row_idx + 1
-        data_end = header_rows[i + 1][0] if i + 1 < len(header_rows) else len(df)
-
-        for r_idx in range(data_start, data_end):
-            row = df.iloc[r_idx]
-            date_val = row.iloc[0]
-            if pd.isnull(date_val) or str(date_val).strip() == "":
-                continue
-            try:
-                if isinstance(date_val, (pd.Timestamp, date)):
-                    period_date = pd.Timestamp(date_val).date()
-                else:
-                    period_date = pd.Timestamp(str(date_val)).date()
-            except Exception:
-                continue
-
-            for col_j, year in year_cols.items():
-                v = parse_value(row.iloc[col_j])
-                if v is not None:
-                    records.append({
-                        "indicator_code": code,
-                        "indicator_name": title,
-                        "period_date": period_date,
-                        "period_label": period_date.strftime("%B %Y"),
-                        "value": v,
-                    })
-    return records
+            results.append((i, code, s))
+    return results
 
 
-def parse_pattern_B_simple(df: pd.DataFrame) -> list[dict]:
-    """
-    ПАТТЕРН B-simple: один столбец на год, строки = месяцы.
-    """
+# ─── ПАТТЕРН A ───────────────────────────────────────────────────────────────
+#
+# Структура блока (реальная):
+#   row i:   "N.M Название показателя"
+#   row i+1: пустая
+#   row i+2: "Дата | 2020 | 2021 | 2022 | ... | YoY cols"
+#   row i+3+: "2021-01-01 | val2020 | val2021 | ..."
+#
+# Колонки с годами: is_year(header) and not is_dynamic_col(header)
+# Значение для года Y в строке с датой D берётся из колонки с заголовком Y,
+# только если D.year == Y (данные хранятся «по диагонали»).
+
+def parse_A(df: pd.DataFrame) -> list[dict]:
     records = []
-    header_rows = []
-    for idx, row in df.iterrows():
-        first = str(row.iloc[0]).strip() if row.iloc[0] is not None else ""
-        code = extract_indicator_code(first)
-        if code:
-            header_rows.append((idx, code, first))
+    nrows, ncols = df.shape
+    indicator_rows = find_indicator_rows(df)
 
-    for i, (h_idx, code, title) in enumerate(header_rows):
-        col_row_idx = h_idx + 1
-        if col_row_idx >= len(df):
-            continue
-        col_headers = df.iloc[col_row_idx].tolist()
+    for idx, (row_i, code, full_name) in enumerate(indicator_rows):
+        # Граница блока — следующий индикатор или конец листа
+        next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-        year_cols = {}
-        for j, h in enumerate(col_headers):
-            if j == 0:
-                continue
-            if is_dynamic_col(str(h)):
-                continue
-            try:
-                y = int(float(str(h)))
-                if 2011 <= y <= 2030:
-                    year_cols[j] = y
-            except (ValueError, TypeError):
-                pass
+        # Ищем строку заголовков (содержит год-числа в колонках)
+        header_row = None
+        for r in range(row_i + 1, min(row_i + 5, next_row)):
+            row_vals = df.iloc[r].tolist()
+            if any(is_year(v) and not is_dynamic_col(v) for v in row_vals):
+                header_row = r
+                break
 
-        data_start = col_row_idx + 1
-        data_end = header_rows[i + 1][0] if i + 1 < len(header_rows) else len(df)
-
-        for r_idx in range(data_start, data_end):
-            row = df.iloc[r_idx]
-            month_str = str(row.iloc[0]).strip().lower()
-            if month_str in ("итого", "итог", "всего", ""):
-                continue
-            if month_str not in MONTH_MAP:
-                continue
-
-            for col_j, year in year_cols.items():
-                v = parse_value(row.iloc[col_j])
-                if v is not None:
-                    period_date = date(year, MONTH_MAP[month_str], 1)
-                    records.append({
-                        "indicator_code": code,
-                        "indicator_name": title,
-                        "period_date": period_date,
-                        "period_label": f"{row.iloc[0].strip()} {year}",
-                        "value": v,
-                    })
-    return records
-
-
-def parse_pattern_B_cum(df: pd.DataFrame) -> list[dict]:
-    """
-    ПАТТЕРН B-cum: два подстолбца на год ('за период с начала года' и 'в том числе месяц').
-    Берём только 'в том числе месяц'.
-    """
-    records = []
-    header_rows = []
-    for idx, row in df.iterrows():
-        first = str(row.iloc[0]).strip() if row.iloc[0] is not None else ""
-        code = extract_indicator_code(first)
-        if code:
-            header_rows.append((idx, code, first))
-
-    for i, (h_idx, code, title) in enumerate(header_rows):
-        # Два ряда заголовков: год (row +1) и подтип (row +2)
-        year_row_idx = h_idx + 1
-        sub_row_idx = h_idx + 2
-        if sub_row_idx >= len(df):
-            continue
-
-        year_headers = df.iloc[year_row_idx].tolist()
-        sub_headers = df.iloc[sub_row_idx].tolist()
-
-        # Заполняем год вперёд (merged cells представлены как NaN после первого)
-        current_year = None
-        month_cols = []  # (col_index, year)
-        for j, (yh, sh) in enumerate(zip(year_headers, sub_headers)):
-            if j == 0:
-                continue
-            if is_dynamic_col(str(yh)):
-                continue
-            try:
-                y = int(float(str(yh)))
-                if 2011 <= y <= 2030:
-                    current_year = y
-            except (ValueError, TypeError):
-                pass
-            if current_year and "месяц" in str(sh).lower():
-                month_cols.append((j, current_year))
-
-        data_start = sub_row_idx + 1
-        data_end = header_rows[i + 1][0] if i + 1 < len(header_rows) else len(df)
-
-        for r_idx in range(data_start, data_end):
-            row = df.iloc[r_idx]
-            month_str = str(row.iloc[0]).strip().lower()
-            if month_str in ("итого", "итог", "всего", ""):
-                continue
-            if month_str not in MONTH_MAP:
-                continue
-
-            for col_j, year in month_cols:
-                v = parse_value(row.iloc[col_j])
-                if v is not None:
-                    period_date = date(year, MONTH_MAP[month_str], 1)
-                    records.append({
-                        "indicator_code": code,
-                        "indicator_name": title,
-                        "period_date": period_date,
-                        "period_label": f"{row.iloc[0].strip()} {year}",
-                        "value": v,
-                    })
-    return records
-
-
-def parse_pattern_C(df: pd.DataFrame) -> list[dict]:
-    """
-    ПАТТЕРН C: годовые данные, первый столбец = 'Год' или годовые строки.
-    """
-    records = []
-    header_rows = []
-    for idx, row in df.iterrows():
-        first = str(row.iloc[0]).strip() if row.iloc[0] is not None else ""
-        code = extract_indicator_code(first)
-        if code:
-            header_rows.append((idx, code, first))
-
-    for i, (h_idx, code, title) in enumerate(header_rows):
-        col_row_idx = h_idx + 1
-        if col_row_idx >= len(df):
-            continue
-
-        col_headers = df.iloc[col_row_idx].tolist()
-        # Для паттерна C: строки — это годы, столбцы могут быть показателями
-        # или наоборот: столбцы — годы.
-        # Определяем структуру: если первый столбец = 'Год', то строки — годы
-        first_col = str(col_headers[0]).strip().lower()
-        if "год" in first_col or "year" in first_col:
-            # Структура: строки — годы, data_col = 1
-            data_start = col_row_idx + 1
-            data_end = header_rows[i + 1][0] if i + 1 < len(header_rows) else len(df)
-            for r_idx in range(data_start, data_end):
-                row = df.iloc[r_idx]
-                year_val = row.iloc[0]
-                try:
-                    year = int(float(str(year_val)))
-                    if not (2011 <= year <= 2030):
+        # ── Режим 1: «широкий» формат — колонки = годы ──────────────────────
+        if header_row is not None:
+            headers = df.iloc[header_row].tolist()
+            # Если год встречается несколько раз (несколько категорий в одной таблице,
+            # например квартирография), берём только ПЕРВОЕ вхождение каждого года.
+            seen_years: set[int] = set()
+            year_cols = []
+            for ci, h in enumerate(headers):
+                if is_year(h) and not is_dynamic_col(h):
+                    yr = int(float(str(h)))
+                    if yr not in seen_years:
+                        seen_years.add(yr)
+                        year_cols.append((ci, yr))
+            if year_cols:
+                dp_list = []
+                for r in range(header_row + 1, next_row):
+                    first = df.iloc[r, 0]
+                    d = to_date(first)
+                    if d is None:
                         continue
-                except (ValueError, TypeError):
-                    continue
-                v = parse_value(row.iloc[1]) if len(row) > 1 else None
-                if v is not None:
+                    for ci, year in year_cols:
+                        if d.year != year:
+                            continue
+                        if ci >= ncols:
+                            continue
+                        val = to_float(df.iloc[r, ci])
+                        if val is None:
+                            continue
+                        dp_list.append({
+                            "period_date": d,
+                            "period_label": make_label(d, "monthly"),
+                            "value": val,
+                        })
+                if dp_list:
                     records.append({
                         "indicator_code": code,
-                        "indicator_name": title,
-                        "period_date": date(year, 1, 1),
-                        "period_label": str(year),
-                        "value": v,
+                        "indicator_name": full_name,
+                        "unit": extract_unit(full_name),
+                        "period_type": "point_in_time",
+                        "periodicity": "monthly",
+                        "data_points": dp_list,
                     })
-        else:
-            # Структура: столбцы — годы
-            year_cols = {}
-            for j, h in enumerate(col_headers):
-                if j == 0:
-                    continue
-                if is_dynamic_col(str(h)):
-                    continue
-                try:
-                    y = int(float(str(h)))
-                    if 2011 <= y <= 2030:
-                        year_cols[j] = y
-                except (ValueError, TypeError):
-                    pass
+                continue  # переходим к следующему показателю
 
-            data_start = col_row_idx + 1
-            data_end = header_rows[i + 1][0] if i + 1 < len(header_rows) else len(df)
-            for r_idx in range(data_start, data_end):
-                row = df.iloc[r_idx]
-                row_label = str(row.iloc[0]).strip().lower()
-                if row_label in ("итого", "итог", ""):
-                    continue
-                for col_j, year in year_cols.items():
-                    v = parse_value(row.iloc[col_j])
-                    if v is not None:
-                        records.append({
-                            "indicator_code": code,
-                            "indicator_name": title,
-                            "period_date": date(year, 1, 1),
-                            "period_label": str(year),
-                            "value": v,
-                        })
+        # ── Режим 2: «длинный» формат — col0=дата, col1=значение ────────────
+        # Используется когда заголовок содержит «Дата | Название_колонки | ...»
+        # без годов (пример: лист 6.35).
+        # Ищем строку с «Дата» в col0
+        long_header_row = None
+        for r in range(row_i + 1, min(row_i + 5, next_row)):
+            v = cell_str(df.iloc[r, 0]).lower()
+            if v == "дата":
+                long_header_row = r
+                break
+
+        if long_header_row is None:
+            continue
+
+        dp_list = []
+        for r in range(long_header_row + 1, next_row):
+            first = df.iloc[r, 0]
+            d = to_date(first)
+            if d is None:
+                continue
+            # Берём первый ненулевой числовой столбец справа от даты
+            val = to_float(df.iloc[r, 1]) if ncols > 1 else None
+            if val is None:
+                continue
+            dp_list.append({
+                "period_date": d,
+                "period_label": make_label(d, "monthly"),
+                "value": val,
+            })
+
+        if dp_list:
+            records.append({
+                "indicator_code": code,
+                "indicator_name": full_name,
+                "unit": extract_unit(full_name),
+                "period_type": "point_in_time",
+                "periodicity": "monthly",
+                "data_points": dp_list,
+            })
+
     return records
 
-# ─── Работа с БД ─────────────────────────────────────────────────────────────
 
-def get_or_create_indicator(
-    cur, code: str, name: str, category_code: str,
-    source_code: str, period_type: str, periodicity: str, unit: str
-) -> int:
-    cur.execute("SELECT id FROM indicators WHERE code = %s", (code,))
-    row = cur.fetchone()
-    if row:
-        return row[0]
+# ─── ПАТТЕРН B-simple ────────────────────────────────────────────────────────
+#
+# Структура блока (реальная):
+#   row i:   "N.M Название показателя"
+#   row i+1: пустая
+#   row i+2: "Дата | 2020 | 2021 | ... | YoY cols"  (заголовки; первый столбец = "Дата" или "Месяц")
+#   row i+3+: "Январь | v2020 | v2021 | ..."
+#   ...
+#   "Итого" → пропустить
+#
+# Колонки с годами: is_year(header) and not is_dynamic_col(header)
 
-    cur.execute("SELECT id FROM categories WHERE code = %s", (category_code,))
-    cat = cur.fetchone()
-    category_id = cat[0] if cat else None
+def parse_B_simple(df: pd.DataFrame) -> list[dict]:
+    records = []
+    nrows, ncols = df.shape
+    indicator_rows = find_indicator_rows(df)
 
-    cur.execute("SELECT id FROM sources WHERE code = %s", (source_code,))
-    src = cur.fetchone()
-    source_id = src[0] if src else None
+    for idx, (row_i, code, full_name) in enumerate(indicator_rows):
+        next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-    cur.execute("""
-        INSERT INTO indicators (code, name, category_id, source_id, period_type, periodicity, unit)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        RETURNING id
-    """, (code, name, category_id, source_id, period_type, periodicity, unit))
-    return cur.fetchone()[0]
+        # Ищем строку заголовков (год-числа в колонках, первый столбец = "Дата"/"Месяц")
+        header_row = None
+        for r in range(row_i + 1, min(row_i + 6, next_row)):
+            row_vals = df.iloc[r].tolist()
+            has_years = any(is_year(v) and not is_dynamic_col(v) for v in row_vals)
+            first_s = cell_str(row_vals[0]).lower()
+            if has_years and first_s in ("дата", "месяц", ""):
+                header_row = r
+                break
+            # Иногда первый столбец пустой, но годы есть
+            if has_years and first_s == "":
+                header_row = r
+                break
+
+        if header_row is None:
+            # Попробуем найти любую строку с годами в окне
+            for r in range(row_i + 1, min(row_i + 6, next_row)):
+                row_vals = df.iloc[r].tolist()
+                if any(is_year(v) and not is_dynamic_col(v) for v in row_vals):
+                    header_row = r
+                    break
+
+        if header_row is None:
+            continue
+
+        headers = df.iloc[header_row].tolist()
+        year_cols = [
+            (ci, int(float(str(h)))) for ci, h in enumerate(headers)
+            if is_year(h) and not is_dynamic_col(h)
+        ]
+
+        if not year_cols:
+            continue
+
+        dp_list = []
+        for r in range(header_row + 1, next_row):
+            first_s = cell_str(df.iloc[r, 0]).lower()
+
+            # Пропускаем служебные строки
+            if first_s in SKIP_ROW_LABELS or first_s == "":
+                continue
+
+            month_num = MONTH_MAP.get(first_s)
+            if month_num is None:
+                continue
+
+            for ci, year in year_cols:
+                if ci >= ncols:
+                    continue
+                val = to_float(df.iloc[r, ci])
+                if val is None:
+                    continue
+                d = date(year, month_num, 1)
+                dp_list.append({
+                    "period_date": d,
+                    "period_label": make_label(d, "monthly"),
+                    "value": val,
+                })
+
+        if dp_list:
+            records.append({
+                "indicator_code": code,
+                "indicator_name": full_name,
+                "unit": extract_unit(full_name),
+                "period_type": "period",
+                "periodicity": "monthly",
+                "data_points": dp_list,
+            })
+
+    return records
 
 
-def upsert_data_points(cur, rows: list[tuple]) -> int:
+# ─── ПАТТЕРН B-cum ───────────────────────────────────────────────────────────
+#
+# Структура блока (реальная):
+#   row i:   "N.M Название показателя"
+#   row i+1: пустая
+#   row i+2: "Абсолютные значения" (или пустая)
+#   row i+3: "Месяц | 2017 | NaN | 2018 | NaN | ..." (годы с NaN-разделителями)
+#   row i+4: "NaN | за период с начала года | в том числе месяц | ..."  (подзаголовки)
+#   row i+5+: "Январь | cum17 | month17 | cum18 | month18 | ..."
+#
+# Нам нужны ТОЛЬКО колонки с подзаголовком «в том числе месяц».
+
+# Подзаголовки, означающие «значение за конкретный месяц» (не накопленное с начала года)
+_MONTH_SUBHEADERS = (
+    "в том числе месяц",
+    "в т.ч. месяц",
+    "по кредитам, выданным в течение месяца",  # листы 6.3-6.6, 6.9-6.12 и др.
+)
+
+def _is_month_subheader(s: str) -> bool:
+    return any(kw in s for kw in _MONTH_SUBHEADERS)
+
+
+def parse_B_cum(df: pd.DataFrame) -> list[dict]:
+    records = []
+    nrows, ncols = df.shape
+    indicator_rows = find_indicator_rows(df)
+
+    for idx, (row_i, code, full_name) in enumerate(indicator_rows):
+        next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
+
+        # Ищем строку с ЧИСТЫМИ годами (не «2018/2017»).
+        # Блок динамики тоже содержит подзаголовки «в том числе месяц»,
+        # но его год-строка имеет вид «2018/2017» — is_dynamic_col отфильтрует их.
+        year_header_row = None
+        for r in range(row_i + 1, min(row_i + 8, next_row)):
+            row_vals = df.iloc[r].tolist()
+            # Только чистые годы (не содержат «/»)
+            clean_years = sum(
+                1 for v in row_vals
+                if is_year(v) and not is_dynamic_col(v)
+            )
+            if clean_years >= 2:
+                year_header_row = r
+                break
+
+        if year_header_row is None:
+            continue
+
+        # Строка подзаголовков — +1 или +2 строки ниже year_header_row.
+        # Ищем первую строку, содержащую хотя бы один месячный подзаголовок.
+        sub_header_row = None
+        sub_headers: list[str] = []
+        for offset in (1, 2):
+            r = year_header_row + offset
+            if r >= next_row:
+                break
+            candidates = [cell_str(v).lower() for v in df.iloc[r].tolist()]
+            if any(_is_month_subheader(s) for s in candidates):
+                sub_header_row = r
+                sub_headers = candidates
+                break
+
+        if sub_header_row is None:
+            continue
+
+        # Строим маппинг year → col_index для месячных колонок.
+        # Используем ТОЛЬКО год-строку с чистыми годами (year_header_row).
+        year_headers = df.iloc[year_header_row].tolist()
+        month_cols: dict[int, int] = {}  # year → col_index
+
+        for ci, s in enumerate(sub_headers):
+            if not _is_month_subheader(s):
+                continue
+            # Ближайший чистый год левее
+            for ci2 in range(ci - 1, -1, -1):
+                if is_year(year_headers[ci2]) and not is_dynamic_col(year_headers[ci2]):
+                    year = int(float(str(year_headers[ci2])))
+                    month_cols[year] = ci
+                    break
+
+        if not month_cols:
+            continue
+
+        dp_list = []
+        data_start = sub_header_row + 1
+
+        for r in range(data_start, next_row):
+            row_vals_cur = df.iloc[r].tolist()
+            first_s = cell_str(row_vals_cur[0]).lower()
+
+            # Стоп 1: строка «Динамика...» — дальше идут YoY-коэффициенты, не абсолюты
+            if "динамика" in first_s:
+                break
+
+            # Стоп 2: новый суб-блок с чистыми годами (второй заголовок внутри блока)
+            clean_year_count = sum(
+                1 for v in row_vals_cur
+                if is_year(v) and not is_dynamic_col(v)
+            )
+            if clean_year_count >= 2:
+                break
+
+            if first_s in SKIP_ROW_LABELS or first_s == "" or first_s == "итого":
+                continue
+
+            month_num = MONTH_MAP.get(first_s)
+            if month_num is None:
+                continue
+
+            for year, ci in month_cols.items():
+                if ci >= ncols:
+                    continue
+                val = to_float(df.iloc[r, ci])
+                if val is None:
+                    continue
+                d = date(year, month_num, 1)
+                dp_list.append({
+                    "period_date": d,
+                    "period_label": make_label(d, "monthly"),
+                    "value": val,
+                })
+
+        if dp_list:
+            records.append({
+                "indicator_code": code,
+                "indicator_name": full_name,
+                "unit": extract_unit(full_name),
+                "period_type": "period",
+                "periodicity": "monthly",
+                "data_points": dp_list,
+            })
+
+    return records
+
+
+# ─── ПАТТЕРН C ───────────────────────────────────────────────────────────────
+#
+# Структура блока (реальная):
+#   row i:   "N.M Название показателя"
+#   row i+1: пустая
+#   row i+2: "Абсолютные значение"
+#   row i+3: "Год | 2011 | 2012 | ... | 2025"   (заголовки годов)
+#   row i+4: "Итого" или "Значение" — строка абсолютных значений
+#   row i+5: пустая
+#   row i+6: "Динамика..." — начало блока динамики, стоп
+#
+# Для 1.2 (квартальные): строки «1», «2», «3», «4», «За год» —
+# нам нужна строка «За год» (годовой итог).
+#
+# Для 5.10-5.11 (квартальные): берём «Среднее га год» / «Среднее за год».
+
+def parse_C(df: pd.DataFrame) -> list[dict]:
+    records = []
+    nrows, ncols = df.shape
+    indicator_rows = find_indicator_rows(df)
+
+    for idx, (row_i, code, full_name) in enumerate(indicator_rows):
+        next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
+
+        # Ищем строку с заголовками годов (содержит ≥2 годов)
+        header_row = None
+        for r in range(row_i + 1, min(row_i + 8, next_row)):
+            row_vals = df.iloc[r].tolist()
+            year_count = sum(1 for v in row_vals if is_year(v))
+            if year_count >= 2:
+                header_row = r
+                break
+
+        if header_row is None:
+            continue
+
+        headers = df.iloc[header_row].tolist()
+        year_cols = [
+            (ci, int(float(str(h)))) for ci, h in enumerate(headers)
+            if is_year(h)
+        ]
+
+        if not year_cols:
+            continue
+
+        # Ищем строку(и) с данными — до строки «Динамика» или следующего индикатора
+        dp_list = []
+        for r in range(header_row + 1, next_row):
+            first_s = cell_str(df.iloc[r, 0]).lower()
+
+            # Стоп-условия
+            if "динамика" in first_s:
+                break
+            if first_s in ("", "абсолютные значение", "абсолютные значения"):
+                continue
+            # Пропускаем строки с пометкой источника или даты
+            if any(kw in first_s for kw in ("источник", "дата последнего", "к содержанию")):
+                break
+
+            # Берём строки-итоги:
+            # «итого», «значение», «за год», «среднее га год», «среднее за год»
+            # А также числовые строки с квартальными данными (1, 2, 3, 4)
+            is_summary = first_s in (
+                "итого", "значение", "за год",
+                "среднее га год", "среднее за год",
+                "среднегодовое значение",
+            )
+            # Для годовых данных (лист «2.9-2.13») строка называется «Значение»
+            is_quarterly_total = first_s in ("за год", "среднее га год", "среднее за год")
+
+            if not is_summary:
+                continue
+
+            for ci, year in year_cols:
+                if ci >= ncols:
+                    continue
+                val = to_float(df.iloc[r, ci])
+                if val is None:
+                    continue
+                d = date(year, 1, 1)
+                dp_list.append({
+                    "period_date": d,
+                    "period_label": str(year),
+                    "value": val,
+                })
+            # Берём только первую подходящую строку
+            if dp_list:
+                break
+
+        if dp_list:
+            records.append({
+                "indicator_code": code,
+                "indicator_name": full_name,
+                "unit": extract_unit(full_name),
+                "period_type": "period",
+                "periodicity": "annual",
+                "data_points": dp_list,
+            })
+
+    return records
+
+
+# ─── Диспетчер паттернов ─────────────────────────────────────────────────────
+
+PATTERN_PARSERS = {
+    "A":        parse_A,
+    "B-simple": parse_B_simple,
+    "B-cum":    parse_B_cum,
+    "C":        parse_C,
+}
+
+
+# ─── БД: подключение и справочники ──────────────────────────────────────────
+
+def get_connection():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", 5432)),
+        dbname=os.getenv("DB_NAME", "realestate"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", ""),
+    )
+
+
+def seed_references(conn):
+    with conn.cursor() as cur:
+        for code, name, base_url, freq in SOURCES_SEED:
+            cur.execute("""
+                INSERT INTO sources (code, name, base_url, update_freq)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (code) DO NOTHING
+            """, (code, name, base_url, freq))
+        for code, name, sort in CATEGORIES_SEED:
+            cur.execute("""
+                INSERT INTO categories (code, name, sort_order)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (code) DO NOTHING
+            """, (code, name, sort))
+    conn.commit()
+
+
+def get_id(conn, table: str, code: str) -> int | None:
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT id FROM {table} WHERE code = %s", (code,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+def upsert_indicator(conn, rec: dict, category_id, source_id, sort_order: int) -> int:
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO indicators
+                (code, name, unit, period_type, periodicity, category_id, source_id,
+                 geo_level, is_public, chart_type, sort_order, last_updated)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,'russia',TRUE,'line',%s,NOW())
+            ON CONFLICT (code) DO UPDATE SET
+                name         = EXCLUDED.name,
+                unit         = EXCLUDED.unit,
+                period_type  = EXCLUDED.period_type,
+                periodicity  = EXCLUDED.periodicity,
+                last_updated = NOW()
+            RETURNING id
+        """, (
+            rec["indicator_code"], rec["indicator_name"], rec["unit"],
+            rec["period_type"], rec["periodicity"],
+            category_id, source_id, sort_order,
+        ))
+        return cur.fetchone()[0]
+
+
+def upsert_data_points(conn, indicator_id: int, dp_list: list[dict]) -> int:
+    if not dp_list:
+        return 0
+    # Дедупликация: если парсер вернул несколько значений для одной даты,
+    # оставляем последнее (последнее вхождение в списке считается приоритетным).
+    deduped: dict[date, dict] = {}
+    for dp in dp_list:
+        if dp.get("value") is not None:
+            deduped[dp["period_date"]] = dp
+    # Финальная гарантия: все value — Python float, не numpy
+    rows = [
+        (indicator_id, dp["period_date"], dp.get("period_label", ""),
+         float(dp["value"]), False)
+        for dp in deduped.values()
+    ]
     if not rows:
         return 0
-    execute_values(cur, """
-        INSERT INTO data_points (indicator_id, period_date, period_label, value)
-        VALUES %s
-        ON CONFLICT (indicator_id, period_date)
-        DO UPDATE SET value = EXCLUDED.value, period_label = EXCLUDED.period_label
-    """, rows)
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(cur, """
+            INSERT INTO data_points
+                (indicator_id, period_date, period_label, value, is_preliminary)
+            VALUES %s
+            ON CONFLICT (indicator_id, period_date) DO UPDATE SET
+                value          = EXCLUDED.value,
+                period_label   = EXCLUDED.period_label,
+                is_preliminary = EXCLUDED.is_preliminary
+        """, rows, template="(%s,%s,%s,%s,%s)")
     return len(rows)
 
-# ─── Основной процесс ────────────────────────────────────────────────────────
 
-def migrate(filepath: str):
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
+# ─── Основная функция ────────────────────────────────────────────────────────
 
-    visible_sheets = get_visible_sheets(filepath)
-    total_rows = 0
+def find_excel_file() -> Path:
+    data_dir = Path(__file__).parent / "data"
+    for pattern in ("*.xlsx", "*.xls"):
+        files = list(data_dir.glob(pattern))
+        if files:
+            return files[0]
+    raise FileNotFoundError(
+        f"Excel-файл не найден в {data_dir}. "
+        "Поместите файл в migration/data/ и перезапустите скрипт."
+    )
 
-    for sheet_name in visible_sheets:
-        if sheet_name not in SHEET_META:
-            log.info(f"SKIPPED (no meta): {sheet_name}")
+
+def normalize_sheet_name(name: str) -> str:
+    """Убирает trailing пробелы из имени листа для поиска в SHEET_PATTERN."""
+    return name.strip()
+
+
+def main():
+    filepath = find_excel_file()
+    log.info(f"Excel-файл: {filepath}\n")
+
+    # Определяем видимые листы через openpyxl
+    wb = openpyxl.load_workbook(str(filepath), read_only=True, data_only=True)
+    # Сохраняем оригинальные имена (с пробелами) для pandas, нормализованные — для SHEET_PATTERN
+    all_sheets = {name: wb[name].sheet_state for name in wb.sheetnames}
+    wb.close()
+
+    visible_sheets = [
+        name for name, state in all_sheets.items()
+        if state == "visible" and name.strip() != "Содержание"
+    ]
+    log.info(f"Видимых листов (без 'Содержание'): {len(visible_sheets)}\n")
+
+    conn = get_connection()
+    seed_references(conn)
+
+    stats = {"total": len(all_sheets), "success": 0, "skipped": 0, "error": 0, "total_points": 0}
+
+    for sheet_name, state in all_sheets.items():
+        norm_name = normalize_sheet_name(sheet_name)
+
+        # Скрытые листы и Содержание
+        if state != "visible" or norm_name == "Содержание":
+            log.info(f"[SKIPPED] Лист «{sheet_name}»: {'скрытый лист' if state != 'visible' else 'содержание'}")
+            stats["skipped"] += 1
             continue
 
-        category_code, source_code, pattern, period_type, periodicity = SHEET_META[sheet_name]
+        # Паттерн — ищем по нормализованному имени
+        pattern = SHEET_PATTERN.get(norm_name)
+        if pattern is None:
+            log.info(f"[SKIPPED] Лист «{sheet_name}»: паттерн не определён")
+            stats["skipped"] += 1
+            continue
 
         try:
-            df = pd.read_excel(filepath, sheet_name=sheet_name, header=None)
-        except Exception as e:
-            log.error(f"ERROR reading sheet '{sheet_name}': {e}")
-            continue
+            df = pd.read_excel(str(filepath), sheet_name=sheet_name, header=None)
+            parser_fn = PATTERN_PARSERS[pattern]
+            parsed_records = parser_fn(df)
 
-        try:
-            if pattern == "A":
-                records = parse_pattern_A(df)
-            elif pattern == "B-simple":
-                records = parse_pattern_B_simple(df)
-            elif pattern == "B-cum":
-                records = parse_pattern_B_cum(df)
-            elif pattern == "C":
-                records = parse_pattern_C(df)
-            else:
-                log.warning(f"Unknown pattern '{pattern}' for sheet '{sheet_name}'")
-                continue
-        except Exception as e:
-            log.error(f"ERROR parsing sheet '{sheet_name}': {e}", exc_info=True)
-            continue
+            category_id = get_id(conn, "categories", SHEET_CATEGORY.get(norm_name, ""))
+            source_id   = get_id(conn, "sources",    SHEET_SOURCE.get(norm_name, ""))
 
-        # Группируем по показателям
-        by_indicator: dict[str, list] = {}
-        for r in records:
-            key = r["indicator_code"]
-            by_indicator.setdefault(key, []).append(r)
+            sheet_indicators = 0
+            sheet_points = 0
 
-        sheet_rows = 0
-        for ind_code, ind_records in by_indicator.items():
-            first = ind_records[0]
-            unit = extract_unit(first["indicator_name"])
-            ind_id = get_or_create_indicator(
-                cur, ind_code, first["indicator_name"],
-                category_code, source_code, period_type, periodicity, unit
+            for sort_idx, rec in enumerate(parsed_records):
+                ind_id = upsert_indicator(conn, rec, category_id, source_id, sort_idx)
+                pts = upsert_data_points(conn, ind_id, rec["data_points"])
+                sheet_indicators += 1
+                sheet_points += pts
+
+            conn.commit()
+            stats["success"] += 1
+            stats["total_points"] += sheet_points
+
+            log.info(
+                f"[SUCCESS] Лист «{sheet_name}»: "
+                f"{sheet_indicators} показателей, {sheet_points} точек данных"
             )
-            rows = [
-                (ind_id, r["period_date"], r["period_label"], r["value"])
-                for r in ind_records
-            ]
-            upserted = upsert_data_points(cur, rows)
-            sheet_rows += upserted
 
-        conn.commit()
-        total_rows += sheet_rows
-        log.info(f"SUCCESS: {sheet_name} | indicators={len(by_indicator)} | points={sheet_rows}")
+        except Exception as exc:
+            conn.rollback()
+            stats["error"] += 1
+            log.info(f"[ERROR]   Лист «{sheet_name}»: {exc}")
+            import traceback
+            traceback.print_exc()
 
-    # Обновляем materialized view
-    log.info("Refreshing materialized view data_points_with_dynamics...")
+    # Обновление materialized view
     try:
-        cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY data_points_with_dynamics")
+        log.info("\nОбновление materialized view data_points_with_dynamics...")
+        with conn.cursor() as cur:
+            cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY data_points_with_dynamics")
         conn.commit()
-    except Exception as e:
-        log.warning(f"Could not refresh materialized view: {e}")
+        log.info("Materialized view обновлён.")
+    except Exception as exc:
+        log.info(f"[WARNING] Не удалось обновить materialized view: {exc}")
 
-    cur.close()
     conn.close()
-    log.info(f"Migration complete. Total rows upserted: {total_rows}")
+
+    log.info("\n" + "=" * 60)
+    log.info("ИТОГО:")
+    log.info(f"  Всего листов:   {stats['total']}")
+    log.info(f"  Успешно:        {stats['success']}")
+    log.info(f"  Пропущено:      {stats['skipped']}")
+    log.info(f"  Ошибок:         {stats['error']}")
+    log.info(f"  Точек данных:   {stats['total_points']}")
+    log.info("=" * 60)
 
 
 if __name__ == "__main__":
-    excel_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/Статистика_рынка_жилой_недвижимости_России.xlsx")
-    if not excel_path.exists():
-        log.error(f"File not found: {excel_path}")
-        sys.exit(1)
-    migrate(str(excel_path))
+    main()
