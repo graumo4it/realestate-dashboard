@@ -34,32 +34,34 @@ class IndicatorBrief(BaseModel):
     last_updated:         Optional[datetime]
     yoy_change:           Optional[Decimal]
     yoy_change_pct:       Optional[Decimal]
+    mom_change_pct:       Optional[Decimal] = None
 
 
 class IndicatorFull(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id:          int
-    code:        str
-    name:        str
-    unit:        Optional[str]
-    periodicity: Optional[str]
-    period_type: Optional[str]
-    geo_level:   Optional[str]
-    description: Optional[str]
-    source_url:  Optional[str]
-    chart_type:  Optional[str]
+    id:           int
+    code:         str
+    name:         str
+    unit:         Optional[str]
+    periodicity:  Optional[str]
+    period_type:  Optional[str]
+    geo_level:    Optional[str]
+    description:  Optional[str]
+    source_url:   Optional[str]
+    chart_type:   Optional[str]
     last_updated: Optional[datetime]
-    category:    Optional[CategoryOut]
-    source:      Optional[SourceOut]
+    category:     Optional[CategoryOut]
+    source:       Optional[SourceOut]
 
 
 class DataPointOut(BaseModel):
-    date:              date
-    value:             Optional[Decimal]
-    yoy_change_pct:    Optional[Decimal]
-    prev_year_value:   Optional[Decimal]
-    label:             Optional[str]
-    is_preliminary:    bool = False
+    date:            date
+    value:           Optional[Decimal]
+    yoy_change_pct:  Optional[Decimal]
+    mom_change_pct:  Optional[Decimal] = None
+    prev_year_value: Optional[Decimal]
+    label:           Optional[str]
+    is_preliminary:  bool = False
 
 
 class TimeSeriesOut(BaseModel):
@@ -68,15 +70,15 @@ class TimeSeriesOut(BaseModel):
 
 
 class SearchResult(BaseModel):
-    id:   int
-    code: str
-    name: str
-    unit: Optional[str]
+    id:            int
+    code:          str
+    name:          str
+    unit:          Optional[str]
     category_name: Optional[str]
 
 
 class LastUpdateItem(BaseModel):
-    source_code:  str
-    source_name:  str
-    last_updated: Optional[datetime]
+    source_code:   str
+    source_name:   str
+    last_updated:  Optional[datetime]
     rows_upserted: Optional[int]

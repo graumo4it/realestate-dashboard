@@ -45,15 +45,24 @@ function fmtDateFull(dateStr) {
   return `${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function deltaHtml(pct) {
-  if (pct == null) return '';
-  const n = Number(pct);
-  if (Math.abs(n) < 0.05) {
-    return `<span class="delta flat">0%</span>`;
+/**
+ * Форматирует динамику показателя.
+ * @param {number} val - значение динамики
+ * @param {boolean} isPp - если true, показывает п.п. вместо %
+ */
+function deltaHtml(val, isPp = false) {
+  if (val == null) return '';
+  const n = Number(val);
+  const threshold = isPp ? 0.001 : 0.05;
+  if (Math.abs(n) < threshold) {
+    return `<span class="delta flat">${isPp ? '0 п.п.' : '0%'}</span>`;
   }
   const cls = n > 0 ? 'up' : 'down';
   const arrow = n > 0 ? '↑' : '↓';
-  return `<span class="delta ${cls}">${arrow} ${fmtPct(Math.abs(n), false)}</span>`;
+  const label = isPp
+    ? `${fmtNum(Math.abs(n), 2)} п.п.`
+    : fmtPct(Math.abs(n), false);
+  return `<span class="delta ${cls}">${arrow} ${label}</span>`;
 }
 
 function dateFromStr(s) {
@@ -66,4 +75,18 @@ function rangeStart(years) {
   const d = new Date();
   d.setFullYear(d.getFullYear() - years);
   return d.toISOString().slice(0, 10);
+}
+
+// Убирает порядковый код и единицы из названия индикатора
+function cleanName(name) {
+  if (!name) return name;
+  let s = name.replace(/^\d+\.\d+\s+/, '');
+  s = s.replace(/,\s*[^,]+$/, v => {
+    const unit = v.replace(/^,\s*/, '').trim();
+    if (unit.length <= 20 && /^[\w\s\.\/]+$/.test(unit.replace(/[а-яёА-ЯЁ]/g, 'x'))) {
+      return '';
+    }
+    return v;
+  });
+  return s.trim();
 }

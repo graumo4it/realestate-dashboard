@@ -10,7 +10,6 @@
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/chart.css"/>
   <style>
-    /* Indicator list */
     .indicator-list { display: flex; flex-direction: column; gap: 0; }
     .indicator-row {
       display: grid;
@@ -35,26 +34,8 @@
     .indicator-name { font-size: .9rem; font-weight: 500; }
     .indicator-name a { color: var(--color-ink); }
     .indicator-name a:hover { color: var(--color-accent); }
-    .indicator-code {
-      font-family: var(--font-mono);
-      font-size: .72rem;
-      color: var(--color-muted);
-      background: var(--color-bg);
-      padding: 2px 6px;
-      border-radius: 3px;
-      margin-right: 8px;
-    }
-    .indicator-value {
-      font-family: var(--font-mono);
-      font-size: 1rem;
-      font-weight: 600;
-      text-align: right;
-    }
-    .indicator-period {
-      font-size: .72rem;
-      color: var(--color-muted);
-      text-align: right;
-    }
+    .indicator-value { font-family: var(--font-mono); font-size: 1rem; font-weight: 600; text-align: right; }
+    .indicator-period { font-size: .72rem; color: var(--color-muted); text-align: right; }
     .indicator-sparkline { display: flex; justify-content: center; }
     .list-header {
       display: grid;
@@ -71,17 +52,8 @@
       border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
     .page-content { flex: 1; }
-    .page-heading {
-      font-family: var(--font-display);
-      font-size: 1.8rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .page-heading-sub {
-      font-size: .9rem;
-      color: var(--color-muted);
-      margin-bottom: 32px;
-    }
+    .page-heading { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+    .page-heading-sub { font-size: .9rem; color: var(--color-muted); margin-bottom: 32px; }
   </style>
 </head>
 <body>
@@ -103,7 +75,7 @@
   <div class="page-wrap">
     <div class="chart-layout">
 
-      <!-- Sidebar -->
+      <!-- Sidebar навигация -->
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-heading">Разделы</div>
         <div id="sidebar-links"></div>
@@ -126,7 +98,12 @@
           <div style="text-align:center">Динамика</div>
         </div>
         <div class="indicator-list indicator-row-wrap" id="indicator-list">
-          ${Array(6).fill('<div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>').join('')}
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
+          <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
         </div>
       </div>
     </div>
@@ -146,7 +123,6 @@ const params  = new URLSearchParams(location.search);
 const catCode = params.get('code') || 'mortgage_total';
 
 async function loadPage() {
-  // Сайдбар
   const categories = await api.categories();
   const nav = document.getElementById('main-nav');
   nav.innerHTML = categories.slice(0, 8).map(c =>
@@ -158,7 +134,6 @@ async function loadPage() {
     `<a href="category.html?code=${c.code}" class="sidebar-link ${c.code === catCode ? 'active' : ''}">${c.name}</a>`
   ).join('');
 
-  // Показатели
   const indicators = await api.categoryIndicators(catCode);
   const cat = categories.find(c => c.code === catCode);
 
@@ -176,22 +151,21 @@ async function loadPage() {
     row.className = 'indicator-row';
     const sparkEl = document.createElement('div');
     sparkEl.className = 'indicator-sparkline';
+    const pp = ind.unit === '%';
 
     row.innerHTML = `
       <div class="indicator-name">
-        <span class="indicator-code">${ind.code}</span>
-        <a href="chart.html?code=${ind.code}">${ind.name}</a>
+        <a href="chart.html?code=${ind.code}">${cleanName(ind.name)}</a>
       </div>
       <div>
         <div class="indicator-value">${ind.last_value != null ? fmtValue(ind.last_value) : '—'}</div>
         <div class="indicator-period">${ind.last_period_label || ''} ${ind.unit ? '· ' + ind.unit : ''}</div>
       </div>
-      <div style="text-align:center">${deltaHtml(ind.yoy_change_pct)}</div>
+      <div style="text-align:center">${deltaHtml(ind.yoy_change_pct, pp)}</div>
     `;
     row.appendChild(sparkEl);
     list.appendChild(row);
 
-    // Sparkline: подгружаем данные
     (async () => {
       try {
         const data = await api.indicatorData(ind.code, rangeStart(2));

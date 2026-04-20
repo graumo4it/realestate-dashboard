@@ -8,6 +8,8 @@ migration/excel_to_db.py
 Excel-файл ожидается в: migration/data/<имя файла>.xlsx
 """
 
+from __future__ import annotations
+
 import os
 import re
 import sys
@@ -15,6 +17,7 @@ import math
 import logging
 from datetime import date, datetime
 from pathlib import Path
+from typing import Optional, List, Dict, Tuple
 
 import numpy as np
 import openpyxl
@@ -42,7 +45,6 @@ MONTH_MAP = {
     "сентябрь": 9,"октябрь": 10, "ноябрь": 11, "декабрь": 12,
 }
 
-# Строки первого столбца, которые нужно пропускать (не данные)
 SKIP_ROW_LABELS = {
     "итого", "динамика", "динамика (к предыдущему периоду)",
     "динамика (к соответствующему периоду прошлого года)",
@@ -55,8 +57,6 @@ SKIP_ROW_LABELS = {
     "-",
 }
 
-# Маппинг листов → паттерн
-# Имя листа «6.56-6.65 Доля ГП ДДУ » содержит пробел в конце — учитываем через strip()
 SHEET_PATTERN = {
     "1.1-1.3 Макроданные":                  "C",
     "2.1-2.5 Объем ввода жилья":            "B-cum",
@@ -82,14 +82,13 @@ SHEET_PATTERN = {
     "6.35 Ипотека (Frank RG)":             "A",
     "6.36-6.45 Господдержка всего":         "B-simple",
     "6.46-6.55 Господдержка ДДУ":          "B-simple",
-    "6.56-6.65 Доля ГП ДДУ":              "B-simple",  # реальное имя с пробелом в конце
+    "6.56-6.65 Доля ГП ДДУ":              "B-simple",
     "6.66-6.67 Доля ипотеки в ДДУ":       "C",
     "6.70-6.75 Ипотека ИЖС всего БР":      "B-cum",
     "6.76-6.81 Ипотека ИЖС созд БР":       "B-cum",
     "6.82-6.87 Ипотека ИЖС покуп БР":      "B-cum",
 }
 
-# Маппинг листов → category_code
 SHEET_CATEGORY = {
     "1.1-1.3 Макроданные":                  "macro",
     "2.1-2.5 Объем ввода жилья":            "supply_volume",
@@ -122,7 +121,6 @@ SHEET_CATEGORY = {
     "6.82-6.87 Ипотека ИЖС покуп БР":      "mortgage_igs",
 }
 
-# Маппинг листов → source_code
 SHEET_SOURCE = {
     "1.1-1.3 Макроданные":                  "rosstat",
     "2.1-2.5 Объем ввода жилья":            "rosstat",
@@ -155,7 +153,6 @@ SHEET_SOURCE = {
     "6.82-6.87 Ипотека ИЖС покуп БР":      "cbr",
 }
 
-# Начальные данные для таблицы sources
 SOURCES_SEED = [
     ("cbr",       "Банк России",  "https://cbr.ru",              "monthly"),
     ("emiss",     "ЕМИСС",        "https://www.fedstat.ru",       "monthly"),
@@ -166,7 +163,6 @@ SOURCES_SEED = [
     ("rosreestr", "Росреестр",    "https://rosreestr.gov.ru",     "monthly"),
 ]
 
-# Начальные данные для таблицы categories
 CATEGORIES_SEED = [
     ("macro",              "Макроданные",             1),
     ("supply_volume",      "Объём ввода жилья",       2),
@@ -190,14 +186,9 @@ CATEGORIES_SEED = [
 
 # ─── Вспомогательные функции ─────────────────────────────────────────────────
 
-def to_float(v) -> float | None:
-    """
-    Конвертирует любое значение (включая np.float64, str, None) в Python float.
-    Возвращает None для пустых/некорректных значений.
-    """
+def to_float(v):
     if v is None:
         return None
-    # numpy scalar → python float
     if isinstance(v, (np.floating, np.integer)):
         f = float(v)
         if math.isnan(f) or math.isinf(f):
@@ -212,7 +203,6 @@ def to_float(v) -> float | None:
     s = str(v).strip()
     if s in ("х", "x", "X", "Х", "-", "–", "н/д", "", "nan", "NaN", "None"):
         return None
-    # убираем пробелы как разделители тысяч
     s = s.replace("\xa0", "").replace(" ", "").replace(",", ".")
     try:
         f = float(s)
@@ -223,8 +213,7 @@ def to_float(v) -> float | None:
         return None
 
 
-def cell_str(v) -> str:
-    """Возвращает строковое представление ячейки (без NaN)."""
+def cell_str(v):
     if v is None:
         return ""
     if isinstance(v, float) and math.isnan(v):
@@ -234,14 +223,10 @@ def cell_str(v) -> str:
     return str(v).strip()
 
 
-def is_year(v) -> bool:
-    """
-    Проверяет, является ли значение целым годом (2000–2035).
-    Дробные значения вида 2011.6 отклоняются — это данные, а не год.
-    """
+def is_year(v):
     try:
         f = float(str(v).strip())
-        if f != int(f):          # отклоняем дробные: 2011.6, 2007.554
+        if f != int(f):
             return False
         y = int(f)
         return 2000 <= y <= 2035
@@ -249,28 +234,21 @@ def is_year(v) -> bool:
         return False
 
 
-def is_dynamic_col(v) -> bool:
-    """Колонки динамики вида '2024/2023' или 'к соответствующему...'."""
+def is_dynamic_col(v):
     s = cell_str(v)
     return "/" in s or s.lower().startswith("к соответствующему") or s.lower().startswith("динамика")
 
 
-def extract_code(text: str) -> str | None:
-    """
-    Извлекает код показателя вида '6.1' или '6.67.1' из начала строки.
-    Требует после кода пробел и нецифровой символ — это исключает даты вида '01.01.2014'.
-    """
+def extract_code(text):
     if not isinstance(text, str):
         return None
     m = re.match(r"^\s*(\d{1,2}\.\d{1,3}(?:\.\d{1,2})?[а-яёa-z]?)\s+\D", text.strip())
     return m.group(1) if m else None
 
 
-def extract_unit(name: str) -> str:
-    """Пытается найти единицу измерения в конце названия (в скобках или по ключевым словам)."""
+def extract_unit(name):
     if not isinstance(name, str):
         return ""
-    # последние скобки
     m = re.search(r"\(([^)]+)\)\s*$", name)
     if m:
         return m.group(1).strip()
@@ -281,7 +259,7 @@ def extract_unit(name: str) -> str:
     return ""
 
 
-def make_label(d: date, periodicity: str) -> str:
+def make_label(d, periodicity):
     months_ru = ["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
                  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
     if periodicity == "annual":
@@ -289,10 +267,7 @@ def make_label(d: date, periodicity: str) -> str:
     return f"{months_ru[d.month]} {d.year}"
 
 
-def to_date(v) -> date | None:
-    """
-    Конвертирует Timestamp / datetime / date / строку вида "01.01.2014" в date.
-    """
+def to_date(v):
     if isinstance(v, pd.Timestamp):
         return v.date()
     if isinstance(v, datetime):
@@ -313,12 +288,7 @@ def to_date(v) -> date | None:
 
 # ─── Поиск блоков показателей ────────────────────────────────────────────────
 
-def find_indicator_rows(df: pd.DataFrame) -> list[tuple[int, str, str]]:
-    """
-    Сканирует DataFrame и находит все строки, начинающие блок показателя.
-    Признак: ячейка col[0] начинается с кода вида 'N.M '.
-    Возвращает список (row_index, code, full_name).
-    """
+def find_indicator_rows(df):
     results = []
     nrows = df.shape[0]
     for i in range(nrows):
@@ -331,27 +301,15 @@ def find_indicator_rows(df: pd.DataFrame) -> list[tuple[int, str, str]]:
 
 
 # ─── ПАТТЕРН A ───────────────────────────────────────────────────────────────
-#
-# Структура блока (реальная):
-#   row i:   "N.M Название показателя"
-#   row i+1: пустая
-#   row i+2: "Дата | 2020 | 2021 | 2022 | ... | YoY cols"
-#   row i+3+: "2021-01-01 | val2020 | val2021 | ..."
-#
-# Колонки с годами: is_year(header) and not is_dynamic_col(header)
-# Значение для года Y в строке с датой D берётся из колонки с заголовком Y,
-# только если D.year == Y (данные хранятся «по диагонали»).
 
-def parse_A(df: pd.DataFrame) -> list[dict]:
+def parse_A(df):
     records = []
     nrows, ncols = df.shape
     indicator_rows = find_indicator_rows(df)
 
     for idx, (row_i, code, full_name) in enumerate(indicator_rows):
-        # Граница блока — следующий индикатор или конец листа
         next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-        # Ищем строку заголовков (содержит год-числа в колонках)
         header_row = None
         for r in range(row_i + 1, min(row_i + 5, next_row)):
             row_vals = df.iloc[r].tolist()
@@ -359,12 +317,9 @@ def parse_A(df: pd.DataFrame) -> list[dict]:
                 header_row = r
                 break
 
-        # ── Режим 1: «широкий» формат — колонки = годы ──────────────────────
         if header_row is not None:
             headers = df.iloc[header_row].tolist()
-            # Если год встречается несколько раз (несколько категорий в одной таблице,
-            # например квартирография), берём только ПЕРВОЕ вхождение каждого года.
-            seen_years: set[int] = set()
+            seen_years = set()
             year_cols = []
             for ci, h in enumerate(headers):
                 if is_year(h) and not is_dynamic_col(h):
@@ -401,12 +356,8 @@ def parse_A(df: pd.DataFrame) -> list[dict]:
                         "periodicity": "monthly",
                         "data_points": dp_list,
                     })
-                continue  # переходим к следующему показателю
+                continue
 
-        # ── Режим 2: «длинный» формат — col0=дата, col1=значение ────────────
-        # Используется когда заголовок содержит «Дата | Название_колонки | ...»
-        # без годов (пример: лист 6.35).
-        # Ищем строку с «Дата» в col0
         long_header_row = None
         for r in range(row_i + 1, min(row_i + 5, next_row)):
             v = cell_str(df.iloc[r, 0]).lower()
@@ -423,7 +374,6 @@ def parse_A(df: pd.DataFrame) -> list[dict]:
             d = to_date(first)
             if d is None:
                 continue
-            # Берём первый ненулевой числовой столбец справа от даты
             val = to_float(df.iloc[r, 1]) if ncols > 1 else None
             if val is None:
                 continue
@@ -447,18 +397,8 @@ def parse_A(df: pd.DataFrame) -> list[dict]:
 
 
 # ─── ПАТТЕРН B-simple ────────────────────────────────────────────────────────
-#
-# Структура блока (реальная):
-#   row i:   "N.M Название показателя"
-#   row i+1: пустая
-#   row i+2: "Дата | 2020 | 2021 | ... | YoY cols"  (заголовки; первый столбец = "Дата" или "Месяц")
-#   row i+3+: "Январь | v2020 | v2021 | ..."
-#   ...
-#   "Итого" → пропустить
-#
-# Колонки с годами: is_year(header) and not is_dynamic_col(header)
 
-def parse_B_simple(df: pd.DataFrame) -> list[dict]:
+def parse_B_simple(df):
     records = []
     nrows, ncols = df.shape
     indicator_rows = find_indicator_rows(df)
@@ -466,7 +406,6 @@ def parse_B_simple(df: pd.DataFrame) -> list[dict]:
     for idx, (row_i, code, full_name) in enumerate(indicator_rows):
         next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-        # Ищем строку заголовков (год-числа в колонках, первый столбец = "Дата"/"Месяц")
         header_row = None
         for r in range(row_i + 1, min(row_i + 6, next_row)):
             row_vals = df.iloc[r].tolist()
@@ -475,13 +414,11 @@ def parse_B_simple(df: pd.DataFrame) -> list[dict]:
             if has_years and first_s in ("дата", "месяц", ""):
                 header_row = r
                 break
-            # Иногда первый столбец пустой, но годы есть
             if has_years and first_s == "":
                 header_row = r
                 break
 
         if header_row is None:
-            # Попробуем найти любую строку с годами в окне
             for r in range(row_i + 1, min(row_i + 6, next_row)):
                 row_vals = df.iloc[r].tolist()
                 if any(is_year(v) and not is_dynamic_col(v) for v in row_vals):
@@ -504,7 +441,6 @@ def parse_B_simple(df: pd.DataFrame) -> list[dict]:
         for r in range(header_row + 1, next_row):
             first_s = cell_str(df.iloc[r, 0]).lower()
 
-            # Пропускаем служебные строки
             if first_s in SKIP_ROW_LABELS or first_s == "":
                 continue
 
@@ -539,29 +475,18 @@ def parse_B_simple(df: pd.DataFrame) -> list[dict]:
 
 
 # ─── ПАТТЕРН B-cum ───────────────────────────────────────────────────────────
-#
-# Структура блока (реальная):
-#   row i:   "N.M Название показателя"
-#   row i+1: пустая
-#   row i+2: "Абсолютные значения" (или пустая)
-#   row i+3: "Месяц | 2017 | NaN | 2018 | NaN | ..." (годы с NaN-разделителями)
-#   row i+4: "NaN | за период с начала года | в том числе месяц | ..."  (подзаголовки)
-#   row i+5+: "Январь | cum17 | month17 | cum18 | month18 | ..."
-#
-# Нам нужны ТОЛЬКО колонки с подзаголовком «в том числе месяц».
 
-# Подзаголовки, означающие «значение за конкретный месяц» (не накопленное с начала года)
 _MONTH_SUBHEADERS = (
     "в том числе месяц",
     "в т.ч. месяц",
-    "по кредитам, выданным в течение месяца",  # листы 6.3-6.6, 6.9-6.12 и др.
+    "по кредитам, выданным в течение месяца",
 )
 
-def _is_month_subheader(s: str) -> bool:
+def _is_month_subheader(s):
     return any(kw in s for kw in _MONTH_SUBHEADERS)
 
 
-def parse_B_cum(df: pd.DataFrame) -> list[dict]:
+def parse_B_cum(df):
     records = []
     nrows, ncols = df.shape
     indicator_rows = find_indicator_rows(df)
@@ -569,13 +494,9 @@ def parse_B_cum(df: pd.DataFrame) -> list[dict]:
     for idx, (row_i, code, full_name) in enumerate(indicator_rows):
         next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-        # Ищем строку с ЧИСТЫМИ годами (не «2018/2017»).
-        # Блок динамики тоже содержит подзаголовки «в том числе месяц»,
-        # но его год-строка имеет вид «2018/2017» — is_dynamic_col отфильтрует их.
         year_header_row = None
         for r in range(row_i + 1, min(row_i + 8, next_row)):
             row_vals = df.iloc[r].tolist()
-            # Только чистые годы (не содержат «/»)
             clean_years = sum(
                 1 for v in row_vals
                 if is_year(v) and not is_dynamic_col(v)
@@ -587,10 +508,8 @@ def parse_B_cum(df: pd.DataFrame) -> list[dict]:
         if year_header_row is None:
             continue
 
-        # Строка подзаголовков — +1 или +2 строки ниже year_header_row.
-        # Ищем первую строку, содержащую хотя бы один месячный подзаголовок.
         sub_header_row = None
-        sub_headers: list[str] = []
+        sub_headers = []
         for offset in (1, 2):
             r = year_header_row + offset
             if r >= next_row:
@@ -604,15 +523,12 @@ def parse_B_cum(df: pd.DataFrame) -> list[dict]:
         if sub_header_row is None:
             continue
 
-        # Строим маппинг year → col_index для месячных колонок.
-        # Используем ТОЛЬКО год-строку с чистыми годами (year_header_row).
         year_headers = df.iloc[year_header_row].tolist()
-        month_cols: dict[int, int] = {}  # year → col_index
+        month_cols = {}
 
         for ci, s in enumerate(sub_headers):
             if not _is_month_subheader(s):
                 continue
-            # Ближайший чистый год левее
             for ci2 in range(ci - 1, -1, -1):
                 if is_year(year_headers[ci2]) and not is_dynamic_col(year_headers[ci2]):
                     year = int(float(str(year_headers[ci2])))
@@ -629,11 +545,9 @@ def parse_B_cum(df: pd.DataFrame) -> list[dict]:
             row_vals_cur = df.iloc[r].tolist()
             first_s = cell_str(row_vals_cur[0]).lower()
 
-            # Стоп 1: строка «Динамика...» — дальше идут YoY-коэффициенты, не абсолюты
             if "динамика" in first_s:
                 break
 
-            # Стоп 2: новый суб-блок с чистыми годами (второй заголовок внутри блока)
             clean_year_count = sum(
                 1 for v in row_vals_cur
                 if is_year(v) and not is_dynamic_col(v)
@@ -675,22 +589,8 @@ def parse_B_cum(df: pd.DataFrame) -> list[dict]:
 
 
 # ─── ПАТТЕРН C ───────────────────────────────────────────────────────────────
-#
-# Структура блока (реальная):
-#   row i:   "N.M Название показателя"
-#   row i+1: пустая
-#   row i+2: "Абсолютные значение"
-#   row i+3: "Год | 2011 | 2012 | ... | 2025"   (заголовки годов)
-#   row i+4: "Итого" или "Значение" — строка абсолютных значений
-#   row i+5: пустая
-#   row i+6: "Динамика..." — начало блока динамики, стоп
-#
-# Для 1.2 (квартальные): строки «1», «2», «3», «4», «За год» —
-# нам нужна строка «За год» (годовой итог).
-#
-# Для 5.10-5.11 (квартальные): берём «Среднее га год» / «Среднее за год».
 
-def parse_C(df: pd.DataFrame) -> list[dict]:
+def parse_C(df):
     records = []
     nrows, ncols = df.shape
     indicator_rows = find_indicator_rows(df)
@@ -698,7 +598,6 @@ def parse_C(df: pd.DataFrame) -> list[dict]:
     for idx, (row_i, code, full_name) in enumerate(indicator_rows):
         next_row = indicator_rows[idx + 1][0] if idx + 1 < len(indicator_rows) else nrows
 
-        # Ищем строку с заголовками годов (содержит ≥2 годов)
         header_row = None
         for r in range(row_i + 1, min(row_i + 8, next_row)):
             row_vals = df.iloc[r].tolist()
@@ -719,30 +618,22 @@ def parse_C(df: pd.DataFrame) -> list[dict]:
         if not year_cols:
             continue
 
-        # Ищем строку(и) с данными — до строки «Динамика» или следующего индикатора
         dp_list = []
         for r in range(header_row + 1, next_row):
             first_s = cell_str(df.iloc[r, 0]).lower()
 
-            # Стоп-условия
             if "динамика" in first_s:
                 break
             if first_s in ("", "абсолютные значение", "абсолютные значения"):
                 continue
-            # Пропускаем строки с пометкой источника или даты
             if any(kw in first_s for kw in ("источник", "дата последнего", "к содержанию")):
                 break
 
-            # Берём строки-итоги:
-            # «итого», «значение», «за год», «среднее га год», «среднее за год»
-            # А также числовые строки с квартальными данными (1, 2, 3, 4)
             is_summary = first_s in (
                 "итого", "значение", "за год",
                 "среднее га год", "среднее за год",
                 "среднегодовое значение",
             )
-            # Для годовых данных (лист «2.9-2.13») строка называется «Значение»
-            is_quarterly_total = first_s in ("за год", "среднее га год", "среднее за год")
 
             if not is_summary:
                 continue
@@ -759,7 +650,6 @@ def parse_C(df: pd.DataFrame) -> list[dict]:
                     "period_label": str(year),
                     "value": val,
                 })
-            # Берём только первую подходящую строку
             if dp_list:
                 break
 
@@ -786,7 +676,7 @@ PATTERN_PARSERS = {
 }
 
 
-# ─── БД: подключение и справочники ──────────────────────────────────────────
+# ─── БД ──────────────────────────────────────────────────────────────────────
 
 def get_connection():
     return psycopg2.connect(
@@ -815,14 +705,14 @@ def seed_references(conn):
     conn.commit()
 
 
-def get_id(conn, table: str, code: str) -> int | None:
+def get_id(conn, table, code):
     with conn.cursor() as cur:
-        cur.execute(f"SELECT id FROM {table} WHERE code = %s", (code,))
+        cur.execute("SELECT id FROM {} WHERE code = %s".format(table), (code,))
         row = cur.fetchone()
         return row[0] if row else None
 
 
-def upsert_indicator(conn, rec: dict, category_id, source_id, sort_order: int) -> int:
+def upsert_indicator(conn, rec, category_id, source_id, sort_order):
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO indicators
@@ -844,16 +734,13 @@ def upsert_indicator(conn, rec: dict, category_id, source_id, sort_order: int) -
         return cur.fetchone()[0]
 
 
-def upsert_data_points(conn, indicator_id: int, dp_list: list[dict]) -> int:
+def upsert_data_points(conn, indicator_id, dp_list):
     if not dp_list:
         return 0
-    # Дедупликация: если парсер вернул несколько значений для одной даты,
-    # оставляем последнее (последнее вхождение в списке считается приоритетным).
-    deduped: dict[date, dict] = {}
+    deduped = {}
     for dp in dp_list:
         if dp.get("value") is not None:
             deduped[dp["period_date"]] = dp
-    # Финальная гарантия: все value — Python float, не numpy
     rows = [
         (indicator_id, dp["period_date"], dp.get("period_label", ""),
          float(dp["value"]), False)
@@ -876,7 +763,7 @@ def upsert_data_points(conn, indicator_id: int, dp_list: list[dict]) -> int:
 
 # ─── Основная функция ────────────────────────────────────────────────────────
 
-def find_excel_file() -> Path:
+def find_excel_file():
     data_dir = Path(__file__).parent / "data"
     for pattern in ("*.xlsx", "*.xls"):
         files = list(data_dir.glob(pattern))
@@ -888,8 +775,7 @@ def find_excel_file() -> Path:
     )
 
 
-def normalize_sheet_name(name: str) -> str:
-    """Убирает trailing пробелы из имени листа для поиска в SHEET_PATTERN."""
+def normalize_sheet_name(name):
     return name.strip()
 
 
@@ -897,9 +783,7 @@ def main():
     filepath = find_excel_file()
     log.info(f"Excel-файл: {filepath}\n")
 
-    # Определяем видимые листы через openpyxl
     wb = openpyxl.load_workbook(str(filepath), read_only=True, data_only=True)
-    # Сохраняем оригинальные имена (с пробелами) для pandas, нормализованные — для SHEET_PATTERN
     all_sheets = {name: wb[name].sheet_state for name in wb.sheetnames}
     wb.close()
 
@@ -917,13 +801,11 @@ def main():
     for sheet_name, state in all_sheets.items():
         norm_name = normalize_sheet_name(sheet_name)
 
-        # Скрытые листы и Содержание
         if state != "visible" or norm_name == "Содержание":
             log.info(f"[SKIPPED] Лист «{sheet_name}»: {'скрытый лист' if state != 'visible' else 'содержание'}")
             stats["skipped"] += 1
             continue
 
-        # Паттерн — ищем по нормализованному имени
         pattern = SHEET_PATTERN.get(norm_name)
         if pattern is None:
             log.info(f"[SKIPPED] Лист «{sheet_name}»: паттерн не определён")
@@ -963,7 +845,6 @@ def main():
             import traceback
             traceback.print_exc()
 
-    # Обновление materialized view
     try:
         log.info("\nОбновление materialized view data_points_with_dynamics...")
         with conn.cursor() as cur:

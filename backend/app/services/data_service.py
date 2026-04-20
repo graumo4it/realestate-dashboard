@@ -34,7 +34,18 @@ def get_indicator_list_for_category(db: Session, category_id: int) -> List[Indic
         dynamics AS (
             SELECT DISTINCT ON (indicator_id)
                 indicator_id,
-                yoy_change_pct
+                value - value_prev_year AS yoy_abs,
+                CASE
+                    WHEN value_prev_year IS NOT NULL AND value_prev_year != 0
+                    THEN (value - value_prev_year) / ABS(value_prev_year) * 100
+                    ELSE NULL
+                END AS yoy_pct,
+                value - value_prev_period AS mom_abs,
+                CASE
+                    WHEN value_prev_period IS NOT NULL AND value_prev_period != 0
+                    THEN (value - value_prev_period) / ABS(value_prev_period) * 100
+                    ELSE NULL
+                END AS mom_pct
             FROM data_points_with_dynamics
             ORDER BY indicator_id, period_date DESC
         )
@@ -43,7 +54,8 @@ def get_indicator_list_for_category(db: Session, category_id: int) -> List[Indic
             lp.value          AS last_value,
             lp.period_label   AS last_period_label,
             lp.period_date    AS last_period_date,
-            d.yoy_change_pct
+            CASE WHEN i.unit = '%' THEN d.yoy_abs ELSE d.yoy_pct END AS yoy_change_pct,
+            CASE WHEN i.unit = '%' THEN d.mom_abs ELSE d.mom_pct END AS mom_change_pct
         FROM indicators i
         LEFT JOIN last_point lp ON lp.indicator_id = i.id
         LEFT JOIN dynamics   d  ON d.indicator_id  = i.id
@@ -55,6 +67,7 @@ def get_indicator_list_for_category(db: Session, category_id: int) -> List[Indic
     for r in rows:
         last_value = r[7]
         yoy = r[10]
+        mom = r[11]
         result.append(IndicatorBrief(
             id=r[0], code=r[1], name=r[2], unit=r[3],
             periodicity=r[4], chart_type=r[5],
@@ -64,6 +77,7 @@ def get_indicator_list_for_category(db: Session, category_id: int) -> List[Indic
             last_period_label=r[8],
             yoy_change=yoy,
             yoy_change_pct=yoy,
+            mom_change_pct=mom,
         ))
     return result
 
@@ -96,13 +110,25 @@ def get_time_series(
         SELECT
             d.period_date,
             d.value,
-            d.yoy_change_pct,
+            CASE
+                WHEN i.unit = '%' THEN d.value - d.value_prev_year
+                WHEN d.value_prev_year IS NOT NULL AND d.value_prev_year != 0
+                THEN (d.value - d.value_prev_year) / ABS(d.value_prev_year) * 100
+                ELSE NULL
+            END AS yoy_change_pct,
             d.value_prev_year,
             d.period_label,
-            dp.is_preliminary
+            dp.is_preliminary,
+            CASE
+                WHEN i.unit = '%' THEN d.value - d.value_prev_period
+                WHEN d.value_prev_period IS NOT NULL AND d.value_prev_period != 0
+                THEN (d.value - d.value_prev_period) / ABS(d.value_prev_period) * 100
+                ELSE NULL
+            END AS mom_change_pct
         FROM data_points_with_dynamics d
         JOIN data_points dp ON dp.indicator_id = d.indicator_id
                            AND dp.period_date   = d.period_date
+        JOIN indicators i ON i.id = d.indicator_id
         WHERE {where}
         ORDER BY d.period_date
     """), params).fetchall()
@@ -115,6 +141,7 @@ def get_time_series(
             prev_year_value=r[3],
             label=r[4],
             is_preliminary=bool(r[5]),
+            mom_change_pct=r[6],
         )
         for r in rows
     ]
