@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Структура ввода жилья МЖС/ИЖС — Рынок недвижимости России</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <!-- Подключаем общие стили проекта -->
+  <link rel="stylesheet" href="css/variables.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="css/chart.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    /* ── KPI-плашки ── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 18px 22px;
+      box-shadow: var(--shadow);
+    }
+    .kpi-label {
+      font-size: .72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--color-muted);
+      margin-bottom: 6px;
+    }
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-size: 1.7rem;
+      font-weight: 600;
+      line-height: 1.1;
+    }
+    .kpi-unit {
+      font-size: .75rem;
+      color: var(--color-muted);
+      margin-top: 2px;
+    }
+    .kpi-delta {
+      margin-top: 6px;
+      font-size: .8rem;
+      font-weight: 500;
+    }
+    .delta-pos { color: #16a34a; }
+    .delta-neg { color: #dc2626; }
+    .delta-neutral { color: var(--color-muted); }
+
+    /* ── Полоски-легенда ── */
+    .legend-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+
+    /* ── Кнопки режимов ── */
+    .chart-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .btn-group { display: flex; border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
+    .btn-group button {
+      padding: 6px 14px;
+      border: none;
+      background: var(--color-surface);
+      font-family: var(--font-body);
+      font-size: .8rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--color-ink-light);
+      border-right: 1px solid var(--color-border);
+      transition: background .15s, color .15s;
+    }
+    .btn-group button:last-child { border-right: none; }
+    .btn-group button:hover { background: var(--color-bg); color: var(--color-ink); }
+    .btn-group button.active { background: var(--color-ink); color: #fff; }
+    .toolbar-actions { display: flex; gap: 8px; }
+    .btn-outline {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: var(--color-surface);
+      font-family: var(--font-body);
+      font-size: .8rem; font-weight: 500;
+      color: var(--color-ink-light);
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-outline:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* ── График ── */
+    .chart-container {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      margin-bottom: 28px;
+    }
+    #main-chart { width: 100%; height: 420px; }
+    .chart-source {
+      font-size: .72rem; color: var(--color-muted);
+      text-align: right; margin-top: 8px;
+    }
+
+    /* ── Таблица ── */
+    .data-table-wrap {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      margin-bottom: 40px;
+    }
+    .data-table-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--color-border);
+      font-weight: 600; font-size: .9rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .tab-buttons { display: flex; gap: 4px; }
+    .tab-btn {
+      padding: 4px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 20px;
+      background: transparent;
+      font-size: .75rem; font-weight: 500;
+      cursor: pointer; color: var(--color-ink-light);
+      transition: all .15s;
+    }
+    .tab-btn.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
+    .data-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    .data-table th {
+      text-align: left; padding: 10px 16px;
+      font-size: .72rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .05em;
+      color: var(--color-muted);
+      background: var(--color-bg);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .data-table th:not(:first-child) { text-align: right; }
+    .data-table td { padding: 9px 16px; border-bottom: 1px solid var(--color-border); }
+    .data-table td:not(:first-child) { text-align: right; font-family: var(--font-mono); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: #fafbfc; }
+    .prelim { color: var(--color-muted); font-style: italic; }
+
+    /* ── Заголовок страницы ── */
+    .page-heading {
+      font-family: var(--font-display);
+      font-size: 1.8rem; font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .page-heading-sub {
+      font-size: .85rem; color: var(--color-muted); margin-bottom: 24px;
+    }
+    .chart-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .chart-meta-item { display: flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--color-muted); }
+  </style>
+</head>
+<body>
+
+<!-- Header (из main.css проекта) -->
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="index.html" class="logo">Рынок<span>Жилья</span></a>
+    <nav class="site-nav">
+      <a href="index.html">Главная</a>
+      <a href="category.html?code=supply_volume" class="active">Ввод жилья</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=mortgage_total">Ипотека</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container" style="padding-top:32px; padding-bottom:60px;">
+
+  <!-- Хлебные крошки -->
+  <nav style="font-size:.8rem; color:var(--color-muted); margin-bottom:20px;">
+    <a href="index.html" style="color:var(--color-muted)">Главная</a>
+    <span style="margin:0 6px">›</span>
+    <a href="category.html?code=supply_volume" style="color:var(--color-muted)">Объём ввода жилья</a>
+    <span style="margin:0 6px">›</span>
+    <span>Структура ввода МЖС / ИЖС</span>
+  </nav>
+
+  <!-- Заголовок -->
+  <div class="page-heading">Структура ввода жилья: МЖС и ИЖС</div>
+  <div class="page-heading-sub">Доля многоквартирных и индивидуальных домов в общем вводе жилья, %</div>
+
+  <!-- Мета -->
+  <div class="chart-meta">
+    <span class="chart-meta-item">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Ежемесячно
+    </span>
+    <span class="chart-meta-item">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Источник: Росстат
+    </span>
+    <span class="chart-meta-item" style="color:var(--color-muted)">%</span>
+  </div>
+
+  <!-- KPI-плашки -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">
+        <span class="legend-dot" style="background:#1A2B4A"></span>МЖС (многоквартирные дома)
+      </div>
+      <div class="kpi-value" id="kpi-mzhs-val">—</div>
+      <div class="kpi-unit">% от общего ввода</div>
+      <div class="kpi-delta" id="kpi-mzhs-delta"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">
+        <span class="legend-dot" style="background:#F4A336"></span>ИЖС (индивидуальные дома)
+      </div>
+      <div class="kpi-value" id="kpi-izhs-val">—</div>
+      <div class="kpi-unit">% от общего ввода</div>
+      <div class="kpi-delta" id="kpi-izhs-delta"></div>
+    </div>
+  </div>
+
+  <!-- Тулбар -->
+  <div class="chart-toolbar">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <!-- Ретроспектива -->
+      <div class="btn-group" id="range-group">
+        <button data-range="1">1 г</button>
+        <button data-range="3">3 г</button>
+        <button data-range="5">5 л</button>
+        <button data-range="all" class="active">За всё время</button>
+      </div>
+      <!-- Режим отображения -->
+      <div class="btn-group" id="mode-group">
+        <button data-mode="share" class="active">Структура, %</button>
+        <button data-mode="yoy">Изм. г/г, п.п.</button>
+      </div>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn-outline" id="btn-download-png">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        PNG
+      </button>
+      <button class="btn-outline" id="btn-download-xlsx">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- График -->
+  <div class="chart-container">
+    <div id="main-chart"></div>
+    <div class="chart-source">Источник: Росстат</div>
+  </div>
+
+  <!-- Таблица -->
+  <div class="data-table-wrap">
+    <div class="data-table-header">
+      <span>Исходные данные</span>
+      <div class="tab-buttons">
+        <button class="tab-btn active" data-tab="izhs">ИЖС</button>
+        <button class="tab-btn" data-tab="mzhs">МЖС</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:35%">Период</th>
+            <th style="width:32%">Доля, %</th>
+            <th style="width:33%">Изм. г/г, п.п.</th>
+          </tr>
+        </thead>
+        <tbody id="data-table-body">
+          <tr><td colspan="3" style="text-align:center;color:var(--color-muted);padding:24px">Загрузка…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Footer -->
+<footer class="site-footer">
+  <div class="container">
+    <p style="font-size:.8rem;color:var(--color-muted)">
+      Данные: Росстат. Актуальность: ежемесячно. &copy; 2025 Рынок жилья России.
+    </p>
+  </div>
+</footer>
+
+<script>window.API_BASE = 'http://localhost:8001/api';</script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+// Конфигурация
+// ═══════════════════════════════════════════════════════
+// API_BASE берётся из window.API_BASE (задан выше)
+const CODE_IZHS = '2.2';  // ИЖС, тыс. кв. м
+const CODE_MZHS = '2.3';  // МЖС, тыс. кв. м
+
+const COLOR_MZHS   = '#1A2B4A';
+const COLOR_IZHS   = '#F4A336';
+const COLOR_ACCENT = '#E8341C';
+
+// ═══════════════════════════════════════════════════════
+// Состояние
+// ═══════════════════════════════════════════════════════
+let allData  = null;   // {dates, izhs[], mzhs[], izhsShare[], mzhsShare[], izhsYoy[], mzhsYoy[]}
+let fullData = null;   // то же, без обрезки
+let mode     = 'share';
+let range    = 'all';
+let activeTab = 'izhs';
+
+// ═══════════════════════════════════════════════════════
+// ECharts
+// ═══════════════════════════════════════════════════════
+const chart = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
+
+// ═══════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════
+async function loadData() {
+  // Используем api.js если подключён в проекте, иначе прямой fetch
+  if (typeof api !== 'undefined' && api.multiIndicatorData) {
+    return api.multiIndicatorData(CODE_IZHS + ',' + CODE_MZHS);
+  }
+  const base = window.API_BASE || 'http://localhost:8001/api';
+  const url = base + '/multi/data?codes=' + CODE_IZHS + ',' + CODE_MZHS;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════════
+// Парсинг ответа API → внутренний формат
+// ═══════════════════════════════════════════════════════
+function parseApiResponse(raw) {
+  // API возвращает объект-словарь: {"2.2": {indicator, series}, "2.3": {indicator, series}}
+  let izhsInd, mzhsInd;
+  if (raw[CODE_IZHS] && raw[CODE_MZHS]) {
+    // Формат словаря (реальный ответ /api/multi/data)
+    izhsInd = { code: CODE_IZHS, series: raw[CODE_IZHS].series };
+    mzhsInd = { code: CODE_MZHS, series: raw[CODE_MZHS].series };
+  } else if (Array.isArray(raw)) {
+    izhsInd = raw.find(i => i.code === CODE_IZHS);
+    mzhsInd = raw.find(i => i.code === CODE_MZHS);
+  } else {
+    const list = raw.indicators || raw.data || [];
+    izhsInd = list.find(i => i.code === CODE_IZHS);
+    mzhsInd = list.find(i => i.code === CODE_MZHS);
+  }
+  if (!izhsInd || !mzhsInd) throw new Error('Не найдены индикаторы 2.2 / 2.3');
+
+  // Формируем общий массив дат (пересечение)
+  const izhsMap = new Map(izhsInd.series.map(p => [p.date, p]));
+  const mzhsMap = new Map(mzhsInd.series.map(p => [p.date, p]));
+
+  // Все даты, отсортированные
+  const allDates = [...new Set([...izhsMap.keys(), ...mzhsMap.keys()])].sort();
+
+  const dates     = [];
+  const izhsAbs   = [];
+  const mzhsAbs   = [];
+  const izhsShare = [];
+  const mzhsShare = [];
+  const izhsYoy   = [];  // изменение доли г/г в п.п.
+  const mzhsYoy   = [];
+  const preliminary = [];
+
+  for (const d of allDates) {
+    const ip = izhsMap.get(d);
+    const mp = mzhsMap.get(d);
+    const iv = ip?.value != null ? parseFloat(ip.value) : null;
+    const mv = mp?.value != null ? parseFloat(mp.value) : null;
+
+    if (iv === null || mv === null) continue;
+
+    const total = iv + mv;
+    if (total === 0) continue;
+
+    const iShare = (iv / total) * 100;
+    const mShare = (mv / total) * 100;
+
+    dates.push(d);
+    izhsAbs.push(iv);
+    mzhsAbs.push(mv);
+    izhsShare.push(+iShare.toFixed(2));
+    mzhsShare.push(+mShare.toFixed(2));
+    preliminary.push(!!(ip?.is_preliminary || mp?.is_preliminary));
+
+    // YoY доли: сравниваем с тем же месяцем прошлого года
+    izhsYoy.push(null);  // заполним ниже
+    mzhsYoy.push(null);
+  }
+
+  // Рассчитываем YoY в п.п. (сравнение с тем же месяцем прошлого года)
+  for (let i = 0; i < dates.length; i++) {
+    const d     = new Date(dates[i]);
+    const prevD = new Date(d);
+    prevD.setFullYear(prevD.getFullYear() - 1);
+    const prevStr = prevD.toISOString().slice(0, 10);
+    const prevIdx = dates.indexOf(prevStr);
+    if (prevIdx >= 0) {
+      izhsYoy[i] = +(izhsShare[i] - izhsShare[prevIdx]).toFixed(2);
+      mzhsYoy[i] = +(mzhsShare[i] - mzhsShare[prevIdx]).toFixed(2);
+    }
+  }
+
+  return { dates, izhsAbs, mzhsAbs, izhsShare, mzhsShare, izhsYoy, mzhsYoy, preliminary };
+}
+
+// ═══════════════════════════════════════════════════════
+// Фильтрация по диапазону
+// ═══════════════════════════════════════════════════════
+function filterByRange(data, rangeStr) {
+  if (rangeStr === 'all') return data;
+
+  const years = parseInt(rangeStr);
+  const lastDate = new Date(data.dates[data.dates.length - 1]);
+  const cutoff   = new Date(lastDate);
+  cutoff.setFullYear(cutoff.getFullYear() - years);
+  // Сдвиг на 2 месяца назад (правило #3 из блока 1)
+  cutoff.setMonth(cutoff.getMonth() - 2);
+
+  const startIdx = data.dates.findIndex(d => new Date(d) >= cutoff);
+  if (startIdx < 0) return data;
+
+  const slice = (arr) => arr.slice(startIdx);
+  return {
+    dates:      slice(data.dates),
+    izhsAbs:    slice(data.izhsAbs),
+    mzhsAbs:    slice(data.mzhsAbs),
+    izhsShare:  slice(data.izhsShare),
+    mzhsShare:  slice(data.mzhsShare),
+    izhsYoy:    slice(data.izhsYoy),
+    mzhsYoy:    slice(data.mzhsYoy),
+    preliminary:slice(data.preliminary),
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// Форматирование
+// ═══════════════════════════════════════════════════════
+function fmtDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' });
+}
+
+function fmtPct(v, decimals = 1) {
+  if (v === null || v === undefined) return '—';
+  return v.toFixed(decimals) + '%';
+}
+
+function fmtPp(v) {
+  if (v === null || v === undefined) return '—';
+  const sign = v > 0 ? '+' : '';
+  return sign + v.toFixed(1) + ' п.п.';
+}
+
+function deltaClass(v) {
+  if (v === null || v === undefined) return 'delta-neutral';
+  return v > 0 ? 'delta-pos' : v < 0 ? 'delta-neg' : 'delta-neutral';
+}
+
+// ═══════════════════════════════════════════════════════
+// KPI-плашки (берём из fullData — последнее значение)
+// ═══════════════════════════════════════════════════════
+function updateKPI(data) {
+  const n = data.dates.length - 1;
+  if (n < 0) return;
+
+  const iShare = data.izhsShare[n];
+  const mShare = data.mzhsShare[n];
+  const iYoy   = data.izhsYoy[n];
+  const mYoy   = data.mzhsYoy[n];
+
+  document.getElementById('kpi-izhs-val').textContent  = fmtPct(iShare);
+  document.getElementById('kpi-mzhs-val').textContent  = fmtPct(mShare);
+
+  const iDeltaEl = document.getElementById('kpi-izhs-delta');
+  const mDeltaEl = document.getElementById('kpi-mzhs-delta');
+
+  iDeltaEl.innerHTML = iYoy !== null
+    ? `<span class="${deltaClass(iYoy)}">${fmtPp(iYoy)} г/г</span>`
+    : '';
+  mDeltaEl.innerHTML = mYoy !== null
+    ? `<span class="${deltaClass(mYoy)}">${fmtPp(mYoy)} г/г</span>`
+    : '';
+}
+
+// ═══════════════════════════════════════════════════════
+// Построение графика
+// ═══════════════════════════════════════════════════════
+function buildChart(data) {
+  const labels = data.dates.map(fmtDate);
+
+  if (mode === 'share') {
+    // 100%-стековая гистограмма
+    chart.setOption({
+      animation: false,
+      grid: { left: 60, right: 20, top: 30, bottom: 80 },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter(params) {
+          const idx = params[0].dataIndex;
+          const prelim = data.preliminary[idx] ? ' <i>(предв.)</i>' : '';
+          let html = `<b>${labels[idx]}</b>${prelim}<br/>`;
+          // МЖС первый (снизу в легенде — он второй по стеку)
+          params.forEach(p => {
+            html += `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${p.color};margin-right:5px"></span>${p.seriesName}: <b>${fmtPct(p.value)}</b><br/>`;
+          });
+          const i = data.izhsYoy[idx];
+          const m = data.mzhsYoy[idx];
+          if (i !== null) html += `<span style="color:#888;font-size:.85em">ИЖС г/г: ${fmtPp(i)} | МЖС г/г: ${fmtPp(m)}</span>`;
+          return html;
+        }
+      },
+      legend: {
+        data: ['МЖС', 'ИЖС'],
+        top: 4, right: 10,
+        itemWidth: 10, itemHeight: 10,
+        textStyle: { fontSize: 12 }
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: { fontSize: 11, rotate: labels.length > 48 ? 45 : 0 }
+      },
+      yAxis: {
+        type: 'value',
+        min: 0, max: 100,
+        axisLabel: { formatter: v => v + '%', fontSize: 11 },
+        splitLine: { lineStyle: { color: '#eee' } }
+      },
+      dataZoom: [
+        { type: 'slider', bottom: 10, height: 20, borderColor: 'transparent', fillerColor: 'rgba(26,43,74,0.12)' },
+        { type: 'inside' }
+      ],
+      series: [
+        {
+          name: 'МЖС',
+          type: 'bar',
+          stack: 'total',
+          data: data.mzhsShare,
+          color: COLOR_MZHS,
+          barMaxWidth: 24,
+          emphasis: { focus: 'series' }
+        },
+        {
+          name: 'ИЖС',
+          type: 'bar',
+          stack: 'total',
+          data: data.izhsShare,
+          color: COLOR_IZHS,
+          barMaxWidth: 24,
+          emphasis: { focus: 'series' }
+        }
+      ]
+    }, true);
+
+  } else {
+    // Режим YoY: линейный, п.п.
+    chart.setOption({
+      animation: false,
+      grid: { left: 60, right: 20, top: 30, bottom: 80 },
+      tooltip: {
+        trigger: 'axis',
+        formatter(params) {
+          const idx = params[0].dataIndex;
+          let html = `<b>${labels[idx]}</b><br/>`;
+          params.forEach(p => {
+            if (p.value !== null) {
+              html += `<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${p.color};margin-right:5px"></span>${p.seriesName}: <b>${fmtPp(p.value)}</b><br/>`;
+            }
+          });
+          return html;
+        }
+      },
+      legend: {
+        data: ['МЖС г/г', 'ИЖС г/г'],
+        top: 4, right: 10,
+        itemWidth: 10, itemHeight: 10,
+        textStyle: { fontSize: 12 }
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: { fontSize: 11, rotate: labels.length > 48 ? 45 : 0 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          formatter: v => (v > 0 ? '+' : '') + v + ' п.п.',
+          fontSize: 10
+        },
+        splitLine: { lineStyle: { color: '#eee' } }
+      },
+      dataZoom: [
+        { type: 'slider', bottom: 10, height: 20, borderColor: 'transparent', fillerColor: 'rgba(26,43,74,0.12)' },
+        { type: 'inside' }
+      ],
+      series: [
+        {
+          name: 'МЖС г/г',
+          type: 'line',
+          data: data.mzhsYoy,
+          color: COLOR_MZHS,
+          lineStyle: { width: 2 },
+          symbol: 'none',
+          connectNulls: false
+        },
+        {
+          name: 'ИЖС г/г',
+          type: 'line',
+          data: data.izhsYoy,
+          color: COLOR_IZHS,
+          lineStyle: { width: 2 },
+          symbol: 'none',
+          connectNulls: false
+        }
+      ]
+    }, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Таблица
+// ═══════════════════════════════════════════════════════
+function buildTable(data, tab) {
+  const tbody = document.getElementById('data-table-body');
+  const rows  = [];
+  const n     = data.dates.length;
+
+  for (let i = n - 1; i >= 0; i--) {
+    const share = tab === 'izhs' ? data.izhsShare[i] : data.mzhsShare[i];
+    const yoy   = tab === 'izhs' ? data.izhsYoy[i]   : data.mzhsYoy[i];
+    const pre   = data.preliminary[i];
+    const cls   = pre ? ' class="prelim"' : '';
+    rows.push(`
+      <tr>
+        <td${cls}>${fmtDate(data.dates[i])}${pre ? ' *' : ''}</td>
+        <td>${fmtPct(share)}</td>
+        <td class="${deltaClass(yoy)}">${fmtPp(yoy)}</td>
+      </tr>
+    `);
+  }
+
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="3" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+}
+
+// ═══════════════════════════════════════════════════════
+// Обновление всего
+// ═══════════════════════════════════════════════════════
+function refresh() {
+  if (!fullData) return;
+  allData = filterByRange(fullData, range);
+  updateKPI(fullData);  // KPI всегда от последней точки (полный ряд)
+  buildChart(allData);
+  buildTable(allData, activeTab);
+}
+
+// ═══════════════════════════════════════════════════════
+// Инициализация
+// ═══════════════════════════════════════════════════════
+async function init() {
+  try {
+    const raw = await loadData();
+    fullData = parseApiResponse(raw);
+    refresh();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('main-chart').innerHTML =
+      `<div style="padding:40px;text-align:center;color:#dc2626">Ошибка загрузки данных: ${e.message}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// Обработчики кнопок
+// ═══════════════════════════════════════════════════════
+
+// Диапазоны
+document.querySelectorAll('#range-group button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#range-group button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    range = btn.dataset.range;
+    refresh();
+  });
+});
+
+// Режим
+document.querySelectorAll('#mode-group button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#mode-group button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    refresh();
+  });
+});
+
+// Вкладки таблицы
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeTab = btn.dataset.tab;
+    buildTable(allData, activeTab);
+  });
+});
+
+// Скачать PNG
+document.getElementById('btn-download-png').addEventListener('click', () => {
+  const url = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+  const a   = document.createElement('a');
+  a.href    = url;
+  a.download = 'структура-ввода-МЖС-ИЖС.png';
+  a.click();
+});
+
+// Скачать Excel
+document.getElementById('btn-download-xlsx').addEventListener('click', () => {
+  const xlsxBase = window.API_BASE || 'http://localhost:8001/api';
+  window.location.href = xlsxBase + '/multi/data.xlsx?codes=' + CODE_IZHS + ',' + CODE_MZHS;
+});
+
+// Resize
+window.addEventListener('resize', () => chart.resize());
+
+// Старт
+init();
+</script>
+</body>
+</html>
