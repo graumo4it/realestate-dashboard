@@ -19,4 +19,5 @@ const api = {
   indicatorXlsx:       (code)       => `${API_BASE}/indicators/${code}/data.xlsx`,
   search:              (q)          => apiFetch('/search', { q }),
   lastUpdate:          ()           => apiFetch('/meta/last-update'),
+  multiIndicatorData:  (codes, from, to) => apiFetch('/multi/data', { codes, from, to }),
 };

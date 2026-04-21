@@ -66,3 +66,45 @@ def indicator_xlsx(code: str, db: Session = Depends(get_db)):
 @router.get("/search", response_model=List[SearchResult])
 def search(q: str = Query(..., min_length=2), db: Session = Depends(get_db)):
     return search_indicators(db, q)
+
+
+@router.get("/multi/data")
+def multi_indicator_data(
+    codes: str = Query(..., description="Коды через запятую: 2.2,2.3"),
+    from_date: Optional[date] = Query(None, alias="from"),
+    to_date:   Optional[date] = Query(None, alias="to"),
+    db: Session = Depends(get_db),
+):
+    code_list = [c.strip() for c in codes.split(",")]
+    result = {}
+    for code in code_list:
+        ind = get_indicator_by_code(db, code)
+        if ind:
+            series = get_time_series(db, ind.id, from_date, to_date)
+            result[code] = {
+                "indicator": IndicatorFull.model_validate(ind),
+                "series": series,
+            }
+    return result
+
+
+@router.get("/multi/data.xlsx")
+def multi_indicator_xlsx(
+    codes: str = Query(..., description="Коды через запятую: 2.2,2.3"),
+    db: Session = Depends(get_db),
+):
+    from app.services.export_service import export_multi_xlsx
+    code_list = [c.strip() for c in codes.split(",")]
+    indicators = []
+    series_map = {}
+    for code in code_list:
+        ind = get_indicator_by_code(db, code)
+        if ind:
+            indicators.append(ind)
+            series_map[code] = get_time_series(db, ind.id)
+    buf = export_multi_xlsx(indicators, series_map)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="supply_volume.xlsx"'},
+    )
