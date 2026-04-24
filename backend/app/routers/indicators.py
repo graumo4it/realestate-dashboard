@@ -90,21 +90,51 @@ def multi_indicator_data(
 
 @router.get("/multi/data.xlsx")
 def multi_indicator_xlsx(
-    codes: str = Query(..., description="Коды через запятую: 2.2,2.3"),
+    codes: str = Query(..., description="Коды через запятую: 6.7,6.13,6.1"),
+    labels: str = Query(None, description="Короткие метки через запятую (по порядку кодов)"),
+    title: str = Query(None, description="Заголовок листа"),
+    filename: str = Query(None, description="Имя файла без расширения"),
     db: Session = Depends(get_db),
 ):
     from app.services.export_service import export_multi_xlsx
-    code_list = [c.strip() for c in codes.split(",")]
+
+    code_list  = [c.strip() for c in codes.split(",")]
+    label_list = [l.strip() for l in labels.split(",")] if labels else []
+
     indicators = []
     series_map = {}
-    for code in code_list:
+
+    for i, code in enumerate(code_list):
         ind = get_indicator_by_code(db, code)
-        if ind:
-            indicators.append(ind)
-            series_map[code] = get_time_series(db, ind.id)
-    buf = export_multi_xlsx(indicators, series_map)
+        if not ind:
+            continue
+        # Если передана кастомная метка — подставляем в name для экспорта
+        ind_meta = {
+            "code":        ind.code,
+            "name":        label_list[i] if i < len(label_list) else ind.name,
+            "unit":        ind.unit or "",
+            "periodicity": ind.periodicity or "monthly",
+            "period_type": ind.period_type or "period",
+            "source":      ind.source.name if ind.source else "—",
+        }
+        indicators.append(ind_meta)
+        series_map[code] = get_time_series(db, ind.id)
+
+    # Заголовок листа
+    if title:
+        sheet_title = title
+    elif label_list:
+        sheet_title = label_list[0].split("—")[0].strip() if label_list else "Данные"
+    else:
+        sheet_title = "Данные"
+
+    buf = export_multi_xlsx(indicators, series_map, sheet_title=sheet_title)
+
+    # Имя файла
+    safe_filename = (filename or "_".join(code_list)).replace(".", "_") + ".xlsx"
+
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="supply_volume.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
     )

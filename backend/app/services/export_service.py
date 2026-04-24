@@ -2,7 +2,7 @@ import io
 from collections import defaultdict
 from datetime import date as date_type
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
@@ -10,13 +10,20 @@ from app.models import Indicator
 from app.services.data_service import get_time_series
 
 
-HEADER_FILL  = PatternFill("solid", fgColor="1A2B4A")
-HEADER_FONT  = Font(bold=True, color="FFFFFF", name="Calibri", size=10)
-BODY_FONT    = Font(name="Calibri", size=10)
-BOLD_FONT    = Font(name="Calibri", size=10, bold=True)
-THIN_BORDER  = Border(bottom=Side(style="thin", color="E5E7EB"))
-FMT_NUM1     = '#,##0.0'      # Числа с 1 знаком
-FMT_PCT1     = '0.0"%"'       # Проценты с 1 знаком
+HEADER_FILL = PatternFill("solid", fgColor="1A2B4A")
+HEADER_FONT = Font(bold=True, color="FFFFFF", name="Calibri", size=10)
+BODY_FONT   = Font(name="Calibri", size=10)
+BOLD_FONT   = Font(name="Calibri", size=10, bold=True)
+THIN_BORDER = Border(bottom=Side(style="thin", color="E5E7EB"))
+FMT_NUM1    = '#,##0.0'
+FMT_NUM0    = '#,##0'
+FMT_PCT1    = '0.0"%"'
+FMT_PP1     = '+0.00;-0.00;0.00'  # п.п. — показывает знак
+FMT_NUM2    = '#,##0.00'           # 2 знака после запятой (ставки)
+FMT_PP2     = '+0.00" п.п.";-0.00" п.п.";0.00" п.п."'  # п.п. со знаком
+
+MONTHS_RU_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн',
+                    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
 
 
 def _set_header(ws, row, col, value):
@@ -44,9 +51,14 @@ def _set_str(ws, row, col, value, bold=False):
     return cell
 
 
-MONTHS_RU_SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн',
-                    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+def _to_float(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
 
+
+# ── Одиночный индикатор ────────────────────────────────────────────────────
 
 def export_indicator_xlsx(db: Session, ind: Indicator) -> io.BytesIO:
     series = get_time_series(db, ind.id)
@@ -62,18 +74,15 @@ def export_indicator_xlsx(db: Session, ind: Indicator) -> io.BytesIO:
 
     headers = ["Дата", "Период", f"Значение ({ind.unit or ''})", "Изм. г/г, %"]
     for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=6, column=col, value=h)
-        cell.fill = HEADER_FILL
-        cell.font = HEADER_FONT
-        cell.alignment = Alignment(horizontal="center")
+        _set_header(ws, 6, col, h)
 
     for row_i, dp in enumerate(series, 7):
         ws.cell(row=row_i, column=1, value=dp.date).font = BODY_FONT
         ws.cell(row=row_i, column=2, value=dp.label).font = BODY_FONT
-        c3 = ws.cell(row=row_i, column=3, value=float(dp.value) if dp.value else None)
+        c3 = ws.cell(row=row_i, column=3, value=_to_float(dp.value))
         c3.font = BODY_FONT
         c3.number_format = FMT_NUM1
-        c4 = ws.cell(row=row_i, column=4, value=float(dp.yoy_change_pct) if dp.yoy_change_pct else None)
+        c4 = ws.cell(row=row_i, column=4, value=_to_float(dp.yoy_change_pct))
         c4.font = BODY_FONT
         c4.number_format = FMT_PCT1
         for col in range(1, 5):
@@ -90,158 +99,199 @@ def export_indicator_xlsx(db: Session, ind: Indicator) -> io.BytesIO:
     return buf
 
 
-def export_multi_xlsx(indicators, series_map: dict) -> io.BytesIO:
+# ── Мульти-индикатор (универсальный) ──────────────────────────────────────
+
+def export_multi_xlsx(indicators: list, series_map: dict, sheet_title: str = None) -> io.BytesIO:
+    """
+    Универсальный экспорт для любого набора индикаторов.
+
+    indicators  — список объектов Indicator (или dict с полями code, name, unit)
+    series_map  — {code: [DataPoint, ...]}
+
+    Генерирует два листа:
+      • «Данные» — все периоды по всем кодам в столбцах
+      • «Годовые» — агрегат по годам (только для period_type='period' и числовых значений)
+    """
     wb = Workbook()
 
-    # ── Лист 1: Месячные данные ─────────────────────────────────────────────
-    ws = wb.active
-    ws.title = "Месячные данные"
+    # Словарь метаданных по коду
+    meta = {}
+    for ind in indicators:
+        if isinstance(ind, dict):
+            meta[ind["code"]] = ind
+        else:
+            meta[ind.code] = {
+                "code": ind.code,
+                "name": ind.name,
+                "unit": ind.unit or "",
+                "periodicity": getattr(ind, "periodicity", "monthly"),
+                "period_type": getattr(ind, "period_type", "period"),
+                "source": ind.source.name if hasattr(ind, "source") and ind.source else "—",
+            }
 
-    ws["A1"] = "Объём ввода жилья, тыс. кв. м"
-    ws["A1"].font = Font(bold=True, size=13, name="Calibri")
-    ws["A2"] = "Источник: Росстат"
+    codes = list(series_map.keys())
+    if not codes:
+        wb.save(buf := io.BytesIO())
+        buf.seek(0)
+        return buf
+
+    # ── Определяем все даты (union) ────────────────────────────────────────
+    maps = {code: {str(p.date): p for p in series_map[code]} for code in codes}
+    all_dates = sorted(set(d for m in maps.values() for d in m.keys()))
+
+    # ── Лист 1: Данные ─────────────────────────────────────────────────────
+    ws = wb.active
+    ws.title = "Данные"
+
+    # Заголовок
+    if sheet_title:
+        ws_title = sheet_title
+    else:
+        ws_title = f"Данные: {', '.join(meta.get(c, {}).get('name', c)[:40] for c in codes[:3])}"
+        if len(codes) > 3:
+            ws_title += f" и ещё {len(codes) - 3}"
+    ws["A1"] = ws_title
+    ws["A1"].font = Font(bold=True, size=12, name="Calibri")
+    sources = list(dict.fromkeys(meta.get(c, {}).get("source", "—") for c in codes))
+    ws["A2"] = f"Источник: {', '.join(sources)}"
     ws["A2"].font = BODY_FONT
 
-    headers = [
-        "Период",
-        "Всего", "ИЖС", "МЖС",
-        "Всего г/г %", "ИЖС г/г %", "МЖС г/г %",
-        "Всего м/м %", "ИЖС м/м %", "МЖС м/м %",
-    ]
-    for col, h in enumerate(headers, 1):
-        _set_header(ws, 4, col, h)
+    # Строка заголовков: Период | [Значение, г/г, м/м] × N кодов
+    header_row = 4
+    _set_header(ws, header_row, 1, "Период")
+    col = 2
+    col_map = {}  # code -> (val_col, yoy_col, mom_col)
+    for code in codes:
+        m = meta.get(code, {})
+        unit = m.get("unit", "")
+        name = m.get("name", code)
+        short = name[:30]
+        is_pct_unit = unit.strip() in ('%', 'процент', 'п.п.')
+        delta_label = 'г/г, п.п.' if is_pct_unit else 'г/г, %'
+        mom_label   = 'м/м, п.п.' if is_pct_unit else 'м/м, %'
+        _set_header(ws, header_row, col,     f"{short}\n({unit})")
+        _set_header(ws, header_row, col + 1, f"{short}\n{delta_label}")
+        _set_header(ws, header_row, col + 2, f"{short}\n{mom_label}")
+        col_map[code] = (col, col + 1, col + 2)
+        col += 3
 
-    s22 = series_map.get("2.2", [])
-    s23 = series_map.get("2.3", [])
-    map22 = {str(p.date): p for p in s22}
-    map23 = {str(p.date): p for p in s23}
-    all_dates = sorted(set(list(map22.keys()) + list(map23.keys())))
+    ws.row_dimensions[header_row].height = 40
 
-    prev_total = None
-    for row_i, d in enumerate(all_dates, 5):
-        p22 = map22.get(d)
-        p23 = map23.get(d)
-        v22 = float(p22.value) if p22 and p22.value else None
-        v23 = float(p23.value) if p23 and p23.value else None
-        total = (v22 or 0) + (v23 or 0) if (v22 is not None or v23 is not None) else None
-
-        # МоМ для всего
-        mom_total = None
-        if total is not None and prev_total is not None and prev_total != 0:
-            mom_total = round((total - prev_total) / abs(prev_total) * 100, 1)
-        prev_total = total
-
-        # ГоГ для всего
-        prev22 = float(p22.prev_year_value) if p22 and p22.prev_year_value else None
-        prev23 = float(p23.prev_year_value) if p23 and p23.prev_year_value else None
-        yoy_total = None
-        if total is not None and (prev22 is not None or prev23 is not None):
-            pt = (prev22 or 0) + (prev23 or 0)
-            if pt != 0:
-                yoy_total = round((total - pt) / abs(pt) * 100, 1)
-
-        label = (p22.label if p22 and p22.label else None) or (p23.label if p23 and p23.label else d)
-
+    # Данные
+    for row_i, d in enumerate(all_dates, header_row + 1):
+        # Метка периода — берём из первого доступного кода
+        label = d
+        for code in codes:
+            p = maps[code].get(d)
+            if p and p.label:
+                label = p.label
+                break
         _set_str(ws, row_i, 1, label)
-        _set_num(ws, row_i, 2, round(total, 1) if total is not None else None)
-        _set_num(ws, row_i, 3, round(v22, 1) if v22 is not None else None)
-        _set_num(ws, row_i, 4, round(v23, 1) if v23 is not None else None)
-        _set_num(ws, row_i, 5, yoy_total, FMT_PCT1)
-        _set_num(ws, row_i, 6, round(float(p22.yoy_change_pct), 1) if p22 and p22.yoy_change_pct else None, FMT_PCT1)
-        _set_num(ws, row_i, 7, round(float(p23.yoy_change_pct), 1) if p23 and p23.yoy_change_pct else None, FMT_PCT1)
-        _set_num(ws, row_i, 8, mom_total, FMT_PCT1)
-        _set_num(ws, row_i, 9, round(float(p22.mom_change_pct), 1) if p22 and p22.mom_change_pct else None, FMT_PCT1)
-        _set_num(ws, row_i, 10, round(float(p23.mom_change_pct), 1) if p23 and p23.mom_change_pct else None, FMT_PCT1)
+
+        for code in codes:
+            vc, yc, mc = col_map[code]
+            p = maps[code].get(d)
+            val  = _to_float(p.value)           if p else None
+            yoy  = _to_float(p.yoy_change_pct)  if p else None
+            mom  = _to_float(p.mom_change_pct)  if p else None
+            m_unit = meta.get(code, {}).get("unit", "").strip()
+            is_pct = m_unit in ('%', 'процент', 'п.п.')
+            val_fmt = '0.00"%"' if is_pct else FMT_NUM1
+            dlt_fmt = FMT_PP2  if is_pct else FMT_PCT1
+            _set_num(ws, row_i, vc, round(val, 2) if val is not None else None, val_fmt)
+            _set_num(ws, row_i, yc, round(yoy, 2) if yoy is not None else None, dlt_fmt)
+            _set_num(ws, row_i, mc, round(mom, 2) if mom is not None else None, dlt_fmt)
 
     # Ширина столбцов
     ws.column_dimensions["A"].width = 18
-    for i in range(2, 11):
-        ws.column_dimensions[get_column_letter(i)].width = 14
-    ws.row_dimensions[4].height = 30
+    for code in codes:
+        for c in col_map[code]:
+            ws.column_dimensions[get_column_letter(c)].width = 16
 
-    # ── Лист 2: Годовые данные ──────────────────────────────────────────────
-    ws2 = wb.create_sheet("Годовые данные")
-    ws2["A1"] = "Годовой ввод жилья, тыс. кв. м"
-    ws2["A1"].font = Font(bold=True, size=13, name="Calibri")
-    ws2["A2"] = "Источник: Росстат"
-    ws2["A2"].font = BODY_FONT
+    # ── Лист 2: Годовые ────────────────────────────────────────────────────
+    # Строим только если есть месячные данные (period_type='period', periodicity='monthly')
+    monthly_codes = [
+        c for c in codes
+        if meta.get(c, {}).get("periodicity", "monthly") in ("monthly", "quarterly")
+        and meta.get(c, {}).get("period_type", "period") == "period"
+    ]
 
-    for col, h in enumerate(["Год", "Всего", "ИЖС", "МЖС", "Всего г/г %", "ИЖС г/г %", "МЖС г/г %"], 1):
-        _set_header(ws2, 4, col, h)
+    if monthly_codes and all_dates:
+        ws2 = wb.create_sheet("Годовые")
+        ws2["A1"] = "Годовые данные (накопленный итог)"
+        ws2["A1"].font = Font(bold=True, size=12, name="Calibri")
+        ws2["A2"] = f"Источник: {', '.join(sources)}"
+        ws2["A2"].font = BODY_FONT
 
-    # Группируем по годам
-    year_data = defaultdict(lambda: {"v22": 0.0, "v23": 0.0, "months": [], "dates": []})
-    for d in all_dates:
-        year = int(d[:4])
-        month = int(d[5:7])
-        p22 = map22.get(d)
-        p23 = map23.get(d)
-        if p22 and p22.value: year_data[year]["v22"] += float(p22.value)
-        if p23 and p23.value: year_data[year]["v23"] += float(p23.value)
-        year_data[year]["months"].append(month)
-        year_data[year]["dates"].append(d)
+        header_row2 = 4
+        _set_header(ws2, header_row2, 1, "Год")
+        col2 = 2
+        col_map2 = {}
+        for code in monthly_codes:
+            m = meta.get(code, {})
+            unit = m.get("unit", "")
+            name = m.get("name", code)[:30]
+            _set_header(ws2, header_row2, col2,     f"{name}\n({unit})")
+            _set_header(ws2, header_row2, col2 + 1, f"{name}\nг/г, %")
+            col_map2[code] = (col2, col2 + 1)
+            col2 += 2
 
-    current_year = date_type.today().year
-    sorted_years = sorted(year_data.keys())
+        ws2.row_dimensions[header_row2].height = 40
 
-    # Словарь годовых итогов для расчёта ГоГ
-    year_totals = {y: year_data[y]["v22"] + year_data[y]["v23"] for y in sorted_years}
-    year_v22 = {y: year_data[y]["v22"] for y in sorted_years}
-    year_v23 = {y: year_data[y]["v23"] for y in sorted_years}
+        # Группируем по годам
+        year_vals = defaultdict(lambda: defaultdict(list))
+        year_months = defaultdict(set)
+        for d in all_dates:
+            year = int(d[:4])
+            month = int(d[5:7])
+            year_months[year].add(month)
+            for code in monthly_codes:
+                p = maps[code].get(d)
+                if p and p.value is not None:
+                    year_vals[year][code].append(_to_float(p.value))
 
-    for row_i, year in enumerate(sorted_years, 5):
-        yd = year_data[year]
-        total_y = round(yd["v22"] + yd["v23"], 1)
-        v22_y = round(yd["v22"], 1)
-        v23_y = round(yd["v23"], 1)
-        months = sorted(yd["months"])
-        is_partial = year == current_year and len(months) < 12
+        current_year = date_type.today().year
+        sorted_years = sorted(year_vals.keys())
+        year_sums = {y: {c: sum(v) for c, v in year_vals[y].items()} for y in sorted_years}
 
-        if is_partial:
-            m_from = MONTHS_RU_SHORT[months[0] - 1]
-            m_to = MONTHS_RU_SHORT[months[-1] - 1]
-            label = f"{m_from}–{m_to} {year}"
-        else:
-            label = str(year)
+        for row_i, year in enumerate(sorted_years, header_row2 + 1):
+            months = sorted(year_months[year])
+            is_partial = year == current_year and len(months) < 12
+            if is_partial:
+                label = f"{MONTHS_RU_SHORT[months[0]-1]}–{MONTHS_RU_SHORT[months[-1]-1]} {year}"
+            else:
+                label = str(year)
 
-        # ГоГ для года — для неполного года сравниваем только те же месяцы прошлого года
-        prev_year = year - 1
-        yoy_total_y = None
-        yoy_v22_y = None
-        yoy_v23_y = None
+            _set_str(ws2, row_i, 1, label, bold=is_partial)
 
-        if is_partial:
-            # Считаем сумму тех же месяцев за прошлый год
-            prev_months_dates = [f"{prev_year}-{str(m).zfill(2)}-01" for m in months]
-            prev_v22 = sum(float(map22[d].value) for d in prev_months_dates if d in map22 and map22[d].value)
-            prev_v23 = sum(float(map23[d].value) for d in prev_months_dates if d in map23 and map23[d].value)
-            prev_total_partial = prev_v22 + prev_v23
-            if prev_total_partial != 0:
-                yoy_total_y = round((year_totals[year] - prev_total_partial) / abs(prev_total_partial) * 100, 1)
-            if prev_v22 != 0:
-                yoy_v22_y = round((year_v22[year] - prev_v22) / abs(prev_v22) * 100, 1)
-            if prev_v23 != 0:
-                yoy_v23_y = round((year_v23[year] - prev_v23) / abs(prev_v23) * 100, 1)
-        else:
-            if prev_year in year_totals and year_totals[prev_year] != 0:
-                yoy_total_y = round((year_totals[year] - year_totals[prev_year]) / abs(year_totals[prev_year]) * 100, 1)
-            if prev_year in year_v22 and year_v22[prev_year] != 0:
-                yoy_v22_y = round((year_v22[year] - year_v22[prev_year]) / abs(year_v22[prev_year]) * 100, 1)
-            if prev_year in year_v23 and year_v23[prev_year] != 0:
-                yoy_v23_y = round((year_v23[year] - year_v23[prev_year]) / abs(year_v23[prev_year]) * 100, 1)
+            for code in monthly_codes:
+                vc2, yc2 = col_map2[code]
+                val_y = year_sums[year].get(code)
+                val_y_r = round(val_y, 1) if val_y is not None else None
 
-        _set_str(ws2, row_i, 1, label, bold=is_partial)
-        _set_num(ws2, row_i, 2, total_y)
-        _set_num(ws2, row_i, 3, v22_y)
-        _set_num(ws2, row_i, 4, v23_y)
-        _set_num(ws2, row_i, 5, yoy_total_y, FMT_PCT1)
-        _set_num(ws2, row_i, 6, yoy_v22_y, FMT_PCT1)
-        _set_num(ws2, row_i, 7, yoy_v23_y, FMT_PCT1)
+                # ГоГ — для неполного года берём те же месяцы прошлого года
+                prev_year = year - 1
+                yoy_y = None
+                if prev_year in year_sums:
+                    if is_partial:
+                        prev_months_dates = [f"{prev_year}-{str(m).zfill(2)}-01" for m in months]
+                        prev_val = sum(
+                            _to_float(maps[code][d].value) or 0
+                            for d in prev_months_dates
+                            if d in maps.get(code, {}) and maps[code][d].value is not None
+                        )
+                    else:
+                        prev_val = year_sums[prev_year].get(code, 0)
+                    if prev_val and val_y is not None:
+                        yoy_y = round((val_y - prev_val) / abs(prev_val) * 100, 1)
 
-    ws2.column_dimensions["A"].width = 20
-    for i in range(2, 8):
-        ws2.column_dimensions[get_column_letter(i)].width = 14
-    ws2.row_dimensions[4].height = 30
+                _set_num(ws2, row_i, vc2, val_y_r, FMT_NUM1)
+                _set_num(ws2, row_i, yc2, yoy_y, FMT_PCT1)
+
+        ws2.column_dimensions["A"].width = 20
+        for code in monthly_codes:
+            for c in col_map2[code]:
+                ws2.column_dimensions[get_column_letter(c)].width = 16
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -65,6 +65,11 @@
     if (indicator.periodicity === 'annual') {
       document.querySelector('[data-mode="mom"]')?.remove();
     }
+    // Переименовать кнопку для квартальных
+    if (indicator.periodicity === 'quarterly') {
+      const momBtn = document.querySelector('[data-mode="mom"]');
+      if (momBtn) momBtn.textContent = 'Изм. кв./кв.';
+    }
   }
 
   function renderKPI() {
@@ -76,10 +81,11 @@
     elKpiPeriod.textContent = last.label || fmtDate(last.date, indicator.periodicity);
 
     const pp = isPp();
+    const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
     const yoyHtml = last.yoy_change_pct != null
       ? `<span style="margin-right:12px">г/г: ${deltaHtml(last.yoy_change_pct, pp)}</span>` : '';
     const momHtml = (last.mom_change_pct != null && indicator.periodicity !== 'annual')
-      ? `<span>м/м: ${deltaHtml(last.mom_change_pct, pp)}</span>` : '';
+      ? `<span>${momLabel}: ${deltaHtml(last.mom_change_pct, pp)}</span>` : '';
     elKpiDelta.innerHTML = yoyHtml + momHtml;
   }
 
@@ -104,7 +110,7 @@
     const isDelta = currentMode === 'yoy' || currentMode === 'mom';
     const pp      = isPp();
 
-    const xData = series.map(p => fmtDate(p.date, indicator.periodicity));
+    const xData = series.map(p => p.label || fmtDate(p.date, indicator.periodicity));
     let yData, seriesName, yFmt, useBar;
 
     if (currentMode === 'yoy') {
@@ -114,7 +120,8 @@
       useBar = true;
     } else if (currentMode === 'mom') {
       yData = series.map(p => p.mom_change_pct != null ? Number(p.mom_change_pct) : null);
-      seriesName = pp ? 'Изм. м/м, п.п.' : 'Изм. м/м, %';
+      const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
+      seriesName = pp ? `Изм. ${momLabel}, п.п.` : `Изм. ${momLabel}, %`;
       yFmt = v => pp ? `${v > 0 ? '+' : ''}${fmtNum(v, 2)} п.п.` : `${v > 0 ? '+' : ''}${fmtNum(v, 1)}%`;
       useBar = true;
     } else {
@@ -216,20 +223,21 @@
     const series  = [...getFiltered()].reverse();
     const showMom = indicator.periodicity !== 'annual';
     const pp      = isPp();
+    const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
 
     const thead = document.querySelector('.data-table thead tr');
     if (thead) {
       thead.innerHTML = `
         <th>Период</th>
-        <th style="text-align:right">Значение</th>
+        <th style="text-align:right">Значение${indicator.unit ? ', ' + indicator.unit : ''}</th>
         <th style="text-align:right">${pp ? 'Изм. г/г, п.п.' : 'Изм. г/г'}</th>
-        ${showMom ? `<th style="text-align:right">${pp ? 'Изм. м/м, п.п.' : 'Изм. м/м'}</th>` : ''}
+        ${showMom ? `<th style="text-align:right">${pp ? `Изм. ${momLabel}, п.п.` : `Изм. ${momLabel}`}</th>` : ''}
       `;
     }
 
     elTableBody.innerHTML = series.map(p => `
       <tr>
-        <td>${fmtDate(p.date, indicator.periodicity)}</td>
+        <td>${p.label || fmtDate(p.date, indicator.periodicity)}</td>
         <td class="num ${p.is_preliminary ? 'prelim' : ''}">${p.value != null ? fmtValue(p.value) : '—'}</td>
         <td class="num">${deltaHtml(p.yoy_change_pct, pp)}</td>
         ${showMom ? `<td class="num">${deltaHtml(p.mom_change_pct, pp)}</td>` : ''}

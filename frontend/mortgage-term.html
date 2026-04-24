@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Структура ввода жилья МЖС/ИЖС — Рынок недвижимости России</title>
+  <title>Средневзвешенный срок ипотечного кредита — Рынок недвижимости России</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/variables.css"/>
@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
     .kpi-cards-row {
-      display: grid; grid-template-columns: repeat(2, 1fr);
+      display: grid; grid-template-columns: repeat(3, 1fr);
       gap: 16px; margin-bottom: 28px;
     }
     .kpi-card-sm {
@@ -71,31 +71,30 @@
           <div class="filter-options"><button class="filter-btn active">Россия</button></div>
         </div>
         <div class="filter-section">
-          <div class="filter-label">Тип жилья</div>
+          <div class="filter-label">Рынок</div>
           <div class="filter-options">
-            <button class="filter-btn active" data-series="2.2">
-              <span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>ИЖС
+            <button class="filter-btn active" data-series="total">
+              <span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Всего
             </button>
-            <button class="filter-btn active" data-series="2.3">
-              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>МЖС
+            <button class="filter-btn active" data-series="primary">
+              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Первичный
+            </button>
+            <button class="filter-btn active" data-series="secondary">
+              <span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>Вторичный
             </button>
           </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-label">Город</div>
-          <div class="filter-options"><span class="filter-soon">Скоро</span></div>
         </div>
       </aside>
 
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
-          <a href="category.html?code=supply_volume">Объём ввода жилья</a><span class="breadcrumb-sep">›</span>
-          <span>Структура ввода МЖС / ИЖС</span>
+          <a href="category.html?code=mortgage_total">Ипотека</a><span class="breadcrumb-sep">›</span>
+          <span>Средневзвешенный срок ипотечного кредита</span>
         </div>
 
         <div class="chart-header">
-          <h1>Структура ввода жилья: МЖС и ИЖС</h1>
+          <h1>Средневзвешенный срок ипотечного кредита</h1>
           <div class="chart-meta">
             <span class="chart-meta-item">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -103,25 +102,31 @@
             </span>
             <span class="chart-meta-item">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              Росстат
+              Банк России
             </span>
-            <span class="chart-meta-item" style="color:var(--color-muted)">%</span>
+            <span class="chart-meta-item" style="color:var(--color-muted)">мес.</span>
           </div>
         </div>
 
-        <!-- KPI: МЖС %, ИЖС % -->
+        <!-- KPI: Всего, Первичный, Вторичный -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>МЖС (многоквартирные дома)</div>
-            <div class="kpi-value" id="kpi-mzhs-value">—</div>
-            <div class="kpi-period">% от общего ввода · <span id="kpi-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-mzhs-deltas"></div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Всего</div>
+            <div class="kpi-value" id="kpi-total-value">—</div>
+            <div class="kpi-period">мес. · <span id="kpi-total-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-total-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>ИЖС (индивидуальные дома)</div>
-            <div class="kpi-value" id="kpi-izhs-value">—</div>
-            <div class="kpi-period">% от общего ввода · <span class="kpi-period-ref"></span></div>
-            <div class="kpi-deltas" id="kpi-izhs-deltas"></div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Первичный рынок</div>
+            <div class="kpi-value" id="kpi-primary-value">—</div>
+            <div class="kpi-period">мес. · <span id="kpi-primary-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-primary-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Вторичный рынок</div>
+            <div class="kpi-value" id="kpi-secondary-value">—</div>
+            <div class="kpi-period">мес. · <span id="kpi-secondary-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-secondary-deltas"></div>
           </div>
         </div>
 
@@ -135,8 +140,9 @@
               <button data-range="all" class="active">За всё время</button>
             </div>
             <div class="btn-group">
-              <button data-mode="share" class="active">Структура, %</button>
-              <button data-mode="yoy">Изм. г/г, п.п.</button>
+              <button data-mode="absolute" class="active">Значения</button>
+              <button data-mode="yoy">Изм. г/г</button>
+              <button data-mode="mom">Изм. м/м</button>
             </div>
           </div>
           <div class="toolbar-actions">
@@ -153,26 +159,28 @@
 
         <div class="chart-container">
           <div id="main-chart"></div>
-          <div class="chart-source">Источник: Росстат</div>
+          <div class="chart-source">Источник: Банк России</div>
         </div>
 
-        <!-- Data table -->
+        <!-- Таблица -->
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
           <div class="table-tabs">
-            <button class="table-tab active" data-table="izhs">ИЖС</button>
-            <button class="table-tab" data-table="mzhs">МЖС</button>
+            <button class="table-tab active" data-table="total">Всего</button>
+            <button class="table-tab" data-table="primary">Первичный</button>
+            <button class="table-tab" data-table="secondary">Вторичный</button>
           </div>
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width:34%">Период</th>
-                <th style="width:33%;text-align:right">Доля, %</th>
-                <th style="width:33%;text-align:right">Изм. г/г, п.п.</th>
+                <th style="width:25%">Период</th>
+                <th style="width:25%;text-align:right">Значение, мес.</th>
+                <th style="width:25%;text-align:right">Изм. г/г</th>
+                <th style="width:25%;text-align:right">Изм. м/м</th>
               </tr>
             </thead>
             <tbody id="data-table-body">
-              <tr><td colspan="3" class="skeleton" style="height:180px"></td></tr>
+              <tr><td colspan="4" class="skeleton" style="height:180px"></td></tr>
             </tbody>
           </table>
         </div>
@@ -182,7 +190,7 @@
 </main>
 
 <footer class="site-footer">
-  <div>Данные: Росстат &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div>
+  <div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div>
 </footer>
 
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
@@ -190,12 +198,25 @@
 <script src="js/utils.js"></script>
 <script>
 
+const CODES = {
+  total:     '6.4',
+  primary:   '6.10',
+  secondary: '6.16',
+};
+const COLORS = { total: '#E8341C', primary: '#1A2B4A', secondary: '#F4A336' };
+const LABELS = { total: 'Всего', primary: 'Первичный', secondary: 'Вторичный' };
+const CHART_TYPE   = 'line';   // 'bar' | 'line'
+const FMT_DECIMALS = 1;
+const TOOLTIP_SFX  = ' мес.';
+const UNIT         = 'мес.';
+const FILE_NAME    = 'mortgage-term.html';
+
 let chartInstance = null;
-let allData = {};          // {"2.2": {indicator, series}, "2.3": {indicator, series}}
-let computed = [];         // [{date, label, izhsShare, mzhsShare, izhsYoy, mzhsYoy}]
-let currentRange = null;   // null = всё время, число = лет
-let currentMode = 'share'; // 'share' | 'yoy'
-let currentTable = 'izhs';
+let allData = {};
+let activeSeries = new Set(['total', 'primary', 'secondary']);
+let currentRange = null;
+let currentMode  = 'absolute';
+let currentTable = 'total';
 
 // ── Навигация ──────────────────────────────────────────────────────────────
 api.categories().then(cats => {
@@ -203,93 +224,46 @@ api.categories().then(cats => {
     `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
 }).catch(() => {});
 
-// ── Загрузка данных ────────────────────────────────────────────────────────
+// ── Загрузка ───────────────────────────────────────────────────────────────
 async function init() {
-  allData = await api.multiIndicatorData('2.2,2.3');
+  const codes = Object.values(CODES).join(',');
+  allData = await api.multiIndicatorData(codes);
 
-  const dates = Object.values(allData).map(d => d.indicator.last_updated).filter(Boolean);
+  const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
   if (dates.length)
     document.getElementById('chart-updated').textContent =
       new Date(dates[0]).toLocaleDateString('ru-RU');
 
-  computed = buildComputed(allData['2.2']?.series || [], allData['2.3']?.series || []);
   renderKPI();
   buildChart();
   renderTable();
 }
 
-// ── Расчёт долей и YoY в п.п. ─────────────────────────────────────────────
-function buildComputed(s22, s23) {
-  // Объединяем по дате
-  const map = {};
-  s22.forEach(p => { map[p.date] = { date: p.date, label: p.label, p22: p }; });
-  s23.forEach(p => {
-    if (!map[p.date]) map[p.date] = { date: p.date, label: p.label };
-    map[p.date].p23 = p;
-  });
-
-  const arr = Object.values(map)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .filter(m => m.p22?.value != null && m.p23?.value != null);
-
-  // Рассчитываем доли
-  const result = arr.map(m => {
-    const v22 = Number(m.p22.value);
-    const v23 = Number(m.p23.value);
-    const total = v22 + v23;
-    const izhsShare = total > 0 ? +(v22 / total * 100).toFixed(2) : null;
-    const mzhsShare = total > 0 ? +(v23 / total * 100).toFixed(2) : null;
-    return { date: m.date, label: m.label, izhsShare, mzhsShare, izhsYoy: null, mzhsYoy: null };
-  });
-
-  // YoY в п.п.: сравниваем с тем же месяцем прошлого года
-  const byDate = {};
-  result.forEach(p => { byDate[p.date] = p; });
-
-  result.forEach(p => {
-    const d = new Date(p.date);
-    d.setFullYear(d.getFullYear() - 1);
-    const prevKey = d.toISOString().slice(0, 10);
-    const prev = byDate[prevKey];
-    if (prev) {
-      p.izhsYoy = p.izhsShare != null && prev.izhsShare != null
-        ? +(p.izhsShare - prev.izhsShare).toFixed(2) : null;
-      p.mzhsYoy = p.mzhsShare != null && prev.mzhsShare != null
-        ? +(p.mzhsShare - prev.mzhsShare).toFixed(2) : null;
-    }
-  });
-
-  return result;
-}
-
 // ── Фильтрация по диапазону ────────────────────────────────────────────────
-function getFiltered() {
-  if (!currentRange) return computed;
-  const pts = computed.filter(p => p.izhsShare != null);
-  if (!pts.length) return computed;
+function getFiltered(key) {
+  const series = allData[CODES[key]]?.series || [];
+  if (!currentRange) return series;
+  const pts = series.filter(p => p.value != null);
+  if (!pts.length) return series;
   const lastDate = new Date(pts[pts.length - 1].date);
   const cutoff = new Date(lastDate);
   cutoff.setFullYear(cutoff.getFullYear() - currentRange);
-  // Сдвиг −2 месяца (правило #3)
   cutoff.setMonth(cutoff.getMonth() - 2);
-  return computed.filter(p => new Date(p.date) >= cutoff);
+  return series.filter(p => new Date(p.date) >= cutoff);
 }
 
 // ── KPI ────────────────────────────────────────────────────────────────────
 function renderKPI() {
-  if (!computed.length) return;
-  const last = [...computed].reverse().find(p => p.izhsShare != null);
-  if (!last) return;
-
-  document.getElementById('kpi-mzhs-value').textContent = fmtPct(last.mzhsShare);
-  document.getElementById('kpi-izhs-value').textContent = fmtPct(last.izhsShare);
-  document.getElementById('kpi-period').textContent = last.label || '';
-  document.querySelectorAll('.kpi-period-ref').forEach(el => el.textContent = last.label || '');
-
-  document.getElementById('kpi-mzhs-deltas').innerHTML =
-    last.mzhsYoy != null ? `<span>г/г: ${deltaPpHtml(last.mzhsYoy)}</span>` : '';
-  document.getElementById('kpi-izhs-deltas').innerHTML =
-    last.izhsYoy != null ? `<span>г/г: ${deltaPpHtml(last.izhsYoy)}</span>` : '';
+  ['total', 'primary', 'secondary'].forEach(key => {
+    const s    = (allData[CODES[key]]?.series || []).filter(p => p.value != null);
+    const last = s[s.length - 1];
+    if (!last) return;
+    document.getElementById(`kpi-${key}-value`).textContent  = fmtNum(Number(last.value), FMT_DECIMALS);
+    document.getElementById(`kpi-${key}-period`).textContent = last.label || '—';
+    document.getElementById(`kpi-${key}-deltas`).innerHTML =
+      `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
+      `<span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+  });
 }
 
 // ── График ─────────────────────────────────────────────────────────────────
@@ -299,52 +273,68 @@ function buildChart() {
     window.addEventListener('resize', () => chartInstance.resize());
   }
 
-  const data = getFiltered();
-  const xData = data.map(p => p.label || fmtDate(p.date, 'monthly'));
-  const isYoy = currentMode === 'yoy';
+  // Объединяем даты из всех активных серий
+  const allDates = [...new Set(
+    [...activeSeries].flatMap(key => getFiltered(key).map(p => p.date))
+  )].sort();
 
-  let series;
-  if (!isYoy) {
-    // 100%-стековая гистограмма
-    series = [
-      {
-        name: 'МЖС', type: 'bar', stack: 'total',
-        data: data.map(p => p.mzhsShare),
-        itemStyle: { color: '#1A2B4A' }, emphasis: { focus: 'series' },
-      },
-      {
-        name: 'ИЖС', type: 'bar', stack: 'total',
-        data: data.map(p => p.izhsShare),
-        itemStyle: { color: '#F4A336' }, emphasis: { focus: 'series' },
-      },
-    ];
-  } else {
-    // Линейный: изменение доли г/г в п.п.
-    series = [
-      {
-        name: 'МЖС г/г', type: 'line',
-        data: data.map(p => p.mzhsYoy),
-        lineStyle: { color: '#1A2B4A', width: 2 }, itemStyle: { color: '#1A2B4A' },
-        symbol: data.length < 60 ? 'circle' : 'none', symbolSize: 4, connectNulls: false,
-      },
-      {
-        name: 'ИЖС г/г', type: 'line',
-        data: data.map(p => p.izhsYoy),
-        lineStyle: { color: '#F4A336', width: 2 }, itemStyle: { color: '#F4A336' },
-        symbol: data.length < 60 ? 'circle' : 'none', symbolSize: 4, connectNulls: false,
-      },
-    ];
-  }
+  const isDelta = currentMode !== 'absolute';
+  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
+
+  const series = [...activeSeries].map(key => {
+    const cfg = { color: COLORS[key], label: LABELS[key] };
+    const map = {};
+    getFiltered(key).forEach(p => { map[p.date] = p; });
+
+    const data = allDates.map(d => {
+      const p = map[d];
+      if (!p || p.value == null) return null;
+      return isDelta ? (p[field] != null ? Number(p[field]) : null) : Number(p.value);
+    });
+
+    // Гистограмма или линия
+    if (CHART_TYPE === 'bar' && !isDelta) {
+      return {
+        name: cfg.label, type: 'bar', stack: null,
+        data,
+        itemStyle: { color: cfg.color },
+        barMaxWidth: 20,
+        emphasis: { focus: 'series' },
+      };
+    }
+    return {
+      name: cfg.label, type: 'line',
+      data,
+      lineStyle: { color: cfg.color, width: 2.5 },
+      itemStyle: { color: cfg.color },
+      symbol: allDates.length < 60 ? 'circle' : 'none',
+      symbolSize: 4,
+      connectNulls: false,
+      ...(isDelta && CHART_TYPE === 'bar' ? {
+        itemStyle: {
+          color: params => params.value >= 0 ? '#16a34a' : '#dc2626',
+        },
+      } : {}),
+    };
+  });
+
+  const xLabels = allDates.map(d => {
+    for (const key of activeSeries) {
+      const p = (allData[CODES[key]]?.series || []).find(x => x.date === d);
+      if (p?.label) return p.label;
+    }
+    return d;
+  });
 
   chartInstance.setOption({
     animation: true, animationDuration: 200, animationEasing: 'cubicOut',
     legend: {
-      data: isYoy ? ['МЖС г/г', 'ИЖС г/г'] : ['МЖС', 'ИЖС'],
+      data: series.map(s => s.name),
       top: 0, left: 0,
       textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 12, color: '#3D4F60' },
       icon: 'circle', itemWidth: 10, itemHeight: 10,
     },
-    grid: { left: 60, right: 20, top: 40, bottom: 80 },
+    grid: { left: 70, right: 20, top: 40, bottom: 80 },
     dataZoom: [
       {
         type: 'slider', bottom: 8, height: 24,
@@ -359,38 +349,32 @@ function buildChart() {
       { type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 16 },
     ],
     tooltip: {
-      trigger: 'axis', backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
+      trigger: 'axis',
+      ...(CHART_TYPE === 'bar' ? { axisPointer: { type: 'shadow' } } : {}),
+      backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
       textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
       formatter: params => {
         let html = `<b>${params[0]?.axisValue}</b><br/>`;
         params.forEach(p => {
           if (p.value == null) return;
-          const val = isYoy
-            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)} п.п.`
-            : `${fmtNum(p.value, 1)}%`;
+          const val = isDelta
+            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)}%`
+            : fmtNum(p.value, FMT_DECIMALS) + TOOLTIP_SFX;
           html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
         });
-        // В режиме структуры показываем итог
-        if (!isYoy) {
-          const total = params.reduce((s, p) => s + (p.value ?? 0), 0);
-          if (Math.abs(total - 100) < 0.5)
-            html += `<span style="color:#aaa">Итого: 100%</span>`;
-        }
         return html;
       },
     },
     xAxis: {
-      type: 'category', data: xData,
-      axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: xData.length > 36 ? 30 : 0 },
+      type: 'category', data: xLabels,
+      axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: xLabels.length > 36 ? 30 : 0 },
       axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
-      min: isYoy ? undefined : 0,
-      max: isYoy ? undefined : 100,
       axisLabel: {
         fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-        formatter: v => isYoy ? (v > 0 ? '+' : '') + v + ' п.п.' : v + '%',
+        formatter: v => isDelta ? (v > 0 ? '+' : '') + fmtNum(v, 1) + '%' : fmtNum(v, FMT_DECIMALS),
       },
       splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
       axisLine: { show: false }, axisTick: { show: false },
@@ -401,34 +385,15 @@ function buildChart() {
 
 // ── Таблица ────────────────────────────────────────────────────────────────
 function renderTable() {
-  const data = getFiltered().slice().reverse();
-  const body = document.getElementById('data-table-body');
-  const shareField  = currentTable === 'izhs' ? 'izhsShare' : 'mzhsShare';
-  const yoyField    = currentTable === 'izhs' ? 'izhsYoy'   : 'mzhsYoy';
-
-  body.innerHTML = data.map(p => {
-    const share = p[shareField];
-    const yoy   = p[yoyField];
-    return `<tr>
-      <td>${p.label || fmtDate(p.date, 'monthly')}</td>
-      <td class="num">${share != null ? fmtNum(share, 1) + '%' : '—'}</td>
-      <td class="num">${yoy != null ? deltaPpHtml(yoy) : '—'}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="3" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-// ── Вспомогательные функции ────────────────────────────────────────────────
-function fmtPct(v) {
-  if (v == null) return '—';
-  return fmtNum(v, 1) + '%';
-}
-
-function deltaPpHtml(v) {
-  if (v == null) return '<span style="color:var(--color-muted)">—</span>';
-  const sign = v > 0 ? '+' : '';
-  const cls  = v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu';
-  const clsMap = { pos: 'color:#16a34a', neg: 'color:#dc2626', neu: 'color:var(--color-muted)' };
-  return `<span style="${clsMap[cls]}">${sign}${fmtNum(v, 1)} п.п.</span>`;
+  const series = getFiltered(currentTable).slice().reverse();
+  const body   = document.getElementById('data-table-body');
+  body.innerHTML = series.map(p => `<tr>
+    <td>${p.label || p.date}</td>
+    <td class="num">${p.value != null ? fmtNum(Number(p.value), FMT_DECIMALS) + ' ' + UNIT : '—'}</td>
+    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
+    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
+  </tr>`).join('') ||
+    '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
 }
 
 // ── Обработчики ────────────────────────────────────────────────────────────
@@ -450,6 +415,18 @@ document.querySelectorAll('[data-mode]').forEach(btn => {
   });
 });
 
+document.querySelectorAll('[data-series]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.series;
+    if (activeSeries.has(key)) {
+      if (activeSeries.size > 1) { activeSeries.delete(key); btn.classList.remove('active'); }
+    } else {
+      activeSeries.add(key); btn.classList.add('active');
+    }
+    buildChart();
+  });
+});
+
 document.querySelectorAll('[data-table]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
@@ -462,12 +439,12 @@ document.querySelectorAll('[data-table]').forEach(btn => {
 document.getElementById('btn-download-png')?.addEventListener('click', () => {
   if (!chartInstance) return;
   const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
-  const a = document.createElement('a');
-  a.href = url; a.download = 'share_mzhs_izhs.png'; a.click();
+  const a = document.createElement('a'); a.href = url; a.download = FILE_NAME.replace('.html', '.png'); a.click();
 });
 
 document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=2.2,2.3`);
+  const xlsxUrl = `${window.API_BASE}/multi/data.xlsx?codes=${Object.values(CODES).join(',')}&labels=Весь%20рынок%2CПервичный%20рынок%2CВторичный%20рынок&title=Средневзвешенный%20срок%20ипотечных%20кредитов&filename=mortgage_term`;
+  window.open(xlsxUrl);
 });
 
 init().catch(console.error);

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Цены на жильё (Росстат) — Рынок недвижимости России</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/variables.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="css/chart.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    .kpi-cards-row {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 16px; margin-bottom: 28px;
+    }
+    .kpi-card-sm {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg); padding: 16px 20px; box-shadow: var(--shadow);
+    }
+    .kpi-card-sm .kpi-label {
+      font-size: .7rem; color: var(--color-muted); text-transform: uppercase;
+      letter-spacing: .08em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
+    }
+    .kpi-card-sm .kpi-value {
+      font-family: var(--font-mono); font-size: 1.3rem; font-weight: 700;
+      color: var(--color-ink); line-height: 1; margin-bottom: 2px;
+    }
+    .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 8px; }
+    .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .78rem; }
+    .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Группы фильтров в сайдбаре */
+    .filter-group-label {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--color-muted);
+      margin: 14px 0 6px;
+    }
+    .filter-group-label:first-child { margin-top: 0; }
+
+    /* Двухуровневые вкладки таблицы */
+    .table-tabs-wrap {
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-bg);
+    }
+    .table-tabs-level1 {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .table-tab-l1 {
+      flex: 1; padding: 10px 16px; text-align: center;
+      font-size: .82rem; font-weight: 600; font-family: var(--font-body);
+      border: none; border-right: 1px solid var(--color-border);
+      background: var(--color-bg); color: var(--color-muted);
+      cursor: pointer; transition: all .15s;
+    }
+    .table-tab-l1:last-child { border-right: none; }
+    .table-tab-l1.active { background: var(--color-surface); color: var(--color-ink); box-shadow: inset 0 -2px 0 var(--color-ink); }
+    .table-tab-l1:hover:not(.active) { color: var(--color-ink); }
+
+    .table-tabs-level2 {
+      display: flex; gap: 6px; padding: 10px 20px;
+    }
+    .table-tab-l2 {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 14px; border: 1px solid var(--color-border);
+      border-radius: 20px; background: var(--color-surface);
+      font-size: .78rem; font-weight: 500; font-family: var(--font-body);
+      color: var(--color-muted); cursor: pointer; transition: all .15s;
+    }
+    .table-tab-l2.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
+    .table-tab-l2:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
+    <nav class="header-nav" id="main-nav"></nav>
+    <div class="header-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" placeholder="Поиск показателей…"/>
+    </div>
+  </div>
+</header>
+
+<main class="page-main">
+  <div class="page-wrap">
+    <div class="chart-layout">
+
+      <!-- Сайдбар с фильтрами -->
+      <aside class="sidebar" id="filters-panel">
+        <div class="sidebar-heading">Фильтры</div>
+
+        <div class="filter-section">
+          <div class="filter-label">Регион</div>
+          <div class="filter-options">
+            <button class="filter-btn active">Россия</button>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">Тип динамики цен</div>
+          <div class="filter-options" id="series-filters">
+
+            <div class="filter-group-label">Первичный рынок</div>
+            <button class="filter-btn active" data-code="4.4">
+              <span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Все квартиры
+            </button>
+            <button class="filter-btn" data-code="4.4.1">
+              <span class="kpi-dot" style="background:#FF8C00;margin-right:4px"></span>Типовые
+            </button>
+            <button class="filter-btn" data-code="4.4.2">
+              <span class="kpi-dot" style="background:#C44B8A;margin-right:4px"></span>Улучшенное
+            </button>
+            <button class="filter-btn" data-code="4.4.3">
+              <span class="kpi-dot" style="background:#8B3A9E;margin-right:4px"></span>Элитные
+            </button>
+
+            <div class="filter-group-label">Вторичный рынок</div>
+            <button class="filter-btn active" data-code="4.5">
+              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Все квартиры
+            </button>
+            <button class="filter-btn" data-code="4.5.1">
+              <span class="kpi-dot" style="background:#0D7C56;margin-right:4px"></span>Низкое кач.
+            </button>
+            <button class="filter-btn" data-code="4.5.2">
+              <span class="kpi-dot" style="background:#1A9E7A;margin-right:4px"></span>Типовые
+            </button>
+            <button class="filter-btn" data-code="4.5.3">
+              <span class="kpi-dot" style="background:#2EC4B6;margin-right:4px"></span>Улучшенное
+            </button>
+            <button class="filter-btn" data-code="4.5.4">
+              <span class="kpi-dot" style="background:#3A86FF;margin-right:4px"></span>Элитные
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">Периодичность</div>
+          <div class="filter-options">
+            <span style="font-size:.82rem;color:var(--color-muted)">Квартал</span>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <div class="filter-label">Источник данных</div>
+          <div class="filter-options">
+            <span style="font-size:.82rem;color:var(--color-muted)">Росстат</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="chart-main">
+        <div class="breadcrumb">
+          <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
+          <a href="category.html?code=prices">Цены</a><span class="breadcrumb-sep">›</span>
+          <span>Первичный и вторичный рынок (Росстат)</span>
+        </div>
+
+        <div class="chart-header">
+          <h1>Цены на жильё по типам квартир</h1>
+          <div class="chart-meta">
+            <span class="chart-meta-item">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span id="chart-updated">—</span>
+            </span>
+            <span class="chart-meta-item">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Росстат
+            </span>
+            <span class="chart-meta-item" style="color:var(--color-muted)">руб. / кв. м</span>
+          </div>
+        </div>
+
+        <!-- KPI: первичный и вторичный (все квартиры) -->
+        <div class="kpi-cards-row">
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Первичный рынок (все)</div>
+            <div class="kpi-value" id="kpi-primary-value">—</div>
+            <div class="kpi-period">руб. / кв. м · <span id="kpi-primary-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-primary-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Вторичный рынок (все)</div>
+            <div class="kpi-value" id="kpi-secondary-value">—</div>
+            <div class="kpi-period">руб. / кв. м · <span id="kpi-secondary-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-secondary-deltas"></div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="chart-toolbar">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div class="btn-group">
+              <button data-range="1">1 г</button>
+              <button data-range="3">3 г</button>
+              <button data-range="5">5 л</button>
+              <button data-range="all" class="active">За всё время</button>
+            </div>
+            <div class="btn-group">
+              <button data-mode="absolute" class="active">Значения</button>
+              <button data-mode="yoy">Изм. г/г</button>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn-outline" id="btn-download-png">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              PNG
+            </button>
+            <button class="btn-outline" id="btn-download-xlsx">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Excel
+            </button>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div id="main-chart"></div>
+          <div class="chart-source">Источник: Росстат (fedstat.ru)</div>
+        </div>
+
+        <!-- Таблица -->
+        <div class="data-table-wrap">
+          <div class="data-table-header"><span>Исходные данные</span></div>
+          <div class="table-tabs-wrap" id="table-tabs-wrap">
+            <div class="table-tabs-level1" id="table-tabs-l1">
+              <button class="table-tab-l1 active" data-market="primary">Первичный рынок</button>
+              <button class="table-tab-l1" data-market="secondary">Вторичный рынок</button>
+            </div>
+            <div class="table-tabs-level2" id="table-tabs-l2"></div>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:25%">Период</th>
+                <th style="width:25%;text-align:right">Значение, руб./кв. м</th>
+                <th style="width:25%;text-align:right">Изм. г/г</th>
+                <th style="width:25%;text-align:right">Изм. кв./кв.</th>
+              </tr>
+            </thead>
+            <tbody id="data-table-body">
+              <tr><td colspan="4" class="skeleton" style="height:180px"></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div>Данные: Росстат &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div>
+</footer>
+
+<script>window.API_BASE = 'http://localhost:8001/api';</script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script>
+
+// ── Конфиг серий ──────────────────────────────────────────────────────────
+const SERIES_CONFIG = {
+  // Первичный рынок: красный (все) + оттенки от тёплого к холодному
+  '4.4':   { label: 'Первичный (все)',         color: '#E8341C', width: 3,   dash: false },
+  '4.4.1': { label: 'Первичный — типовые',     color: '#FF8C00', width: 1.5, dash: true  },
+  '4.4.2': { label: 'Первичный — улучшенное',  color: '#C44B8A', width: 1.5, dash: true  },
+  '4.4.3': { label: 'Первичный — элитные',     color: '#8B3A9E', width: 1.5, dash: true  },
+  // Вторичный рынок: тёмно-синий (все) + оттенки зелёного/бирюзового
+  '4.5':   { label: 'Вторичный (все)',          color: '#1A2B4A', width: 3,   dash: false },
+  '4.5.1': { label: 'Вторичный — низкое кач.', color: '#0D7C56', width: 1.5, dash: true  },
+  '4.5.2': { label: 'Вторичный — типовые',     color: '#1A9E7A', width: 1.5, dash: true  },
+  '4.5.3': { label: 'Вторичный — улучшенное',  color: '#2EC4B6', width: 1.5, dash: true  },
+  '4.5.4': { label: 'Вторичный — элитные',     color: '#3A86FF', width: 1.5, dash: true  },
+};
+
+const ALL_CODES = Object.keys(SERIES_CONFIG);
+
+let chartInstance = null;
+let allData = {};              // {code: {indicator, series}}
+let activeSeries = new Set(['4.4', '4.5']);
+let currentRange = null;
+let currentMode = 'absolute';
+let currentTableCode = '4.4';
+
+// ── Навигация ──────────────────────────────────────────────────────────────
+api.categories().then(cats => {
+  document.getElementById('main-nav').innerHTML = cats.slice(0, 8).map(c =>
+    `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
+}).catch(() => {});
+
+// ── Загрузка ───────────────────────────────────────────────────────────────
+async function init() {
+  allData = await api.multiIndicatorData(ALL_CODES.join(','));
+
+  const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
+  if (dates.length)
+    document.getElementById('chart-updated').textContent =
+      new Date(dates[0]).toLocaleDateString('ru-RU');
+
+  renderKPI();
+  buildChart();
+  buildTableTabs();
+  renderTable();
+}
+
+// ── Фильтрация по диапазону ────────────────────────────────────────────────
+function getFiltered(code) {
+  const series = allData[code]?.series || [];
+  if (!currentRange) return series;
+  const pts = series.filter(p => p.value != null);
+  if (!pts.length) return series;
+  const lastDate = new Date(pts[pts.length - 1].date);
+  const cutoff = new Date(lastDate);
+  cutoff.setFullYear(cutoff.getFullYear() - currentRange);
+  cutoff.setMonth(cutoff.getMonth() - 2);
+  return series.filter(p => new Date(p.date) >= cutoff);
+}
+
+// ── KPI ────────────────────────────────────────────────────────────────────
+function renderKPI() {
+  ['4.4', '4.5'].forEach(code => {
+    const s = (allData[code]?.series || []).filter(p => p.value != null);
+    const last = s[s.length - 1];
+    if (!last) return;
+    const suffix = code === '4.4' ? 'primary' : 'secondary';
+    document.getElementById(`kpi-${suffix}-value`).textContent =
+      fmtNum(Number(last.value), 0);
+    document.getElementById(`kpi-${suffix}-period`).textContent = last.label || '—';
+    document.getElementById(`kpi-${suffix}-deltas`).innerHTML =
+      `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
+      `<span>кв./кв.: ${deltaHtml(last.mom_change_pct)}</span>`;
+  });
+}
+
+// ── График ─────────────────────────────────────────────────────────────────
+function buildChart() {
+  if (!chartInstance) {
+    chartInstance = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
+    window.addEventListener('resize', () => chartInstance.resize());
+  }
+
+  const isDelta = currentMode === 'yoy';
+  const field = 'yoy_change_pct';
+
+  // Для каждой серии строим свой массив точек {date, value/yoy}
+  // Используем xAxis на основе дат (time axis), чтобы годовые и квартальные
+  // корректно отображались на одной временной шкале
+  const series = [...activeSeries].map(code => {
+    const cfg = SERIES_CONFIG[code];
+    const pts = getFiltered(code).filter(p => p.value != null);
+
+    const data = pts.map(p => {
+      const val = isDelta
+        ? (p[field] != null ? Number(p[field]) : null)
+        : Number(p.value);
+      return [p.date, val];
+    }).filter(d => d[1] != null);
+
+    return {
+      name: cfg.label,
+      type: 'line',
+      data,
+      lineStyle: { color: cfg.color, width: cfg.width, type: cfg.dash ? 'dashed' : 'solid' },
+      itemStyle: { color: cfg.color },
+      symbol: 'circle',
+      symbolSize: pts.length <= 10 ? 6 : 3,
+      connectNulls: false,
+      encode: { x: 0, y: 1 },
+    };
+  });
+
+  // xLabels не нужны — используем time axis
+  const xLabels = null;
+
+  chartInstance.setOption({
+    animation: true, animationDuration: 200, animationEasing: 'cubicOut',
+    legend: {
+      data: series.map(s => s.name),
+      top: 0, left: 0,
+      textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#3D4F60' },
+      icon: 'circle', itemWidth: 10, itemHeight: 10,
+      type: 'scroll',
+    },
+    grid: { left: 80, right: 20, top: 50, bottom: 80 },
+    dataZoom: [
+      {
+        type: 'slider', bottom: 8, height: 24,
+        borderColor: '#DDE2E8', backgroundColor: '#F2F4F7',
+        fillerColor: 'rgba(26,43,74,0.10)',
+        handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 },
+        selectedDataBackground: { lineStyle: { color: '#1A2B4A', width: 1 }, areaStyle: { color: 'rgba(26,43,74,0.08)' } },
+        dataBackground: { lineStyle: { color: '#DDE2E8', width: 1 }, areaStyle: { color: 'rgba(221,226,232,0.3)' } },
+        textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' },
+        brushSelect: false, throttle: 16,
+      },
+      { type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 16 },
+    ],
+    tooltip: {
+      trigger: 'axis', backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
+      textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 12 },
+      formatter: params => {
+        const d = new Date(params[0]?.value?.[0] || params[0]?.axisValue);
+        const qLabel = isNaN(d) ? (params[0]?.axisValue || '') :
+          d.getFullYear() + ' Q' + Math.ceil((d.getMonth()+1)/3);
+        let html = `<b>${qLabel}</b><br/>`;
+        params.forEach(p => {
+          if (p.value == null) return;
+          const val = isDelta
+            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)}%`
+            : fmtNum(p.value, 0) + ' руб.';
+          html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
+        });
+        return html;
+      },
+    },
+    xAxis: {
+      type: 'time',
+      axisLabel: {
+        fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A',
+        formatter: val => {
+          const d = new Date(val);
+          return d.getFullYear() + (d.getMonth() > 0 ? '-Q' + Math.ceil((d.getMonth()+1)/3) : '');
+        },
+        rotate: 30,
+      },
+      axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
+        formatter: v => isDelta
+          ? (v > 0 ? '+' : '') + fmtNum(v, 1) + '%'
+          : fmtNum(v, 0),
+      },
+      splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
+      axisLine: { show: false }, axisTick: { show: false },
+    },
+    series,
+  }, true);
+}
+
+// ── Вкладки таблицы ────────────────────────────────────────────────────────
+// Карта рынков → коды
+const MARKET_CODES = {
+  primary:   ['4.4', '4.4.1', '4.4.2', '4.4.3'],
+  secondary: ['4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'],
+};
+const MARKET_SUBTAB_LABELS = {
+  '4.4':   'Все',  '4.4.1': 'Типовые',    '4.4.2': 'Улучшенное', '4.4.3': 'Элитные',
+  '4.5':   'Все',  '4.5.1': 'Низкое кач.','4.5.2': 'Типовые',    '4.5.3': 'Улучшенное', '4.5.4': 'Элитные',
+};
+
+let currentMarket = 'primary';
+
+function buildTableTabs() {
+  // Уровень 1 — переключение рынка
+  document.querySelectorAll('[data-market]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-market]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMarket = btn.dataset.market;
+      // При смене рынка выбираем первую вкладку уровня 2
+      currentTableCode = MARKET_CODES[currentMarket][0];
+      buildLevel2Tabs();
+      renderTable();
+    });
+  });
+
+  // Строим второй уровень для начального рынка
+  buildLevel2Tabs();
+}
+
+function buildLevel2Tabs() {
+  const codes = MARKET_CODES[currentMarket];
+  const l2 = document.getElementById('table-tabs-l2');
+  l2.innerHTML = codes.map(code => {
+    const cfg = SERIES_CONFIG[code];
+    const label = MARKET_SUBTAB_LABELS[code];
+    return `<button class="table-tab-l2${code === currentTableCode ? ' active' : ''}" data-table="${code}">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cfg.color};flex-shrink:0"></span>
+      ${label}
+    </button>`;
+  }).join('');
+
+  l2.querySelectorAll('[data-table]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      l2.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTableCode = btn.dataset.table;
+      renderTable();
+    });
+  });
+}
+
+// ── Таблица ────────────────────────────────────────────────────────────────
+function renderTable() {
+  const series = getFiltered(currentTableCode).slice().reverse();
+  const body = document.getElementById('data-table-body');
+
+  body.innerHTML = series.map(p => `<tr>
+    <td>${p.label || p.date}</td>
+    <td class="num">${p.value != null ? fmtNum(Number(p.value), 0) + ' руб.' : '—'}</td>
+    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
+    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+}
+
+// ── Обработчики ────────────────────────────────────────────────────────────
+document.querySelectorAll('[data-range]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range);
+    buildChart(); renderTable();
+  });
+});
+
+document.querySelectorAll('[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+    buildChart();
+  });
+});
+
+document.querySelectorAll('[data-code]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.dataset.code;
+    if (activeSeries.has(code)) {
+      if (activeSeries.size > 1) {
+        activeSeries.delete(code);
+        btn.classList.remove('active');
+      }
+    } else {
+      activeSeries.add(code);
+      btn.classList.add('active');
+    }
+    buildChart();
+  });
+});
+
+document.getElementById('btn-download-png')?.addEventListener('click', () => {
+  if (!chartInstance) return;
+  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+  const a = document.createElement('a');
+  a.href = url; a.download = 'prices_rosstat.png'; a.click();
+});
+
+document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
+  const title = encodeURIComponent('Цены на жильё по типам квартир (Росстат)');
+  const labels = encodeURIComponent('Первичный (все),Первичный — типовые,Первичный — улучшенное,Первичный — элитные,Вторичный (все),Вторичный — низкое,Вторичный — типовые,Вторичный — улучшенное,Вторичный — элитные');
+  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${ALL_CODES.join(',')}&title=${title}&labels=${labels}&filename=prices_rosstat`);
+});
+
+init().catch(console.error);
+</script>
+</body>
+</html>
