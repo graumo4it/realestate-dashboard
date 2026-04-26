@@ -54,6 +54,32 @@
     .page-content { flex: 1; }
     .page-heading { font-family: var(--font-display); font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
     .page-heading-sub { font-size: .9rem; color: var(--color-muted); margin-bottom: 32px; }
+
+    /* Комбо-карточки */
+    .combo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: .72rem;
+      font-weight: 600;
+      color: var(--color-accent);
+      background: #fff6f5;
+      border: 1px solid #fcd9d5;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .combo-value {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      color: var(--color-muted);
+      font-size: .82rem;
+    }
+    .combo-icon {
+      flex-shrink: 0;
+      opacity: .5;
+    }
   </style>
 </head>
 <body>
@@ -119,60 +145,208 @@
 <script src="js/utils.js"></script>
 <script src="js/sparkline.js"></script>
 <script>
+
+// ── COMBO_OVERRIDES ────────────────────────────────────────────────────────
+// Правила преобразования списка индикаторов перед рендерингом карточек.
+// Ключ — code категории.
+// Каждая запись:
+//   label      — название карточки (заменяет ind.name)
+//   url        — URL комбо-страницы (заменяет chart.html?code=...)
+//   parentCode — ind.code, чья карточка заменяется этой; null = добавить новую
+//   hideCodes  — массив ind.code, чьи карточки скрываются
+const COMBO_OVERRIDES = {
+  supply_volume: [
+    { label: 'Объём ввода жилья: МЖС + ИЖС', url: 'combo-chart.html',  parentCode: '2.1',  hideCodes: ['2.2'] },
+    { label: 'Структура ввода жилья, %',       url: 'share-chart.html',  parentCode: null,   hideCodes: [] },
+  ],
+  concentration: [
+    { label: 'Уровень концентрации рынка (ИХХ)', url: 'ihh-chart.html', parentCode: '3.17', hideCodes: ['3.18'] },
+  ],
+  prices: [
+    { label: 'Цены на жильё по типам квартир (Росстат)', url: 'prices-chart.html', parentCode: '4.4', hideCodes: ['4.5'] },
+  ],
+  mortgage_primary: [
+    { label: 'Количество ипотек: первичный vs вторичный', url: 'mortgage-count.html',   parentCode: '6.7',  hideCodes: ['6.13'] },
+    { label: 'Объём ипотек: первичный vs вторичный',      url: 'mortgage-volume.html',  parentCode: '6.8',  hideCodes: ['6.14'] },
+    { label: 'Ставки: первичный / вторичный / всего',      url: 'mortgage-rate.html',    parentCode: '6.9',  hideCodes: ['6.15'] },
+    { label: 'Сроки ипотеки: первичный vs вторичный',     url: 'mortgage-term.html',    parentCode: '6.10', hideCodes: ['6.16'] },
+    { label: 'Средний кредит: первичный vs вторичный',    url: 'mortgage-size.html',    parentCode: '6.11', hideCodes: ['6.17'] },
+    { label: 'Средний платёж: первичный vs вторичный',    url: 'mortgage-payment.html', parentCode: '6.12', hideCodes: ['6.18'] },
+  ],
+  mortgage_subsidy: [
+    { label: 'Господдержка: количество кредитов (программы)', url: 'subsidy-count.html',      parentCode: '6.36', hideCodes: ['6.37','6.38','6.39'] },
+    { label: 'Господдержка: объём кредитов (программы)',      url: 'subsidy-volume.html',     parentCode: '6.46', hideCodes: ['6.47','6.48','6.49'] },
+    { label: 'Господдержка ДДУ: количество',                  url: 'subsidy-ddu-count.html',  parentCode: '6.50', hideCodes: ['6.51','6.52','6.53'] },
+    { label: 'Господдержка ДДУ: объём',                       url: 'subsidy-ddu-volume.html', parentCode: '6.56', hideCodes: ['6.57','6.58','6.59'] },
+  ],
+  mortgage_igs: [
+    { label: 'ИЖС ипотека: количество (всего / строит. / покупка)', url: 'igs-count.html',   parentCode: '6.70', hideCodes: ['6.76','6.82'] },
+    { label: 'ИЖС ипотека: объём',                                   url: 'igs-volume.html',  parentCode: '6.71', hideCodes: ['6.77','6.83'] },
+    { label: 'ИЖС ипотека: ставка',                                  url: 'igs-rate.html',    parentCode: '6.72', hideCodes: ['6.78','6.84'] },
+    { label: 'ИЖС ипотека: срок',                                    url: 'igs-term.html',    parentCode: '6.73', hideCodes: ['6.79','6.85'] },
+    { label: 'ИЖС ипотека: средний кредит',                          url: 'igs-size.html',    parentCode: '6.74', hideCodes: ['6.80','6.86'] },
+    { label: 'ИЖС ипотека: средний платёж',                          url: 'igs-payment.html', parentCode: '6.75', hideCodes: ['6.81','6.87'] },
+  ],
+};
+
+/**
+ * Преобразует список индикаторов из API с учётом COMBO_OVERRIDES.
+ *
+ * @param {string} catCode — код категории
+ * @param {Array}  indicators — массив объектов из /api/categories/{code}/indicators
+ * @returns {Array} — новый массив для рендеринга
+ *
+ * Каждый элемент массива может иметь дополнительные свойства:
+ *   _comboUrl   — если задан, href карточки = _comboUrl вместо chart.html?code=...
+ *   _comboLabel — если задан, имя карточки = _comboLabel вместо ind.name
+ *   _isComboOnly — true для карточек без parentCode (добавляются в конец)
+ */
+function applyComboOverrides(catCode, indicators) {
+  const rules = COMBO_OVERRIDES[catCode];
+  if (!rules || !rules.length) return indicators;
+
+  // Собираем множество скрытых кодов и карту parentCode → rule
+  const hideCodes = new Set();
+  const parentMap = {};  // parentCode → rule
+  const appendRules = [];  // rules с parentCode === null
+
+  for (const rule of rules) {
+    rule.hideCodes.forEach(c => hideCodes.add(c));
+    if (rule.parentCode !== null) {
+      parentMap[rule.parentCode] = rule;
+    } else {
+      appendRules.push(rule);
+    }
+  }
+
+  // Фильтруем и модифицируем массив индикаторов
+  const result = [];
+  for (const ind of indicators) {
+    // Скрыть карточку
+    if (hideCodes.has(ind.code)) continue;
+
+    // Заменить карточку (parentCode)
+    if (parentMap[ind.code]) {
+      const rule = parentMap[ind.code];
+      result.push({ ...ind, _comboUrl: rule.url, _comboLabel: rule.label });
+    } else {
+      result.push(ind);
+    }
+  }
+
+  // Добавить «null-parent» комбо-карточки в конец
+  for (const rule of appendRules) {
+    result.push({
+      _isComboOnly: true,
+      _comboUrl: rule.url,
+      _comboLabel: rule.label,
+    });
+  }
+
+  return result;
+}
+
+// ── Иконка для комбо-карточек ──────────────────────────────────────────────
+const COMBO_ICON_SVG = `<svg class="combo-icon" width="16" height="16" viewBox="0 0 24 24"
+  fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+  <line x1="8" y1="6" x2="16" y2="6" opacity=".4"/>
+</svg>`;
+
+// ── Основная логика страницы ───────────────────────────────────────────────
 const params  = new URLSearchParams(location.search);
 const catCode = params.get('code') || 'mortgage_total';
 
 async function loadPage() {
   const categories = await api.categories();
+
+  // Заголовочная навигация
   const nav = document.getElementById('main-nav');
   nav.innerHTML = categories.slice(0, 8).map(c =>
     `<a href="category.html?code=${c.code}" ${c.code === catCode ? 'class="active"' : ''}>${c.name}</a>`
   ).join('');
 
+  // Боковая панель
   const sidebarLinks = document.getElementById('sidebar-links');
   sidebarLinks.innerHTML = categories.map(c =>
     `<a href="category.html?code=${c.code}" class="sidebar-link ${c.code === catCode ? 'active' : ''}">${c.name}</a>`
   ).join('');
 
-  const indicators = await api.categoryIndicators(catCode);
+  // Индикаторы категории
+  const rawIndicators = await api.categoryIndicators(catCode);
+  const indicators    = applyComboOverrides(catCode, rawIndicators);
   const cat = categories.find(c => c.code === catCode);
 
   document.title = `${cat?.name || catCode} — Рынок недвижимости`;
-  document.getElementById('cat-name').textContent = cat?.name || catCode;
+  document.getElementById('cat-name').textContent    = cat?.name || catCode;
   document.getElementById('page-heading').textContent = cat?.name || catCode;
   document.getElementById('page-sub').textContent =
-    `${indicators.length} показателей · Данные обновляются автоматически`;
+    `${rawIndicators.length} показателей · Данные обновляются автоматически`;
 
   const list = document.getElementById('indicator-list');
   list.innerHTML = '';
 
   for (const ind of indicators) {
-    const row = document.createElement('div');
+    const isCombo = !!(ind._comboUrl);
+    const href    = isCombo ? ind._comboUrl : `chart.html?code=${ind.code}`;
+    const name    = isCombo ? ind._comboLabel : cleanName(ind.name);
+    const pp      = ind.unit === '%';
+
+    const row     = document.createElement('div');
     row.className = 'indicator-row';
+
+    // Колонка «Динамика» (sparkline или пусто для комбо)
     const sparkEl = document.createElement('div');
     sparkEl.className = 'indicator-sparkline';
-    const pp = ind.unit === '%';
 
-    row.innerHTML = `
-      <div class="indicator-name">
-        <a href="chart.html?code=${ind.code}">${cleanName(ind.name)}</a>
-      </div>
-      <div>
-        <div class="indicator-value">${ind.last_value != null ? fmtValue(ind.last_value) : '—'}</div>
-        <div class="indicator-period">${ind.last_period_label || ''} ${ind.unit ? '· ' + ind.unit : ''}</div>
-      </div>
-      <div style="text-align:center">${deltaHtml(ind.yoy_change_pct, pp)}</div>
-    `;
-    row.appendChild(sparkEl);
+    if (isCombo) {
+      // Комбо-карточка: название + badge, вместо значения — «Сравнительный анализ»
+      row.innerHTML = `
+        <div class="indicator-name">
+          <a href="${href}">${name}</a>
+        </div>
+        <div>
+          <div class="combo-value">
+            ${COMBO_ICON_SVG}
+            <span style="font-size:.82rem;color:var(--color-muted)">Сравнительный&nbsp;анализ</span>
+          </div>
+        </div>
+        <div style="text-align:center">
+          <span class="combo-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            комбо
+          </span>
+        </div>
+      `;
+      row.appendChild(sparkEl);
+      // Sparkline для комбо не загружаем
+    } else {
+      // Обычная карточка
+      row.innerHTML = `
+        <div class="indicator-name">
+          <a href="${href}">${name}</a>
+        </div>
+        <div>
+          <div class="indicator-value">${ind.last_value != null ? fmtValue(ind.last_value) : '—'}</div>
+          <div class="indicator-period">${ind.last_period_label || ''} ${ind.unit ? '· ' + ind.unit : ''}</div>
+        </div>
+        <div style="text-align:center">${deltaHtml(ind.yoy_change_pct, pp)}</div>
+      `;
+      row.appendChild(sparkEl);
+
+      // Загрузка sparkline асинхронно
+      (code => {
+        (async () => {
+          try {
+            const data = await api.indicatorData(code, rangeStart(2));
+            const vals = data.series.map(p => p.value);
+            drawSparkline(sparkEl, vals, { width: 100, height: 36, color: '#E8341C' });
+          } catch (_) {}
+        })();
+      })(ind.code);
+    }
+
     list.appendChild(row);
-
-    (async () => {
-      try {
-        const data = await api.indicatorData(ind.code, rangeStart(2));
-        const vals = data.series.map(p => p.value);
-        drawSparkline(sparkEl, vals, { width: 100, height: 36, color: '#E8341C' });
-      } catch (_) {}
-    })();
   }
 }
 
