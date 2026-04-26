@@ -47,7 +47,6 @@
         <div class="filter-section">
           <div class="filter-label">Рынок</div>
           <div class="filter-options">
-            <button class="filter-btn active" data-series="total"><span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Всего</button>
             <button class="filter-btn active" data-series="primary"><span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Первичный</button>
             <button class="filter-btn active" data-series="secondary"><span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>Вторичный</button>
           </div>
@@ -137,91 +136,145 @@
 const CODES  = { total: '6.20', primary: '6.23', secondary: '6.26' };
 const COLORS = { total: '#E8341C', primary: '#1A2B4A', secondary: '#F4A336' };
 const LABELS = { total: 'Всего', primary: 'Первичный', secondary: 'Вторичный' };
-const KEYS   = Object.keys(CODES);
-const FMT    = 0; const UNIT = 'млн руб.'; const SFX = ' млн руб.';
-const FNAME  = 'debt_overdue';
+const CHART_KEYS = ['primary', 'secondary'];
+const FMT = 0;
+const UNIT = 'млн руб.';
+const SFX  = ' млн руб.';
+const FNAME = 'debt_overdue';
 
-let chartInstance = null, allData = {}, currentRange = null;
-let currentMode = 'absolute', currentTable = 'total';
-let activeSeries = new Set(KEYS);
+let chartInstance = null;
+let allData = {};
+let currentRange = null;
+let currentMode = 'absolute';
+let currentTable = 'total';
+let activeSeries = new Set(CHART_KEYS);
 
 api.categories().then(cats => {
-  document.getElementById('main-nav').innerHTML = cats.slice(0,8).map(c =>
+  document.getElementById('main-nav').innerHTML = cats.slice(0, 8).map(c =>
     `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
-}).catch(()=>{});
+}).catch(() => {});
 
 async function init() {
   allData = await api.multiIndicatorData(Object.values(CODES).join(','));
-  const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
-  if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
-  renderKPI(); buildChart(); renderTable();
+  const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
+  if (dates.length) {
+    document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
+  }
+  renderKPI();
+  buildChart();
+  renderTable();
 }
 
 function getFiltered(key) {
   const s = allData[CODES[key]]?.series || [];
   if (!currentRange) return s;
-  const pts = s.filter(p=>p.value!=null);
+  const pts = s.filter(p => p.value != null);
   if (!pts.length) return s;
-  const last = new Date(pts[pts.length-1].date);
+  const last = new Date(pts[pts.length - 1].date);
   const cutoff = new Date(last);
-  cutoff.setFullYear(cutoff.getFullYear()-currentRange); cutoff.setDate(1);
-  return s.filter(p=>new Date(p.date)>=cutoff);
+  cutoff.setFullYear(cutoff.getFullYear() - currentRange);
+  cutoff.setDate(1);
+  return s.filter(p => new Date(p.date) >= cutoff);
 }
 
 function renderKPI() {
-  KEYS.forEach(key => {
-    const s = (allData[CODES[key]]?.series||[]).filter(p=>p.value!=null);
-    const last = s[s.length-1]; if (!last) return;
-    document.getElementById(`kpi-${key}-value`).textContent  = fmtNum(Number(last.value), FMT);
-    document.getElementById(`kpi-${key}-period`).textContent = last.label || '—';
-    document.getElementById(`kpi-${key}-deltas`).innerHTML   =
-      `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span><span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+  Object.keys(CODES).forEach(function(key) {
+    const s = (allData[CODES[key]]?.series || []).filter(p => p.value != null);
+    const last = s[s.length - 1];
+    if (!last) return;
+    document.getElementById('kpi-' + key + '-value').textContent  = fmtNum(Number(last.value), FMT);
+    document.getElementById('kpi-' + key + '-period').textContent = last.label || '—';
+    document.getElementById('kpi-' + key + '-deltas').innerHTML   =
+      '<span>г/г: ' + deltaHtml(last.yoy_change_pct) + '</span><span>м/м: ' + deltaHtml(last.mom_change_pct) + '</span>';
   });
 }
 
 function buildChart() {
   if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, {renderer:'canvas'});
-    window.addEventListener('resize', ()=>chartInstance.resize());
+    chartInstance = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
+    window.addEventListener('resize', function() { chartInstance.resize(); });
   }
-  const allDates = [...new Set([...activeSeries].flatMap(k=>getFiltered(k).map(p=>p.date)))].sort();
-  const isDelta = currentMode !== 'absolute';
-  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-  const maps = {}; KEYS.forEach(k => { const m={}; getFiltered(k).forEach(p=>{m[p.date]=p;}); maps[k]=m; });
-  const xData = allDates.map(d => { for (const k of activeSeries) { const p=maps[k][d]; if(p?.label) return p.label; } return d; });
-  const series = [...activeSeries].map(key => {
-    const data = allDates.map(d => { const p=maps[key][d]; if(!p||p.value==null) return null; return isDelta?(p[field]!=null?Number(p[field]):null):Number(p.value); });
-    return {name:LABELS[key],type:'line',data,lineStyle:{color:COLORS[key],width:2.5},itemStyle:{color:COLORS[key]},symbol:allDates.length<60?'circle':'none',symbolSize:4,connectNulls:false};
+
+  var isDelta = currentMode !== 'absolute';
+  var field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
+
+  var visibleKeys = CHART_KEYS.filter(k => activeSeries.has(k));
+  var dateSet = {};
+  visibleKeys.forEach(function(k) { getFiltered(k).forEach(function(p) { dateSet[p.date] = true; }); });
+  var allDates = Object.keys(dateSet).sort();
+
+  var maps = {};
+  Object.keys(CODES).forEach(function(k) {
+    var m = {};
+    getFiltered(k).forEach(function(p) { m[p.date] = p; });
+    maps[k] = m;
   });
+
+  var xData = allDates.map(function(d) {
+    for (var i = 0; i < visibleKeys.length; i++) {
+      var p = maps[visibleKeys[i]][d];
+      if (p && p.label) return p.label;
+    }
+    return d;
+  });
+
+  var series = visibleKeys.map(function(key) {
+    var data = allDates.map(function(d) {
+      var p = maps[key][d];
+      if (!p || p.value == null) return null;
+      return isDelta ? (p[field] != null ? Number(p[field]) : null) : Number(p.value);
+    });
+    if (!isDelta) {
+      return { name: LABELS[key], type: 'bar', stack: 'total', data: data, itemStyle: { color: COLORS[key] }, emphasis: { focus: 'series' }, barMaxWidth: 24 };
+    }
+    return { name: LABELS[key], type: 'line', data: data, lineStyle: { color: COLORS[key], width: 2.5 }, itemStyle: { color: COLORS[key] }, symbol: allDates.length < 60 ? 'circle' : 'none', symbolSize: 4, connectNulls: false };
+  });
+
   chartInstance.setOption({
-    animation:true,animationDuration:200,
-    legend:{data:[...activeSeries].map(k=>LABELS[k]),top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
-    grid:{left:80,right:20,top:40,bottom:80},
-    dataZoom:[{type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},{type:'inside',throttle:16}],
-    tooltip:{trigger:'axis',backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
-      formatter:params=>{let html=`<b>${params[0]?.axisValue}</b><br/>`;params.forEach(p=>{if(p.value==null)return;const val=isDelta?`${p.value>0?'+':''}${fmtNum(p.value,1)}%`:fmtNum(p.value,FMT)+SFX;html+=`<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;});return html;}},
-    xAxis:{type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
-    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?(v>0?'+':'')+fmtNum(v,1)+'%':fmtNum(v,FMT)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
-    series,
-  },true);
+    animation: true, animationDuration: 200,
+    legend: { data: visibleKeys.map(function(k) { return LABELS[k]; }), top: 0, left: 0, textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 12, color: '#3D4F60' }, icon: 'circle', itemWidth: 10, itemHeight: 10 },
+    grid: { left: 80, right: 20, top: 40, bottom: 80 },
+    dataZoom: [
+      { type: 'slider', bottom: 8, height: 24, borderColor: '#DDE2E8', backgroundColor: '#F2F4F7', fillerColor: 'rgba(26,43,74,0.10)', handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 }, textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' }, brushSelect: false, throttle: 16 },
+      { type: 'inside', throttle: 16 },
+    ],
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: isDelta ? 'line' : 'shadow' },
+      backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
+      textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
+      formatter: function(params) {
+        var html = '<b>' + (params[0] ? params[0].axisValue : '') + '</b><br/>';
+        var stack = 0;
+        params.forEach(function(p) {
+          if (p.value == null) return;
+          var val = isDelta ? (p.value > 0 ? '+' : '') + fmtNum(p.value, 1) + '%' : fmtNum(p.value, FMT) + SFX;
+          html += '<span style="color:' + p.color + '">●</span> ' + p.seriesName + ': <b>' + val + '</b><br/>';
+          if (!isDelta) stack += p.value;
+        });
+        if (!isDelta) html += '<span style="color:#aaa">Всего: <b>' + fmtNum(stack, FMT) + SFX + '</b></span>';
+        return html;
+      },
+    },
+    xAxis: { type: 'category', data: xData, axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: xData.length > 36 ? 30 : 0 }, axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLabel: { fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A', formatter: function(v) { return isDelta ? (v > 0 ? '+' : '') + fmtNum(v, 1) + '%' : fmtNum(v, FMT); } }, splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } }, axisLine: { show: false }, axisTick: { show: false } },
+    series: series,
+  }, true);
 }
 
 function renderTable() {
-  const s = getFiltered(currentTable).slice().reverse();
-  document.getElementById('data-table-body').innerHTML = s.map(p=>`<tr>
-    <td>${p.label||p.date}</td>
-    <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT)+' '+UNIT:'—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
-    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
-  </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+  var s = getFiltered(currentTable).slice().reverse();
+  document.getElementById('data-table-body').innerHTML = s.map(function(p) {
+    return '<tr><td>' + (p.label || p.date) + '</td><td class="num">' + (p.value != null ? fmtNum(Number(p.value), FMT) + ' ' + UNIT : '—') + '</td><td class="num">' + deltaHtml(p.yoy_change_pct) + '</td><td class="num">' + deltaHtml(p.mom_change_pct) + '</td></tr>';
+  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
 }
 
-document.querySelectorAll('[data-range]').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);buildChart();renderTable();});});
-document.querySelectorAll('[data-mode]').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentMode=btn.dataset.mode;buildChart();});});
-document.querySelectorAll('[data-series]').forEach(btn=>{btn.addEventListener('click',()=>{const k=btn.dataset.series;if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active');}}else{activeSeries.add(k);btn.classList.add('active');}buildChart();});});
-document.querySelectorAll('[data-table]').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentTable=btn.dataset.table;renderTable();});});
-document.getElementById('btn-download-png')?.addEventListener('click',()=>{if(!chartInstance)return;const url=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});const a=document.createElement('a');a.href=url;a.download=FNAME+'.png';a.click();});
-document.getElementById('btn-download-xlsx')?.addEventListener('click',()=>{const codes=Object.values(CODES).join(',');const labels=encodeURIComponent(Object.values(LABELS).join(','));const title=encodeURIComponent('Объём просроченной задолженности по ипотеке');window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&title=${title}&filename=${FNAME}`);});
+document.querySelectorAll('[data-range]').forEach(function(btn) { btn.addEventListener('click', function() { document.querySelectorAll('[data-range]').forEach(function(b) { b.classList.remove('active'); }); btn.classList.add('active'); currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range); buildChart(); renderTable(); }); });
+document.querySelectorAll('[data-mode]').forEach(function(btn) { btn.addEventListener('click', function() { document.querySelectorAll('[data-mode]').forEach(function(b) { b.classList.remove('active'); }); btn.classList.add('active'); currentMode = btn.dataset.mode; buildChart(); }); });
+document.querySelectorAll('[data-series]').forEach(function(btn) { btn.addEventListener('click', function() { var k = btn.dataset.series; if (activeSeries.has(k)) { if (activeSeries.size > 1) { activeSeries.delete(k); btn.classList.remove('active'); } } else { activeSeries.add(k); btn.classList.add('active'); } buildChart(); }); });
+document.querySelectorAll('[data-table]').forEach(function(btn) { btn.addEventListener('click', function() { document.querySelectorAll('[data-table]').forEach(function(b) { b.classList.remove('active'); }); btn.classList.add('active'); currentTable = btn.dataset.table; renderTable(); }); });
+document.getElementById('btn-download-png').addEventListener('click', function() { if (!chartInstance) return; var url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' }); var a = document.createElement('a'); a.href = url; a.download = FNAME + '.png'; a.click(); });
+document.getElementById('btn-download-xlsx').addEventListener('click', function() { var codes = Object.values(CODES).join(','); var labels = encodeURIComponent(Object.values(LABELS).join(',')); var title = encodeURIComponent('Объём просроченной задолженности по ипотеке'); window.open(window.API_BASE + '/multi/data.xlsx?codes=' + codes + '&labels=' + labels + '&title=' + title + '&filename=' + FNAME); });
 init().catch(console.error);
 </script>
 </body>
