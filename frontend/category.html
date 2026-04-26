@@ -258,7 +258,8 @@ const params  = new URLSearchParams(location.search);
 const catCode = params.get('code') || 'mortgage_total';
 
 async function loadPage() {
-  const categories = await api.categories();
+  const HIDDEN_CATEGORIES = ['mortgage_total', 'mortgage_secondary'];
+const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.includes(c.code));
 
   // Заголовочная навигация
   const nav = document.getElementById('main-nav');
