@@ -217,7 +217,7 @@ function renderTable() {
   const s = getFiltered(currentTable).slice().reverse();
   document.getElementById('data-table-body').innerHTML = s.map(p=>`<tr>
     <td>${p.label||p.date}</td>
-    <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT)+' '+UNIT:'—'}</td>
+    <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT):'—'}</td>
     <td class="num">${deltaPpHtml(p.yoy_change_pct)}</td>
     <td class="num">${deltaPpHtml(p.mom_change_pct)}</td>
   </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
