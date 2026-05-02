@@ -50,14 +50,17 @@
             <button class="filter-btn active" data-series="semya">
               <span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Семейная
             </button>
-            <button class="filter-btn active" data-series="lgota">
-              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Льготная
-            </button>
             <button class="filter-btn active" data-series="dalvos">
               <span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>Дальневосточная
             </button>
             <button class="filter-btn active" data-series="it">
               <span class="kpi-dot" style="background:#2EC4B6;margin-right:4px"></span>IT-ипотека
+            </button>
+            <button class="filter-btn active" data-series="regions">
+              <span class="kpi-dot" style="background:#8B5CF6;margin-right:4px"></span>Отдельные регионы
+            </button>
+            <button class="filter-btn active" data-series="lgota">
+              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Льготная
             </button>
           </div>
         </div>
@@ -65,7 +68,7 @@
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
-          <a href="category.html?code=mortgage_subsidy">Господдержка</a><span class="breadcrumb-sep">›</span>
+          <a href="category.html?code=mortgage_subsidy">Ипотека (льготные программы)</a><span class="breadcrumb-sep">›</span>
           <span>Количество кредитов по программам господдержки</span>
         </div>
         <div class="chart-header">
@@ -76,18 +79,14 @@
             <span class="chart-meta-item" style="color:var(--color-muted)">ед.</span>
           </div>
         </div>
+        <!-- KPI-плашки: Семейная, Отдельные регионы, Дальневосточная, IT-ипотека -->
+        <!-- Льготная ипотека завершена в 2024, плашка убрана -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
             <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
             <div class="kpi-value" id="kpi-semya-value">—</div>
             <div class="kpi-period">ед. · <span id="kpi-semya-period">—</span></div>
             <div class="kpi-deltas" id="kpi-semya-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Льготная</div>
-            <div class="kpi-value" id="kpi-lgota-value">—</div>
-            <div class="kpi-period">ед. · <span id="kpi-lgota-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-lgota-deltas"></div>
           </div>
           <div class="kpi-card-sm">
             <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
@@ -100,6 +99,12 @@
             <div class="kpi-value" id="kpi-it-value">—</div>
             <div class="kpi-period">ед. · <span id="kpi-it-period">—</span></div>
             <div class="kpi-deltas" id="kpi-it-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#8B5CF6"></span>Отдельные регионы</div>
+            <div class="kpi-value" id="kpi-regions-value">—</div>
+            <div class="kpi-period">ед. · <span id="kpi-regions-period">—</span></div>
+            <div class="kpi-deltas" id="kpi-regions-deltas"></div>
           </div>
         </div>
         <div class="chart-toolbar">
@@ -126,7 +131,11 @@
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
           <div class="table-tabs" id="table-tabs">
-            <button class="table-tab active" data-table="semya">Семейная</button><button class="table-tab" data-table="lgota">Льготная</button><button class="table-tab" data-table="dalvos">Дальневосточная</button><button class="table-tab" data-table="it">IT-ипотека</button>
+            <button class="table-tab active" data-table="semya">Семейная</button>
+            <button class="table-tab" data-table="dalvos">Дальневосточная</button>
+            <button class="table-tab" data-table="it">IT-ипотека</button>
+            <button class="table-tab" data-table="regions">Отдельные регионы</button>
+            <button class="table-tab" data-table="lgota">Льготная</button>
           </div>
           <table class="data-table">
             <thead><tr>
@@ -147,17 +156,21 @@
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script>
-const CODES   = {"semya":"6.36","lgota":"6.38","dalvos":"6.40","it":"6.42"};
-const COLORS  = {"semya":"#E8341C","lgota":"#1A2B4A","dalvos":"#F4A336","it":"#2EC4B6"};
-const LABELS  = {"semya":"Семейная","lgota":"Льготная","dalvos":"Дальневосточная","it":"IT-ипотека"};
-const KEYS    = Object.keys(CODES);
+// Льготная ипотека (6.38) — завершена в дек 2024, остаётся на графике исторически.
+// Ипотека в отдельных регионах (6.44) — действующая программа, добавлена в KPI-плашки.
+const CODES   = {"semya":"6.36","lgota":"6.38","dalvos":"6.40","it":"6.42","regions":"6.44"};
+const COLORS  = {"semya":"#E8341C","lgota":"#1A2B4A","dalvos":"#F4A336","it":"#2EC4B6","regions":"#8B5CF6"};
+const LABELS  = {"semya":"Семейная","lgota":"Льготная","dalvos":"Дальневосточная","it":"IT-ипотека","regions":"Отдельные регионы"};
+// KPI-плашки отображают только активные программы (без Льготной)
+const KPI_KEYS = ["semya","dalvos","it","regions"];
+const KEYS    = ["semya","dalvos","it","regions","lgota"];
 const FMT     = 0;
 const UNIT    = 'ед.';
 const SFX     = ' ед.';
 const FNAME   = 'subsidy_count';
 
 let chartInstance = null, allData = {}, currentRange = null;
-let currentMode = 'absolute', currentTable = KEYS[0];
+let currentMode = 'absolute', currentTable = 'semya';
 let activeSeries = new Set(KEYS);
 
 api.categories().then(cats => {
@@ -185,7 +198,8 @@ function getFiltered(key) {
 }
 
 function renderKPI() {
-  KEYS.forEach(key => {
+  // Отображаем только KPI_KEYS — активные программы
+  KPI_KEYS.forEach(key => {
     const s = (allData[CODES[key]]?.series||[]).filter(p=>p.value!=null);
     const last = s[s.length-1];
     if (!last) return;

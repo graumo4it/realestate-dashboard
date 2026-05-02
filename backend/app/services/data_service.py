@@ -83,9 +83,14 @@ def get_indicator_list_for_category(db: Session, category_id: int) -> List[Indic
 
 
 def get_indicator_by_code(db: Session, code: str) -> Optional[Indicator]:
+    """Возвращает индикатор по коду без фильтра is_public.
+    Скрытые индикаторы (is_public=false) не показываются на страницах разделов
+    (фильтруются в get_indicator_list_for_category), но остаются доступны для
+    комбо-страниц через /api/multi/data и прямых запросов /api/indicators/{code}.
+    """
     return (
         db.query(Indicator)
-        .filter(Indicator.code == code, Indicator.is_public == True)
+        .filter(Indicator.code == code)
         .first()
     )
 
