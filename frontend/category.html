@@ -156,8 +156,9 @@
 //   hideCodes  — массив ind.code, чьи карточки скрываются
 const COMBO_OVERRIDES = {
   supply_volume: [
-    { label: 'Объём ввода жилья: МЖС + ИЖС', url: 'combo-chart.html',  parentCode: '2.1',  hideCodes: ['2.2', '2.3'] },
-    { label: 'Структура ввода жилья, %',       url: 'share-chart.html',  parentCode: null,   hideCodes: [] },
+    { label: 'Объём ввода жилья: МЖС + ИЖС', url: 'combo-chart.html',     parentCode: '2.1', hideCodes: ['2.2', '2.3'], sparkCode: '2.1' },
+    { label: 'Структура ввода жилья, %',       url: 'share-chart.html',     parentCode: null,  hideCodes: [], sparkCode: '2.2' },
+    { label: 'Ввод жилья на душу населения',   url: 'per-capita-chart.html', parentCode: '2.6', hideCodes: ['2.7', '2.8'], sparkCode: '2.6' },
   ],
   concentration: [
     { label: 'Уровень концентрации рынка (ИХХ)', url: 'ihh-chart.html', parentCode: '3.17', hideCodes: ['3.18'] },
@@ -231,7 +232,9 @@ function applyComboOverrides(catCode, indicators) {
     // Заменить карточку (parentCode)
     if (parentMap[ind.code]) {
       const rule = parentMap[ind.code];
-      result.push({ ...ind, _comboUrl: rule.url, _comboLabel: rule.label });
+      result.push({ ...ind, _comboUrl: rule.url, _comboLabel: rule.label,
+        _sparkCode: rule.sparkCode || null,
+        _sparkPeriodicity: rule.sparkPeriodicity || ind.periodicity || 'annual' });
     } else {
       result.push(ind);
     }
@@ -243,6 +246,8 @@ function applyComboOverrides(catCode, indicators) {
       _isComboOnly: true,
       _comboUrl: rule.url,
       _comboLabel: rule.label,
+      _sparkCode: rule.sparkCode || null,
+      _sparkPeriodicity: rule.sparkPeriodicity || 'annual',
     });
   }
 
@@ -323,7 +328,19 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
         </div>
       `;
       row.appendChild(sparkEl);
-      // Sparkline для комбо не загружаем
+      // Sparkline для комбо — загружаем если есть sparkCode
+      if (ind._sparkCode) {
+        ((sparkCode, periodicity) => {
+          (async () => {
+            try {
+              const years = periodicity === 'annual' ? 10 : 2;
+              const data = await api.indicatorData(sparkCode, rangeStart(years));
+              const vals = data.series.map(p => p.value);
+              drawSparkline(sparkEl, vals, { width: 100, height: 36, color: '#E8341C' });
+            } catch (_) {}
+          })();
+        })(ind._sparkCode, ind._sparkPeriodicity || 'annual');
+      }
     } else {
       // Обычная карточка
       row.innerHTML = `
@@ -339,15 +356,20 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
       row.appendChild(sparkEl);
 
       // Загрузка sparkline асинхронно
-      (code => {
+      ((code, periodicity) => {
         (async () => {
           try {
-            const data = await api.indicatorData(code, rangeStart(2));
+            const years = periodicity === 'annual' ? 10 : 2;
+            let data = await api.indicatorData(code, rangeStart(years));
+            // Fallback: если точек мало (данные устарели) — берём всё
+            if (data.series.filter(p => p.value != null).length < 2) {
+              data = await api.indicatorData(code, null);
+            }
             const vals = data.series.map(p => p.value);
             drawSparkline(sparkEl, vals, { width: 100, height: 36, color: '#E8341C' });
           } catch (_) {}
         })();
-      })(ind.code);
+      })(ind.code, ind.periodicity);
     }
 
     list.appendChild(row);
