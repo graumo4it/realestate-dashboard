@@ -201,18 +201,20 @@ def calc_from_matrix(df: pd.DataFrame, period_date: date) -> dict:
     # Находим нужные столбцы (case-insensitive)
     col_map = {}
     needed = {
-        'жилая площадь':                    'area',
-        'процент готовности по объекту':    'ready_pct',
-        'распроданность':                   'sold_pct',
-        'продано квартир, шт':              'sold_apt_cnt',
-        'продано квартир, м2':              'sold_apt_sqm',
-        'первая пд':                        'first_pd',
+        'жилая площадь':                             'area',
+        'процент готовности по объекту':             'ready_pct',
+        'распроданность':                            'sold_pct',
+        'продано квартир, шт':                       'sold_apt_cnt',
+        'количество проданных квартир по проекту':   'sold_apt_cnt',  # старый формат
+        'продано квартир, м2':                       'sold_apt_sqm',
+        'первая пд':                                 'first_pd',
     }
     for col in df.columns:
         key = col.lower().strip()
         for needle, alias in needed.items():
             if needle in key:
-                col_map[alias] = col
+                if alias not in col_map:  # не перезаписываем если уже нашли
+                    col_map[alias] = col
                 break
 
     def col(alias) -> pd.Series:
