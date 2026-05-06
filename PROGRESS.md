@@ -1,7 +1,7 @@
 # PROGRESS.md — Трекер разработки
 ## Дашборд «Статистика рынка жилой недвижимости России»
 
-> Последнее обновление: 5 мая 2026
+> Последнее обновление: 6 мая 2026
 > Ветка разработки: `v1.1-improvements`
 > Backend: порт **8001** | Frontend: порт **3000**
 > Путь: `/Users/egor/Работа/data hub/realestate-dashboard/`
@@ -334,6 +334,12 @@ python migration/migrate_sales_matrix.py
 | `frontend/apartments-count.html` | Квартирография: количество квартир по комнатности (stacked bar) |
 | `frontend/apartments-area.html` | Квартирография: средняя площадь по комнатности (line) |
 | `frontend/apartments-share.html` | Квартирография: структура по комнатности, % (100% bar) |
+| `frontend/uc-area.html` | Строящееся жильё БД ДОМ.РФ: жилая площадь всё vs активное (grouped bar) |
+| `frontend/uc-new.html` | Строящееся жильё БД ДОМ.РФ: новые проекты все vs активные (bar) |
+| `frontend/uc-new-vs-input.html` | Строящееся жильё БД ДОМ.РФ: новые проекты / ввод МЖС (line) |
+| `frontend/uc-stock.html` | Строящееся жильё БД ДОМ.РФ: запасы строящегося жилья (line) |
+| `frontend/uc-new-vs-sales.html` | Строящееся жильё БД ДОМ.РФ: обеспеченность продаж новыми запусками (line) |
+| `frontend/uc-absorption.html` | Строящееся жильё БД ДОМ.РФ: коэффициент поглощения (line) |
 
 ### Миграция и парсеры
 | Файл | Что делает |
@@ -353,6 +359,9 @@ python migration/migrate_sales_matrix.py
 | `migration/migrate_apartments.py` | Квартирография (14 индикаторов) из файлов Квартирографии |
 | `migration/migrate_sales_matrix.py` | 8 показателей из Матрицы продаж (окно: пред.+тек. год) |
 | `migration/recalc_mm_budget.py` | Полный пересчёт mm_budget за всю историю |
+| `migration/migrate_ddu.py` | Пересборка 5.1 (ДДУ) как квартальный, Q1 2010–Q4 2025 |
+| `migration/migrate_under_construction_domrf.py` | Новый раздел: 9 показателей из Матрицы проектов, 497 точек |
+| `migration/fix_demand_indicators.py` | Устранение дублей машиномест, перенос mm_budget в demand |
 | `parsers/fetch_fedstat_31557.py` | Парсер населения fedstat/31557 (только локально) |
 | `parsers/base.py` | BaseParser: retry, upsert, job log, refresh view |
 | `parsers/cbr.py` | Скачивает Excel с сайта ЦБ, парсит ипотечную статистику |
@@ -393,6 +402,9 @@ python migration/migrate_sales_matrix.py
 | Квартирография: интерполяция плохих периодов | BAD_PERIODS в migrate_apartments.py: сен.2023, дек.2023, янв.2024 |
 | mm_budget в млн руб. | Удобочитаемость: значения 1–3 вместо 1 000 000–3 000 000 |
 | migrate_sales_matrix.py: окно пред.+тек. год | Источник пересматривает данные за предыдущий год ежемесячно |
+| uc_new_total/active: данные с дек.2023 | Столбец «Первая ПД» появился только в новых файлах Матрицы проектов |
+| uc_absorption: знаменатель из sales_apt_sqm | Площадь продаж в кв. м точнее аппроксимации через среднюю площадь |
+| Сайдбар комбо-страниц: Регион→Серии→Город | Унификация UX со всеми остальными страницами проекта |
 
 ---
 
@@ -455,3 +467,33 @@ python migration/migrate_sales_matrix.py
 - mm_count, mm_area скрыты; данные перенесены в 5.20, 5.21 ✅
 - mm_budget: перенесён в раздел demand, единица млн руб. ✅
 - 5.9, 5.22: добавлен март 2026 (42832.67 и 4826.33 сделок) ✅
+
+### Блок правок v1.4 — 6 мая 2026:
+
+**Новый раздел «Строящееся жильё (база данных ДОМ.РФ)»:**
+- `003_under_construction_domrf.sql` — категория + 14 индикаторов ✅
+- `migrate_under_construction_domrf.py` — расчёт 9 показателей из Матрицы проектов, 497 точек ✅
+  - uc_area_total/active: жилая площадь всего и активного строительства
+  - uc_dev_activity: девелоперская активность (годовой, 5 точек с 2022)
+  - uc_new_total/active: новые проекты по столбцу «Первая ПД» (с дек.2023)
+  - uc_new_vs_input, uc_stock_years, uc_new_vs_sales, uc_absorption: расчётные на основе скользящих 12 мес.
+  - uc_sold_vs_ready: отношение распроданности и стройготовности
+- `sales_apt_sqm` — новый скрытый индикатор суммарной площади продаж, 63 точки ✅
+- `recalc_sales_apt_sqm` — полный пересчёт с янв.2021 ✅
+- Комбо-страницы раздела (6 файлов): uc-area, uc-new, uc-new-vs-input, uc-stock, uc-new-vs-sales, uc-absorption ✅
+- COMBO_OVERRIDES: добавлен раздел under_construction_domrf (6 записей) ✅
+
+**Показатель 5.1 (ДДУ):**
+- `migrate_ddu.py` — пересборка как квартальный, Q1 2010 – Q4 2025, 64 точки ✅
+- Переименован: добавлен источник «(Росреестр)» ✅
+
+**Правки раздела «Спрос»:**
+- mm_count → 5.20, mm_area → 5.21 (устранение дублей) ✅
+- mm_budget перенесён в demand, единица млн руб., полная история с 2021 ✅
+- apt_budget, apt_area — новые показатели из Матрицы продаж ✅
+- 5.9, 5.22, 5.20, 5.21 — март 2026 добавлен ✅
+
+**UX-исправления комбо-страниц:**
+- Все 9 новых страниц: исправлены btn-outline, chart-container, data-table-header ✅
+- Сайдбар: структура Фильтры → Регион → Серии/Тип → Город (Скоро) ✅
+- table-tab.active: убраны inline-стили, добавлен CSS для корректной подсветки ✅
