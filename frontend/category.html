@@ -163,6 +163,16 @@ const COMBO_OVERRIDES = {
   concentration: [
     { label: 'Уровень концентрации рынка (ИХХ)', url: 'ihh-chart.html', parentCode: '3.17', hideCodes: ['3.18'] },
   ],
+  apartments: [
+    { label: 'Квартирография: количество квартир по комнатности', url: 'apartments-count.html',
+      parentCode: 'apartments_count_total',
+      hideCodes: ['apartments_count_1k','apartments_count_2k','apartments_count_3k','apartments_count_4k'] },
+    { label: 'Квартирография: средняя площадь по комнатности',    url: 'apartments-area.html',
+      parentCode: 'apartments_area_total',
+      hideCodes: ['apartments_area_1k','apartments_area_2k','apartments_area_3k','apartments_area_4k'] },
+    { label: 'Квартирография: структура по комнатности, %',        url: 'apartments-share.html',
+      parentCode: null, hideCodes: ['apartments_share_1k','apartments_share_2k','apartments_share_3k','apartments_share_4k'] },
+  ],
   prices: [
     { label: 'Цены на жильё по типам квартир (Росстат)', url: 'prices-chart.html', parentCode: '4.4', hideCodes: ['4.5', '4.4.1', '4.4.2', '4.4.3', '4.5.1', '4.5.2', '4.5.3', '4.5.4'] },
   ],
@@ -191,6 +201,20 @@ const COMBO_OVERRIDES = {
   { label: 'Просроченная задолженность: всего / первичный / вторичный',    url: 'debt-overdue.html',       parentCode: '6.20', hideCodes: ['6.23','6.26'] },
   { label: 'Доля просроченной задолженности: всего / первичный / вторичный', url: 'debt-overdue-share.html', parentCode: '6.21', hideCodes: ['6.24','6.27'] },
   ],
+  under_construction_domrf: [
+  { label: 'Жилая площадь МЖД: всё vs активное строительство', url: 'uc-area.html',
+    parentCode: 'uc_area_total', hideCodes: ['uc_area_active'] },
+  { label: 'Новые проекты: все vs активные', url: 'uc-new.html',
+    parentCode: 'uc_new_total', hideCodes: ['uc_new_active'] },
+  { label: 'Новые проекты / ввод МЖС', url: 'uc-new-vs-input.html',
+    parentCode: 'uc_new_vs_input_total', hideCodes: ['uc_new_vs_input_active'] },
+  { label: 'Запасы строящегося жилья', url: 'uc-stock.html',
+    parentCode: 'uc_stock_years_total', hideCodes: ['uc_stock_years_active'] },
+  { label: 'Обеспеченность продаж новыми запусками', url: 'uc-new-vs-sales.html',
+    parentCode: 'uc_new_vs_sales_total', hideCodes: ['uc_new_vs_sales_active'] },
+  { label: 'Коэффициент поглощения', url: 'uc-absorption.html',
+    parentCode: 'uc_absorption_total', hideCodes: ['uc_absorption_active'] },
+],
 };
 
 /**
