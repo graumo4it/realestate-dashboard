@@ -11,35 +11,15 @@
   <link rel="stylesheet" href="css/chart.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
-    .kpi-cards-row {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 16px; margin-bottom: 28px;
-    }
-    .kpi-card-sm {
-      background: var(--color-surface); border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg); padding: 16px 20px; box-shadow: var(--shadow);
-    }
-    .kpi-card-sm .kpi-label {
-      font-size: .7rem; color: var(--color-muted); text-transform: uppercase;
-      letter-spacing: .08em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
-    }
-    .kpi-card-sm .kpi-value {
-      font-family: var(--font-mono); font-size: 1.3rem; font-weight: 700;
-      color: var(--color-ink); line-height: 1; margin-bottom: 2px;
-    }
-    .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 8px; }
-    .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .78rem; }
+    .kpi-cards-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-card-sm { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow); }
+    .kpi-card-sm .kpi-label { font-size: .7rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .kpi-card-sm .kpi-value { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; color: var(--color-ink); line-height: 1; margin-bottom: 2px; }
+    .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 6px; }
+    .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .75rem; }
     .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .table-tabs {
-      display: flex; gap: 4px; padding: 12px 20px;
-      border-bottom: 1px solid var(--color-border); background: var(--color-bg);
-    }
-    .table-tab {
-      font-size: .8rem; font-weight: 500; font-family: var(--font-body);
-      padding: 6px 24px; border: 1px solid var(--color-border);
-      border-radius: var(--radius); background: var(--color-surface);
-      color: var(--color-muted); cursor: pointer; transition: all .15s; flex: 1; text-align: center;
-    }
+    .table-tabs { display: flex; gap: 4px; padding: 10px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); flex-wrap: wrap; }
+    .table-tab { font-size: .78rem; font-weight: 500; font-family: var(--font-body); padding: 5px 16px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); color: var(--color-muted); cursor: pointer; transition: all .15s; }
     .table-tab.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
     .table-tab:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
   </style>
@@ -65,57 +45,38 @@
           <div class="filter-options"><button class="filter-btn active">Россия</button></div>
         </div>
         <div class="filter-section">
-          <div class="filter-label">Рынок</div>
-          <div class="filter-options">
-            <button class="filter-btn active" data-series="primary">
-              <span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>Первичный
-            </button>
-            <button class="filter-btn active" data-series="secondary">
-              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Вторичный
-            </button>
-          </div>
+          <div class="filter-label">Серии</div>
+          <div class="filter-options" id="series-filters"></div>
         </div>
       </aside>
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
           <a href="category.html?code=mortgage_base">Ипотека (основные данные)</a><span class="breadcrumb-sep">›</span>
-          <span>Объём выданных ипотечных кредитов</span>
+          <span>Объём выданных кредитов</span>
         </div>
         <div class="chart-header">
           <h1>Объём выданных ипотечных кредитов</h1>
           <div class="chart-meta">
-            <span class="chart-meta-item">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <span id="chart-updated">—</span>
-            </span>
-            <span class="chart-meta-item">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              Банк России
-            </span>
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="chart-updated">—</span></span>
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Банк России</span>
             <span class="chart-meta-item" style="color:var(--color-muted)">млн руб.</span>
           </div>
         </div>
         <div class="kpi-cards-row">
-          <div class="kpi-card-sm">
-            <div class="kpi-label">Всего</div>
-            <div class="kpi-value" id="kpi-total-value">—</div>
-            <div class="kpi-period" id="kpi-period">млн руб. · —</div>
-            <div class="kpi-deltas" id="kpi-total-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Вторичный</div>
-            <div class="kpi-value" id="kpi-secondary-value">—</div>
-            <div class="kpi-period" id="kpi-secondary-period">млн руб. · —</div>
-            <div class="kpi-deltas" id="kpi-secondary-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Первичный</div>
-            <div class="kpi-value" id="kpi-primary-value">—</div>
-            <div class="kpi-period" id="kpi-primary-period">млн руб. · —</div>
-            <div class="kpi-deltas" id="kpi-primary-deltas"></div>
-          </div>
-        </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Первичный</div>
+    <div class="kpi-value" id="kpi-primary-value">—</div>
+    <div class="kpi-period">млн руб. · <span id="kpi-primary-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-primary-deltas"></div>
+  </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Вторичный</div>
+    <div class="kpi-value" id="kpi-secondary-value">—</div>
+    <div class="kpi-period">млн руб. · <span id="kpi-secondary-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-secondary-deltas"></div>
+  </div>
+</div>
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
@@ -129,12 +90,8 @@
             </div>
           </div>
           <div class="toolbar-actions">
-            <button class="btn-outline" id="btn-download-png">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PNG
-            </button>
-            <button class="btn-outline" id="btn-download-xlsx">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel
-            </button>
+            <button class="btn-outline" id="btn-download-png"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PNG</button>
+            <button class="btn-outline" id="btn-download-xlsx"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</button>
           </div>
         </div>
         <div class="chart-container">
@@ -143,11 +100,8 @@
         </div>
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
-          <div class="table-tabs">
-            <button class="table-tab active" data-table="total">Всего</button>
-            <button class="table-tab" data-table="primary">Первичный</button>
-            <button class="table-tab" data-table="secondary">Вторичный</button>
-          </div>
+          <div class="table-tabs"><button class="table-tab active" data-table="primary">Первичный</button>
+<button class="table-tab " data-table="secondary">Вторичный</button></div>
           <table class="data-table">
             <thead><tr>
               <th style="width:25%">Период</th>
@@ -155,31 +109,49 @@
               <th style="width:25%;text-align:right">Изм. г/г</th>
               <th style="width:25%;text-align:right">Изм. м/м</th>
             </tr></thead>
-            <tbody id="data-table-body"><tr><td colspan="4" class="skeleton" style="height:180px"></td></tr></tbody>
+            <tbody id="data-table-body"><tr><td colspan="4" class="skeleton" style="height:160px"></td></tr></tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
 </main>
-<footer class="site-footer">
-  <div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div>
-</footer>
+<footer class="site-footer"><div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div></footer>
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/annual-toggle.js"></script>
 <script>
-const CODE_PRIMARY   = '6.8';
-const CODE_SECONDARY = '6.14';
-const CODE_TOTAL     = '6.2';
-const FMT_DECIMALS   = 0;
-const UNIT           = 'млн руб.';
-const TOOLTIP_SFX    = ' млн руб.';
-const DOWNLOAD_NAME  = 'mortgage_volume';
+const CODES   = {'total': '6.2', 'primary': '6.8', 'secondary': '6.14'};
+const COLORS  = {'total': '#E8341C', 'primary': '#F4A336', 'secondary': '#1A2B4A'};
+const LABELS  = {'total': 'Всего', 'primary': 'Первичный', 'secondary': 'Вторичный'};
+const KEYS    = ['primary', 'secondary'];
+const FMT     = 0;
+const UNIT    = 'млн руб.';
+const SFX     = ' млн руб.';
+const CHART_T = 'bar';
+const FNAME   = 'mortgage-volume';
+let isAnnual  = false;
 
+const _deltaFn = deltaHtml;
+
+const _WEIGHT_CODES = {};
 let chartInstance = null, allData = {}, currentRange = null;
-let currentMode = 'absolute', currentTable = 'total';
-let activeSeries = new Set(['primary', 'secondary']);
+let currentMode = 'absolute', currentTable = KEYS[0];
+let activeSeries = new Set(KEYS);
+
+// Строим кнопки фильтров сайдбара динамически
+(function buildSidebarFilters() {
+  const container = document.getElementById('series-filters');
+  if (!container) return;
+  KEYS.forEach(key => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn active';
+    btn.dataset.series = key;
+    btn.innerHTML = `<span class="kpi-dot" style="background:${COLORS[key]};margin-right:4px"></span>${LABELS[key]}`;
+    container.appendChild(btn);
+  });
+})();
 
 api.categories().then(cats => {
   document.getElementById('main-nav').innerHTML = cats.slice(0,8).map(c =>
@@ -187,14 +159,43 @@ api.categories().then(cats => {
 }).catch(()=>{});
 
 async function init() {
-  allData = await api.multiIndicatorData(`${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}`);
+  // Загружаем основные коды + весовые коды если нужно
+  const allCodes = [...new Set([...Object.values(CODES), ...Object.values(_WEIGHT_CODES)])];
+  allData = await api.multiIndicatorData(allCodes.join(','));
   const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
   if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
   renderKPI(); buildChart(); renderTable();
+
+  const toolbar = document.querySelector('.chart-toolbar');
+  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
+    isAnnual = annual;
+    const momBtn = document.querySelector('[data-mode="mom"]');
+    if (momBtn) momBtn.style.display = annual ? 'none' : '';
+    if (annual && currentMode === 'mom') {
+      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+      const ab = document.querySelector('[data-mode="absolute"]');
+      if (ab) { ab.classList.add('active'); currentMode = 'absolute'; }
+    }
+    buildChart(); renderTable();
+  });
 }
 
-function getFiltered(code) {
-  const s = allData[code]?.series || [];
+function getFiltered(key) {
+  if (isAnnual) {
+    const raw = allData[CODES[key]]?.series || [];
+    let agg;
+    if (Object.keys(_WEIGHT_CODES).length > 0) {
+      const wCode = _WEIGHT_CODES[key];
+      const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
+      agg = AnnualToggle.aggregateWavgSeries(raw, wRaw);
+    } else {
+      agg = AnnualToggle.aggregateAnnualSeries(raw, 'sum');
+    }
+    if (!currentRange) return agg;
+    const cy = new Date().getFullYear() - currentRange;
+    return agg.filter(p => parseInt(p.label || p.date) >= cy);
+  }
+  const s = allData[CODES[key]]?.series || [];
   if (!currentRange) return s;
   const pts = s.filter(p=>p.value!=null);
   if (!pts.length) return s;
@@ -205,151 +206,137 @@ function getFiltered(code) {
   return s.filter(p=>new Date(p.date)>=cutoff);
 }
 
-function buildMerged(sP, sS) {
-  const map = {};
-  sP.forEach(p=>{ map[p.date]={date:p.date,label:p.label,pP:p}; });
-  sS.forEach(p=>{ if(!map[p.date]) map[p.date]={date:p.date,label:p.label}; map[p.date].pS=p; });
-  const arr = Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
-  return arr.map((m,i)=>{
-    const vP=m.pP?.value!=null?Number(m.pP.value):null;
-    const vS=m.pS?.value!=null?Number(m.pS.value):null;
-    const total=(vP??0)+(vS??0);
-    const prevP=m.pP?.prev_year_value!=null?Number(m.pP.prev_year_value):null;
-    const prevS=m.pS?.prev_year_value!=null?Number(m.pS.prev_year_value):null;
-    const prevTotal=(prevP??0)+(prevS??0);
-    const yoyTotal=(prevP!=null||prevS!=null)&&prevTotal!==0?(total-prevTotal)/Math.abs(prevTotal)*100:null;
-    let momTotal=null;
-    if(i>0){
-      const prev=arr[i-1];
-      const prevM=(prev.pP?.value!=null?Number(prev.pP.value):0)+(prev.pS?.value!=null?Number(prev.pS.value):0);
-      momTotal=prevM!==0?(total-prevM)/Math.abs(prevM)*100:null;
-    }
-    return {...m,vP,vS,total,yoyTotal,momTotal};
+function renderKPI() {
+  KEYS.forEach(key => {
+    const s = (allData[CODES[key]]?.series||[]).filter(p=>p.value!=null);
+    const last = s[s.length-1];
+    if (!last) return;
+    const elV = document.getElementById(`kpi-${key}-value`);
+    const elP = document.getElementById(`kpi-${key}-period`);
+    const elD = document.getElementById(`kpi-${key}-deltas`);
+    if (elV) elV.textContent  = fmtNum(Number(last.value), FMT);
+    if (elP) elP.textContent  = last.label || '—';
+    if (elD) elD.innerHTML    = `<span>г/г: ${_deltaFn(last.yoy_change_pct)}</span><span>м/м: ${_deltaFn(last.mom_change_pct)}</span>`;
   });
 }
 
-function renderKPI() {
-  const sP=(allData[CODE_PRIMARY]?.series||[]).filter(p=>p.value!=null);
-  const sS=(allData[CODE_SECONDARY]?.series||[]).filter(p=>p.value!=null);
-  const lP=sP[sP.length-1], lS=sS[sS.length-1];
-  if(!lP&&!lS) return;
-  const vP=lP?Number(lP.value):0, vS=lS?Number(lS.value):0;
-  const mergedAll=buildMerged(allData[CODE_PRIMARY]?.series||[],allData[CODE_SECONDARY]?.series||[]);
-  const lastM=mergedAll[mergedAll.length-1];
-  document.getElementById('kpi-total-value').textContent=fmtNum(vP+vS,FMT_DECIMALS);
-  document.getElementById('kpi-period').textContent=`${UNIT} · ${lP?.label||lS?.label||'—'}`;
-  document.getElementById('kpi-total-deltas').innerHTML=`<span>г/г: ${deltaHtml(lastM?.yoyTotal)}</span><span>м/м: ${deltaHtml(lastM?.momTotal)}</span>`;
-  document.getElementById('kpi-primary-value').textContent=fmtNum(vP,FMT_DECIMALS);
-  document.getElementById('kpi-primary-period').textContent=`${UNIT} · ${lP?.label||'—'}`;
-  document.getElementById('kpi-primary-deltas').innerHTML=`<span>г/г: ${deltaHtml(lP?.yoy_change_pct)}</span><span>м/м: ${deltaHtml(lP?.mom_change_pct)}</span>`;
-  document.getElementById('kpi-secondary-value').textContent=fmtNum(vS,FMT_DECIMALS);
-  document.getElementById('kpi-secondary-period').textContent=`${UNIT} · ${lS?.label||'—'}`;
-  document.getElementById('kpi-secondary-deltas').innerHTML=`<span>г/г: ${deltaHtml(lS?.yoy_change_pct)}</span><span>м/м: ${deltaHtml(lS?.mom_change_pct)}</span>`;
-}
-
 function buildChart() {
-  if(!chartInstance){
-    chartInstance=echarts.init(document.getElementById('main-chart'),null,{renderer:'canvas'});
-    window.addEventListener('resize',()=>chartInstance.resize());
+  if (!chartInstance) {
+    chartInstance = echarts.init(document.getElementById('main-chart'), null, {renderer:'canvas'});
+    window.addEventListener('resize', ()=>chartInstance.resize());
   }
-  const sP=getFiltered(CODE_PRIMARY), sS=getFiltered(CODE_SECONDARY);
-  const mergedFull=buildMerged(allData[CODE_PRIMARY]?.series||[],allData[CODE_SECONDARY]?.series||[]);
-  const filteredDates=new Set([...sP,...sS].map(p=>p.date));
-  const merged=mergedFull.filter(p=>filteredDates.has(p.date));
-  const xData=merged.map(p=>p.label||fmtDate(p.date,'monthly'));
-  const isDelta=currentMode!=='absolute';
-  const field=currentMode==='yoy'?'yoy_change_pct':'mom_change_pct';
-  const totalField=currentMode==='yoy'?'yoyTotal':'momTotal';
-  const mapP={};sP.forEach(p=>{mapP[p.date]=p;});
-  const mapS={};sS.forEach(p=>{mapS[p.date]=p;});
-  const mfMap={};mergedFull.forEach(p=>{mfMap[p.date]=p;});
-  const series=[];
-  if(!isDelta){
-    if(activeSeries.has('secondary')) series.push({name:'Вторичный',type:'bar',stack:'total',data:merged.map(p=>p.vS),itemStyle:{color:'#1A2B4A'},emphasis:{focus:'series'},barMaxWidth:24});
-    if(activeSeries.has('primary'))   series.push({name:'Первичный', type:'bar',stack:'total',data:merged.map(p=>p.vP),itemStyle:{color:'#F4A336'},emphasis:{focus:'series'},barMaxWidth:24});
-  } else {
-    if(activeSeries.has('primary'))   series.push({name:'Первичный', type:'line',data:merged.map(p=>mapP[p.date]?.[field]!=null?Number(mapP[p.date][field]):null),lineStyle:{color:'#F4A336',width:2},itemStyle:{color:'#F4A336'},symbol:merged.length<60?'circle':'none',symbolSize:4,connectNulls:false});
-    if(activeSeries.has('secondary')) series.push({name:'Вторичный',type:'line',data:merged.map(p=>mapS[p.date]?.[field]!=null?Number(mapS[p.date][field]):null),lineStyle:{color:'#1A2B4A',width:2},itemStyle:{color:'#1A2B4A'},symbol:merged.length<60?'circle':'none',symbolSize:4,connectNulls:false});
-    series.push({name:'Всего',type:'line',data:merged.map(p=>{const v=mfMap[p.date]?.[totalField];return v!=null?Number(v):null;}),lineStyle:{color:'#E8341C',width:2.5},itemStyle:{color:'#E8341C'},symbol:merged.length<60?'circle':'none',symbolSize:4,connectNulls:false});
-  }
+  const allDates = [...new Set([...activeSeries].flatMap(k=>getFiltered(k).map(p=>p.date||p.label)))].sort();
+  const isDelta = currentMode !== 'absolute';
+  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
+  const maps = {};
+  KEYS.forEach(k => { const m={}; getFiltered(k).forEach(p=>{m[p.date||p.label]=p;}); maps[k]=m; });
+  const xData = allDates.map(d => {
+    for (const k of activeSeries) { const p=maps[k][d]; if(p?.label) return p.label; }
+    return d;
+  });
+  const series = [...activeSeries].map(key => {
+    const data = allDates.map(d => {
+      const p = maps[key][d];
+      if (!p||p.value==null) return null;
+      return isDelta?(p[field]!=null?Number(p[field]):null):Number(p.value);
+    });
+    if (CHART_T==='bar'&&!isDelta) {
+      return {name:LABELS[key],type:'bar',stack:'total',data,itemStyle:{color:COLORS[key]},emphasis:{focus:'series'},barMaxWidth:isAnnual?40:24};
+    }
+    return {name:LABELS[key],type:'line',data,lineStyle:{color:COLORS[key],width:2.5},itemStyle:{color:COLORS[key]},symbol:allDates.length<60?'circle':'none',symbolSize:4,connectNulls:false};
+  });
   chartInstance.setOption({
-    animation:true,animationDuration:200,animationEasing:'cubicOut',
-    legend:{data:isDelta?['Первичный','Вторичный','Всего']:['Первичный','Вторичный'],top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
+    animation:true,animationDuration:200,
+    legend:{data:[...activeSeries].map(k=>LABELS[k]),top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
     grid:{left:70,right:20,top:40,bottom:80},
-    dataZoom:[
-      {type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},selectedDataBackground:{lineStyle:{color:'#1A2B4A',width:1},areaStyle:{color:'rgba(26,43,74,0.08)'}},dataBackground:{lineStyle:{color:'#DDE2E8',width:1},areaStyle:{color:'rgba(221,226,232,0.3)'}},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},
-      {type:'inside',zoomOnMouseWheel:true,moveOnMouseMove:true,throttle:16},
-    ],
-    tooltip:{trigger:'axis',axisPointer:{type:isDelta?'line':'shadow'},backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
+    dataZoom:[{type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},{type:'inside',throttle:16}],
+    tooltip:{trigger:'axis',axisPointer:{type:CHART_T==='bar'&&!isDelta?'shadow':'line'},backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
       formatter:params=>{
         let html=`<b>${params[0]?.axisValue}</b><br/>`,stack=0;
         params.forEach(p=>{
           if(p.value==null) return;
-          const val=isDelta?`${p.value>0?'+':''}${fmtNum(p.value,1)}%`:fmtNum(p.value,FMT_DECIMALS)+TOOLTIP_SFX;
-          html+=`<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-          if(!isDelta&&p.seriesName!=='Всего') stack+=p.value;
+          const val=isDelta?((p.value>0?'+':'')+fmtNum(p.value,2)+'%'):fmtNum(p.value,FMT)+SFX;
+          html+='<span style="color:'+p.color+'">●</span> '+p.seriesName+': <b>'+val+'</b><br/>';
+          if(!isDelta) stack+=p.value;
         });
-        if(!isDelta) html+=`<span style="color:#aaa">Всего: <b>${fmtNum(stack,FMT_DECIMALS)}${TOOLTIP_SFX}</b></span>`;
+        if(!isDelta&&series.length>1) html+=`<span style="color:#aaa">Итого: <b>${fmtNum(stack,FMT)}${SFX}</b></span>`;
         return html;
       }
     },
     xAxis:{type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
-    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?(v>0?'+':'')+fmtNum(v,1)+'%':fmtNum(v,FMT_DECIMALS)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?((v>0?'+':'')+fmtNum(v,2)+'%'):fmtNum(v,FMT)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
     series,
   },true);
 }
 
 function renderTable() {
-  const sP=getFiltered(CODE_PRIMARY),sS=getFiltered(CODE_SECONDARY);
-  const merged=buildMerged(sP,sS).reverse();
-  const body=document.getElementById('data-table-body');
-  if(currentTable==='total'){
-    body.innerHTML=merged.map(p=>`<tr><td>${p.label||fmtDate(p.date,'monthly')}</td><td class="num">${fmtNum(p.total,FMT_DECIMALS)} ${UNIT}</td><td class="num">${deltaHtml(p.yoyTotal)}</td><td class="num">${deltaHtml(p.momTotal)}</td></tr>`).join('');
-  } else {
-    const code=currentTable==='primary'?CODE_PRIMARY:CODE_SECONDARY;
-    const s=getFiltered(code).slice().reverse();
-    body.innerHTML=s.map(p=>`<tr><td>${p.label||fmtDate(p.date,'monthly')}</td><td class="num">${p.value!=null?fmtNum(Number(p.value),FMT_DECIMALS)+' '+UNIT:'—'}</td><td class="num">${deltaHtml(p.yoy_change_pct)}</td><td class="num">${deltaHtml(p.mom_change_pct)}</td></tr>`).join('');
-  }
+  const s = getFiltered(currentTable).slice().reverse();
+  document.getElementById('data-table-body').innerHTML = s.map(p=>`<tr>
+    <td>${p.label||(p.date?fmtDate(p.date,'monthly'):'—')}</td>
+    <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT)+' '+UNIT:'—'}</td>
+    <td class="num">${_deltaFn(p.yoy_change_pct)}</td>
+    <td class="num">${isAnnual?'—':_deltaFn(p.mom_change_pct)}</td>
+  </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
 }
 
-document.querySelectorAll('[data-range]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);
-    buildChart();renderTable();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-range]');
+  if(btn){document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);buildChart();renderTable()}
 });
-document.querySelectorAll('[data-mode]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentMode=btn.dataset.mode; buildChart();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-mode]');
+  if(btn){document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentMode=btn.dataset.mode;buildChart()}
 });
-document.querySelectorAll('[data-series]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const k=btn.dataset.series;
-    if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active');}}
-    else{activeSeries.add(k);btn.classList.add('active');}
-    buildChart();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-series]');
+  if(btn){const k=btn.dataset.series;if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active')}}else{activeSeries.add(k);btn.classList.add('active')}buildChart()}
 });
-document.querySelectorAll('[data-table]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentTable=btn.dataset.table; renderTable();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-table]');
+  if(btn){document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentTable=btn.dataset.table;renderTable()}
 });
-document.getElementById('btn-download-png')?.addEventListener('click',()=>{
-  if(!chartInstance) return;
-  const url=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});
-  const a=document.createElement('a');a.href=url;a.download=DOWNLOAD_NAME+'.png';a.click();
-});
+document.getElementById('btn-download-png')?.addEventListener('click',()=>{if(!chartInstance)return;const a=document.createElement('a');a.href=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});a.download=FNAME+'.png';a.click()});
 document.getElementById('btn-download-xlsx')?.addEventListener('click',()=>{
-  const xlsxUrl = `${window.API_BASE}/multi/data.xlsx?codes=${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}&labels=Первичный%20рынок%2CВторичный%20рынок%2CВесь%20рынок&title=Объём%20предоставленных%20ипотечных%20кредитов%20в%20рублях&filename=mortgage_volume`;
-  window.open(xlsxUrl);
+  const codes=Object.values(CODES).join(',');
+  const labels=encodeURIComponent(Object.values(LABELS).join(','));
+  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&filename=${FNAME}`);
 });
 init().catch(console.error);
+
+// ── Кнопка «Год» ─────────────────────────────────────────────────────────
+
+function _getAgg(key) {
+  const raw = allData[CODES[key]]?.series || [];
+  if ('sum' === 'wavg') {
+    const wCode = _WEIGHT_CODES[key];
+    const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
+    return AnnualToggle.aggregateWavgSeries(raw, wRaw);
+  }
+  return AnnualToggle.aggregateAnnualSeries(raw, 'sum');
+}
+
+function _annRange(agg) {
+  if (!currentRange) return agg;
+  const cy = new Date().getFullYear() - currentRange;
+  return agg.filter(p => parseInt(p.label || p.date) >= cy);
+}
+
+(function _initAnnualBtn() {
+  const toolbar = document.querySelector('.chart-toolbar');
+  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
+    isAnnual = annual;
+    const momBtn = document.querySelector('[data-mode="mom"]');
+    if (momBtn) momBtn.style.display = annual ? 'none' : '';
+    if (annual && currentMode === 'mom') {
+      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+      const ab = document.querySelector('[data-mode="absolute"]');
+      if (ab) { ab.classList.add('active'); currentMode = 'absolute'; }
+    }
+    buildChart();
+    renderTable();
+  });
+})();
+
 </script>
 </body>
 </html>

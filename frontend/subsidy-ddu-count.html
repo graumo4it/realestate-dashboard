@@ -13,11 +13,11 @@
   <style>
     .kpi-cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
     .kpi-card-sm { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow); }
-    .kpi-card-sm .kpi-label { font-size: .68rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+    .kpi-card-sm .kpi-label { font-size: .7rem; color: var(--color-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
     .kpi-card-sm .kpi-value { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; color: var(--color-ink); line-height: 1; margin-bottom: 2px; }
-    .kpi-card-sm .kpi-period { font-size: .7rem; color: var(--color-muted); margin-bottom: 6px; }
-    .kpi-card-sm .kpi-deltas { display: flex; gap: 6px; flex-wrap: wrap; font-size: .75rem; }
-    .kpi-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 6px; }
+    .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .75rem; }
+    .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .table-tabs { display: flex; gap: 4px; padding: 10px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); flex-wrap: wrap; }
     .table-tab { font-size: .78rem; font-weight: 500; font-family: var(--font-body); padding: 5px 16px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); color: var(--color-muted); cursor: pointer; transition: all .15s; }
     .table-tab.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
@@ -45,28 +45,15 @@
           <div class="filter-options"><button class="filter-btn active">Россия</button></div>
         </div>
         <div class="filter-section">
-          <div class="filter-label">Программа</div>
-          <div class="filter-options">
-            <button class="filter-btn active" data-series="semya">
-              <span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Семейная
-            </button>
-            <button class="filter-btn active" data-series="lgota">
-              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Льготная
-            </button>
-            <button class="filter-btn active" data-series="dalvos">
-              <span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>Дальневосточная
-            </button>
-            <button class="filter-btn active" data-series="it">
-              <span class="kpi-dot" style="background:#2EC4B6;margin-right:4px"></span>IT-ипотека
-            </button>
-          </div>
+          <div class="filter-label">Серии</div>
+          <div class="filter-options" id="series-filters"></div>
         </div>
       </aside>
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
-          <a href="category.html?code=mortgage_subsidy">Господдержка</a><span class="breadcrumb-sep">›</span>
-          <span>Количество кредитов по программам господдержки (ДДУ)</span>
+          <a href="category.html?code=mortgage_subsidy">Льготная ипотека</a><span class="breadcrumb-sep">›</span>
+          <span>Количество кредитов ДДУ</span>
         </div>
         <div class="chart-header">
           <h1>Количество кредитов по программам господдержки (ДДУ)</h1>
@@ -77,31 +64,31 @@
           </div>
         </div>
         <div class="kpi-cards-row">
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
-            <div class="kpi-value" id="kpi-semya-value">—</div>
-            <div class="kpi-period">ед. · <span id="kpi-semya-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-semya-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Льготная</div>
-            <div class="kpi-value" id="kpi-lgota-value">—</div>
-            <div class="kpi-period">ед. · <span id="kpi-lgota-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-lgota-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
-            <div class="kpi-value" id="kpi-dalvos-value">—</div>
-            <div class="kpi-period">ед. · <span id="kpi-dalvos-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-dalvos-deltas"></div>
-          </div>
-          <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#2EC4B6"></span>IT-ипотека</div>
-            <div class="kpi-value" id="kpi-it-value">—</div>
-            <div class="kpi-period">ед. · <span id="kpi-it-period">—</span></div>
-            <div class="kpi-deltas" id="kpi-it-deltas"></div>
-          </div>
-        </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
+    <div class="kpi-value" id="kpi-semya-value">—</div>
+    <div class="kpi-period">ед. · <span id="kpi-semya-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-semya-deltas"></div>
+  </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Льготная</div>
+    <div class="kpi-value" id="kpi-lgota-value">—</div>
+    <div class="kpi-period">ед. · <span id="kpi-lgota-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-lgota-deltas"></div>
+  </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
+    <div class="kpi-value" id="kpi-dalvos-value">—</div>
+    <div class="kpi-period">ед. · <span id="kpi-dalvos-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-dalvos-deltas"></div>
+  </div>
+  <div class="kpi-card-sm">
+    <div class="kpi-label"><span class="kpi-dot" style="background:#2EC4B6"></span>IT-ипотека</div>
+    <div class="kpi-value" id="kpi-it-value">—</div>
+    <div class="kpi-period">ед. · <span id="kpi-it-period">—</span></div>
+    <div class="kpi-deltas" id="kpi-it-deltas"></div>
+  </div>
+</div>
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
@@ -125,9 +112,10 @@
         </div>
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
-          <div class="table-tabs" id="table-tabs">
-            <button class="table-tab active" data-table="semya">Семейная</button><button class="table-tab" data-table="lgota">Льготная</button><button class="table-tab" data-table="dalvos">Дальневосточная</button><button class="table-tab" data-table="it">IT-ипотека</button>
-          </div>
+          <div class="table-tabs"><button class="table-tab active" data-table="semya">Семейная</button>
+<button class="table-tab " data-table="lgota">Льготная</button>
+<button class="table-tab " data-table="dalvos">Дальневосточная</button>
+<button class="table-tab " data-table="it">IT-ипотека</button></div>
           <table class="data-table">
             <thead><tr>
               <th style="width:25%">Период</th>
@@ -146,19 +134,38 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/annual-toggle.js"></script>
 <script>
-const CODES   = {"semya":"6.46","lgota":"6.48","dalvos":"6.50","it":"6.52"};
-const COLORS  = {"semya":"#E8341C","lgota":"#1A2B4A","dalvos":"#F4A336","it":"#2EC4B6"};
-const LABELS  = {"semya":"Семейная","lgota":"Льготная","dalvos":"Дальневосточная","it":"IT-ипотека"};
-const KEYS    = Object.keys(CODES);
+const CODES   = {'semya': '6.46', 'lgota': '6.48', 'dalvos': '6.50', 'it': '6.52'};
+const COLORS  = {'semya': '#E8341C', 'lgota': '#1A2B4A', 'dalvos': '#F4A336', 'it': '#2EC4B6'};
+const LABELS  = {'semya': 'Семейная', 'lgota': 'Льготная', 'dalvos': 'Дальневосточная', 'it': 'IT-ипотека'};
+const KEYS    = ['semya', 'lgota', 'dalvos', 'it'];
 const FMT     = 0;
 const UNIT    = 'ед.';
 const SFX     = ' ед.';
-const FNAME   = 'subsidy_ddu_count';
+const CHART_T = 'bar';
+const FNAME   = 'subsidy-ddu-count';
+let isAnnual  = false;
 
+const _deltaFn = deltaHtml;
+
+const _WEIGHT_CODES = {};
 let chartInstance = null, allData = {}, currentRange = null;
 let currentMode = 'absolute', currentTable = KEYS[0];
 let activeSeries = new Set(KEYS);
+
+// Строим кнопки фильтров сайдбара динамически
+(function buildSidebarFilters() {
+  const container = document.getElementById('series-filters');
+  if (!container) return;
+  KEYS.forEach(key => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn active';
+    btn.dataset.series = key;
+    btn.innerHTML = `<span class="kpi-dot" style="background:${COLORS[key]};margin-right:4px"></span>${LABELS[key]}`;
+    container.appendChild(btn);
+  });
+})();
 
 api.categories().then(cats => {
   document.getElementById('main-nav').innerHTML = cats.slice(0,8).map(c =>
@@ -166,13 +173,42 @@ api.categories().then(cats => {
 }).catch(()=>{});
 
 async function init() {
-  allData = await api.multiIndicatorData(Object.values(CODES).join(','));
+  // Загружаем основные коды + весовые коды если нужно
+  const allCodes = [...new Set([...Object.values(CODES), ...Object.values(_WEIGHT_CODES)])];
+  allData = await api.multiIndicatorData(allCodes.join(','));
   const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
   if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
   renderKPI(); buildChart(); renderTable();
+
+  const toolbar = document.querySelector('.chart-toolbar');
+  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
+    isAnnual = annual;
+    const momBtn = document.querySelector('[data-mode="mom"]');
+    if (momBtn) momBtn.style.display = annual ? 'none' : '';
+    if (annual && currentMode === 'mom') {
+      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+      const ab = document.querySelector('[data-mode="absolute"]');
+      if (ab) { ab.classList.add('active'); currentMode = 'absolute'; }
+    }
+    buildChart(); renderTable();
+  });
 }
 
 function getFiltered(key) {
+  if (isAnnual) {
+    const raw = allData[CODES[key]]?.series || [];
+    let agg;
+    if (Object.keys(_WEIGHT_CODES).length > 0) {
+      const wCode = _WEIGHT_CODES[key];
+      const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
+      agg = AnnualToggle.aggregateWavgSeries(raw, wRaw);
+    } else {
+      agg = AnnualToggle.aggregateAnnualSeries(raw, 'sum');
+    }
+    if (!currentRange) return agg;
+    const cy = new Date().getFullYear() - currentRange;
+    return agg.filter(p => parseInt(p.label || p.date) >= cy);
+  }
   const s = allData[CODES[key]]?.series || [];
   if (!currentRange) return s;
   const pts = s.filter(p=>p.value!=null);
@@ -189,10 +225,12 @@ function renderKPI() {
     const s = (allData[CODES[key]]?.series||[]).filter(p=>p.value!=null);
     const last = s[s.length-1];
     if (!last) return;
-    document.getElementById(`kpi-${key}-value`).textContent  = fmtNum(Number(last.value), FMT);
-    document.getElementById(`kpi-${key}-period`).textContent = last.label || '—';
-    document.getElementById(`kpi-${key}-deltas`).innerHTML   =
-      `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span><span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+    const elV = document.getElementById(`kpi-${key}-value`);
+    const elP = document.getElementById(`kpi-${key}-period`);
+    const elD = document.getElementById(`kpi-${key}-deltas`);
+    if (elV) elV.textContent  = fmtNum(Number(last.value), FMT);
+    if (elP) elP.textContent  = last.label || '—';
+    if (elD) elD.innerHTML    = `<span>г/г: ${_deltaFn(last.yoy_change_pct)}</span><span>м/м: ${_deltaFn(last.mom_change_pct)}</span>`;
   });
 }
 
@@ -201,112 +239,118 @@ function buildChart() {
     chartInstance = echarts.init(document.getElementById('main-chart'), null, {renderer:'canvas'});
     window.addEventListener('resize', ()=>chartInstance.resize());
   }
-  const allDates = [...new Set([...activeSeries].flatMap(k=>getFiltered(k).map(p=>p.date)))].sort();
+  const allDates = [...new Set([...activeSeries].flatMap(k=>getFiltered(k).map(p=>p.date||p.label)))].sort();
   const isDelta = currentMode !== 'absolute';
   const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-
   const maps = {};
-  KEYS.forEach(k => { const m={}; getFiltered(k).forEach(p=>{m[p.date]=p;}); maps[k]=m; });
-
+  KEYS.forEach(k => { const m={}; getFiltered(k).forEach(p=>{m[p.date||p.label]=p;}); maps[k]=m; });
   const xData = allDates.map(d => {
     for (const k of activeSeries) { const p=maps[k][d]; if(p?.label) return p.label; }
     return d;
   });
-
   const series = [...activeSeries].map(key => {
     const data = allDates.map(d => {
       const p = maps[key][d];
-      if (!p || p.value==null) return null;
-      return isDelta ? (p[field]!=null?Number(p[field]):null) : Number(p.value);
+      if (!p||p.value==null) return null;
+      return isDelta?(p[field]!=null?Number(p[field]):null):Number(p.value);
     });
-    return {
-      name: LABELS[key], type: 'bar', stack: isDelta ? null : 'total',
-      data,
-      itemStyle: {color: COLORS[key]},
-      emphasis: {focus:'series'}, barMaxWidth: 28,
-    };
+    if (CHART_T==='bar'&&!isDelta) {
+      return {name:LABELS[key],type:'bar',stack:'total',data,itemStyle:{color:COLORS[key]},emphasis:{focus:'series'},barMaxWidth:isAnnual?40:24};
+    }
+    return {name:LABELS[key],type:'line',data,lineStyle:{color:COLORS[key],width:2.5},itemStyle:{color:COLORS[key]},symbol:allDates.length<60?'circle':'none',symbolSize:4,connectNulls:false};
   });
-
   chartInstance.setOption({
-    animation: true, animationDuration: 200,
-    legend: {data:[...activeSeries].map(k=>LABELS[k]),top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
-    grid: {left:70,right:20,top:40,bottom:80},
-    dataZoom: [
-      {type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},
-      {type:'inside',throttle:16},
-    ],
-    tooltip: {
-      trigger:'axis', axisPointer:{type:'shadow'},
-      backgroundColor:'#0D1B2A', borderColor:'#0D1B2A',
-      textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
-      formatter: params => {
-        let html=`<b>${params[0]?.axisValue}</b><br/>`, stack=0;
+    animation:true,animationDuration:200,
+    legend:{data:[...activeSeries].map(k=>LABELS[k]),top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
+    grid:{left:70,right:20,top:40,bottom:80},
+    dataZoom:[{type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},{type:'inside',throttle:16}],
+    tooltip:{trigger:'axis',axisPointer:{type:CHART_T==='bar'&&!isDelta?'shadow':'line'},backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
+      formatter:params=>{
+        let html=`<b>${params[0]?.axisValue}</b><br/>`,stack=0;
         params.forEach(p=>{
           if(p.value==null) return;
-          const val = isDelta ? `${p.value>0?'+':''}${fmtNum(p.value,1)}%` : fmtNum(p.value,FMT)+SFX;
-          html+=`<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
+          const val=isDelta?((p.value>0?'+':'')+fmtNum(p.value,2)+'%'):fmtNum(p.value,FMT)+SFX;
+          html+='<span style="color:'+p.color+'">●</span> '+p.seriesName+': <b>'+val+'</b><br/>';
           if(!isDelta) stack+=p.value;
         });
-        if(!isDelta && params.length>1) html+=`<span style="color:#aaa">Итого: <b>${fmtNum(stack,FMT)}${SFX}</b></span>`;
+        if(!isDelta&&series.length>1) html+=`<span style="color:#aaa">Итого: <b>${fmtNum(stack,FMT)}${SFX}</b></span>`;
         return html;
-      },
+      }
     },
-    xAxis: {type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
-    yAxis: {type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?(v>0?'+':'')+fmtNum(v,1)+'%':fmtNum(v,FMT)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
+    xAxis:{type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?((v>0?'+':'')+fmtNum(v,2)+'%'):fmtNum(v,FMT)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
     series,
-  }, true);
+  },true);
 }
 
 function renderTable() {
   const s = getFiltered(currentTable).slice().reverse();
   document.getElementById('data-table-body').innerHTML = s.map(p=>`<tr>
-    <td>${p.label||p.date}</td>
+    <td>${p.label||(p.date?fmtDate(p.date,'monthly'):'—')}</td>
     <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT)+' '+UNIT:'—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
-    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
-  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+    <td class="num">${_deltaFn(p.yoy_change_pct)}</td>
+    <td class="num">${isAnnual?'—':_deltaFn(p.mom_change_pct)}</td>
+  </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
 }
 
-document.querySelectorAll('[data-range]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);
-    buildChart();renderTable();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-range]');
+  if(btn){document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);buildChart();renderTable()}
 });
-document.querySelectorAll('[data-mode]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentMode=btn.dataset.mode; buildChart();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-mode]');
+  if(btn){document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentMode=btn.dataset.mode;buildChart()}
 });
-document.querySelectorAll('[data-series]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const k=btn.dataset.series;
-    if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active');}}
-    else{activeSeries.add(k);btn.classList.add('active');}
-    buildChart();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-series]');
+  if(btn){const k=btn.dataset.series;if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active')}}else{activeSeries.add(k);btn.classList.add('active')}buildChart()}
 });
-document.querySelectorAll('[data-table]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentTable=btn.dataset.table; renderTable();
-  });
+document.addEventListener('click', e=>{
+  const btn = e.target.closest('[data-table]');
+  if(btn){document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentTable=btn.dataset.table;renderTable()}
 });
-document.getElementById('btn-download-png')?.addEventListener('click',()=>{
-  if(!chartInstance) return;
-  const url=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});
-  const a=document.createElement('a');a.href=url;a.download=FNAME+'.png';a.click();
-});
+document.getElementById('btn-download-png')?.addEventListener('click',()=>{if(!chartInstance)return;const a=document.createElement('a');a.href=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});a.download=FNAME+'.png';a.click()});
 document.getElementById('btn-download-xlsx')?.addEventListener('click',()=>{
   const codes=Object.values(CODES).join(',');
   const labels=encodeURIComponent(Object.values(LABELS).join(','));
-  const title=encodeURIComponent('Количество кредитов по программам господдержки (ДДУ)');
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&title=${title}&filename=${FNAME}`);
+  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&filename=${FNAME}`);
 });
 init().catch(console.error);
+
+// ── Кнопка «Год» ─────────────────────────────────────────────────────────
+
+function _getAgg(key) {
+  const raw = allData[CODES[key]]?.series || [];
+  if ('sum' === 'wavg') {
+    const wCode = _WEIGHT_CODES[key];
+    const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
+    return AnnualToggle.aggregateWavgSeries(raw, wRaw);
+  }
+  return AnnualToggle.aggregateAnnualSeries(raw, 'sum');
+}
+
+function _annRange(agg) {
+  if (!currentRange) return agg;
+  const cy = new Date().getFullYear() - currentRange;
+  return agg.filter(p => parseInt(p.label || p.date) >= cy);
+}
+
+(function _initAnnualBtn() {
+  const toolbar = document.querySelector('.chart-toolbar');
+  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
+    isAnnual = annual;
+    const momBtn = document.querySelector('[data-mode="mom"]');
+    if (momBtn) momBtn.style.display = annual ? 'none' : '';
+    if (annual && currentMode === 'mom') {
+      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+      const ab = document.querySelector('[data-mode="absolute"]');
+      if (ab) { ab.classList.add('active'); currentMode = 'absolute'; }
+    }
+    buildChart();
+    renderTable();
+  });
+})();
+
 </script>
 </body>
 </html>

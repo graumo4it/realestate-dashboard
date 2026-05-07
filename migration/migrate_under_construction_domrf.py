@@ -161,6 +161,31 @@ def safe_float(v) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+def safe_float_pct(v) -> float:
+    """Парсит процент готовности. Поддерживает '80%' и 0.8 и 80.0."""
+    if v is None:
+        return 0.0
+    if isinstance(v, str):
+        v = v.strip()
+        if v == '':
+            return 0.0
+        if v.endswith('%'):
+            try:
+                return float(v[:-1])
+            except ValueError:
+                return 0.0
+        try:
+            f = float(v)
+            return f * 100 if 0 < f <= 1 else f
+        except ValueError:
+            return 0.0
+    try:
+        f = float(v)
+        if 0 < f <= 1:
+            return f * 100
+        return f
+    except (TypeError, ValueError):
+        return 0.0
 
 def safe_date(v):
     """Парсит дату из значения ячейки."""
@@ -222,9 +247,15 @@ def calc_from_matrix(df: pd.DataFrame, period_date: date) -> dict:
         if c is None:
             return pd.Series([0.0] * len(df))
         return df[c].apply(safe_float)
+    
+    def col_pct(alias) -> pd.Series:
+        c = col_map.get(alias)
+        if c is None:
+            return pd.Series([0.0] * len(df))
+        return df[c].apply(safe_float_pct)
 
     area       = col('area')
-    ready_pct  = col('ready_pct')
+    ready_pct  = col_pct('ready_pct')
     sold_pct   = col('sold_pct')
     sold_cnt   = col('sold_apt_cnt')
     sold_sqm   = col('sold_apt_sqm')
