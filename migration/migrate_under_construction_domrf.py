@@ -65,7 +65,7 @@ CODES = {
 }
 
 # Коды существующих индикаторов в БД
-CODE_INPUT_MZS  = '2.2'          # Объём ввода МЖС
+CODE_INPUT_MZS  = '2.3'          # Объём ввода МЖС
 CODE_SALES      = '5.8'          # Количество сделок на первичном рынке
 CODE_POPULATION = '1.1'          # Население
 CODE_SALES_SQM  = 'sales_apt_sqm'  # Суммарная площадь продаж квартир, кв. м
@@ -123,7 +123,7 @@ def read_matrix(filepath: Path) -> pd.DataFrame:
         if status_col is None:
             return pd.DataFrame()
         df = df[df[status_col].str.lower().str.strip() == 'строится'].copy()
-        return df
+        return df.reset_index(drop=True)
     else:
         # xlsb
         rows_data = []
@@ -150,7 +150,7 @@ def read_matrix(filepath: Path) -> pd.DataFrame:
             return pd.DataFrame()
         df[status_col] = df[status_col].astype(str)
         df = df[df[status_col].str.lower().str.strip() == 'строится'].copy()
-        return df
+        return df.reset_index(drop=True)
 
 
 def safe_float(v) -> float:
@@ -318,21 +318,18 @@ def load_db_series(cur, code: str) -> dict:
 
 def sum_last_12_months(series: dict, cutoff_date: date) -> float | None:
     """
-    Суммирует значения за 12 месяцев до cutoff_date (не включая cutoff_date).
-    Для файла апрель 2026 → апрель 2025 – март 2026.
+    Суммирует значения строго за 12 месяцев до cutoff_date.
+    Для апреля 2026 → апрель 2025 – март 2026.
+    Если хотя бы один месяц отсутствует → возвращает None.
     """
-    end   = date(cutoff_date.year, cutoff_date.month, 1) - timedelta(days=1)
-    end   = date(end.year, end.month, 1)
-    start = date(end.year - 1, end.month, 1)
-    # Берём 12 месяцев: start .. start+11 месяцев
     vals = []
-    d = start
+    d = date(cutoff_date.year, cutoff_date.month, 1)
     for _ in range(12):
-        if d in series:
-            vals.append(series[d])
-        d = (date(d.year, d.month, 28) + timedelta(days=4)).replace(day=1)
-    if not vals:
-        return None
+        d = (date(d.year, d.month, 1) - timedelta(days=1))
+        d = date(d.year, d.month, 1)
+        if d not in series:
+            return None
+        vals.append(series[d])
     return sum(vals)
 
 
@@ -475,11 +472,10 @@ def main():
         if sales_sqm_12 and sales_sqm_12 > 0:
             unsold_total  = calc['uc_area_total']  * 1_000_000 - calc.get('_sold_apt_sqm_total',  0)
             unsold_active = calc['uc_area_active'] * 1_000_000 - calc.get('_sold_apt_sqm_active', 0)
-            monthly_sales = sales_sqm_12 / 12
             if unsold_total > 0:
-                add('uc_absorption_total',  round(unsold_total  / monthly_sales, 1))
+                add('uc_absorption_total',  round(unsold_total  / sales_sqm_12, 1))
             if unsold_active > 0:
-                add('uc_absorption_active', round(unsold_active / monthly_sales, 1))
+                add('uc_absorption_active', round(unsold_active / sales_sqm_12, 1))
 
         # Записываем в БД
         for indicator_id, pd_, lbl, val in rows:
