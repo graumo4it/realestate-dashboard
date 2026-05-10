@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Цены на жильё (Росстат) — Рынок недвижимости России</title>
+  <title>Цены на жилье (Росстат) — Рынок недвижимости России</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="css/variables.css"/>
@@ -11,6 +11,10 @@
   <link rel="stylesheet" href="css/chart.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
+    /* Отключаем сайдбарный grid из chart.css — на этой странице сайдбара нет */
+    .chart-layout { display: block; }
+    .chart-main { max-width: 100%; }
+
     .kpi-cards-row {
       display: grid; grid-template-columns: repeat(2, 1fr);
       gap: 16px; margin-bottom: 28px;
@@ -31,13 +35,85 @@
     .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .78rem; }
     .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
-    /* Группы фильтров в сайдбаре */
-    .filter-group-label {
+    /* Горизонтальная панель фильтров */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-bar-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: var(--color-surface);
+      font-family: var(--font-body);
+      font-size: .83rem;
+      font-weight: 500;
+      color: var(--color-ink);
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      min-width: 320px;
+      justify-content: space-between;
+    }
+    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
+    .filter-bar-btn svg { flex-shrink: 0; }
+
+    .filter-bar-reset {
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: .83rem;
+      color: var(--color-muted);
+      cursor: pointer;
+      transition: all .15s;
+      margin-left: auto;
+    }
+    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* Дропдаун */
+    .filter-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 100%;
+      min-width: 320px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+      padding: 6px 0;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .filter-dropdown-group-label {
       font-size: .68rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: .08em; color: var(--color-muted);
-      margin: 14px 0 6px;
+      padding: 8px 14px 4px;
     }
-    .filter-group-label:first-child { margin-top: 0; }
+    .filter-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      font-size: .83rem;
+      cursor: pointer;
+      transition: background .1s;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .filter-dropdown-item:hover { background: var(--color-bg); }
+    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
+    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
 
     /* Двухуровневые вкладки таблицы */
     .table-tabs-wrap {
@@ -78,7 +154,14 @@
 <header class="site-header">
   <div class="header-inner">
     <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav"></nav>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_base">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -92,69 +175,6 @@
   <div class="page-wrap">
     <div class="chart-layout">
 
-      <!-- Сайдбар с фильтрами -->
-      <aside class="sidebar" id="filters-panel">
-        <div class="sidebar-heading">Фильтры</div>
-
-        <div class="filter-section">
-          <div class="filter-label">Регион</div>
-          <div class="filter-options">
-            <button class="filter-btn active">Россия</button>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">Тип динамики цен</div>
-          <div class="filter-options" id="series-filters">
-
-            <div class="filter-group-label">Первичный рынок</div>
-            <button class="filter-btn active" data-code="4.4">
-              <span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Все квартиры
-            </button>
-            <button class="filter-btn" data-code="4.4.1">
-              <span class="kpi-dot" style="background:#FF8C00;margin-right:4px"></span>Типовые
-            </button>
-            <button class="filter-btn" data-code="4.4.2">
-              <span class="kpi-dot" style="background:#C44B8A;margin-right:4px"></span>Улучшенное
-            </button>
-            <button class="filter-btn" data-code="4.4.3">
-              <span class="kpi-dot" style="background:#8B3A9E;margin-right:4px"></span>Элитные
-            </button>
-
-            <div class="filter-group-label">Вторичный рынок</div>
-            <button class="filter-btn active" data-code="4.5">
-              <span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Все квартиры
-            </button>
-            <button class="filter-btn" data-code="4.5.1">
-              <span class="kpi-dot" style="background:#0D7C56;margin-right:4px"></span>Низкое кач.
-            </button>
-            <button class="filter-btn" data-code="4.5.2">
-              <span class="kpi-dot" style="background:#1A9E7A;margin-right:4px"></span>Типовые
-            </button>
-            <button class="filter-btn" data-code="4.5.3">
-              <span class="kpi-dot" style="background:#2EC4B6;margin-right:4px"></span>Улучшенное
-            </button>
-            <button class="filter-btn" data-code="4.5.4">
-              <span class="kpi-dot" style="background:#3A86FF;margin-right:4px"></span>Элитные
-            </button>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">Периодичность</div>
-          <div class="filter-options">
-            <span style="font-size:.82rem;color:var(--color-muted)">Квартал</span>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <div class="filter-label">Источник данных</div>
-          <div class="filter-options">
-            <span style="font-size:.82rem;color:var(--color-muted)">Росстат</span>
-          </div>
-        </div>
-      </aside>
-
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
@@ -163,7 +183,7 @@
         </div>
 
         <div class="chart-header">
-          <h1>Цены на жильё по типам квартир</h1>
+          <h1>Цены на жилье по типам квартир</h1>
           <div class="chart-meta">
             <span class="chart-meta-item">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -193,14 +213,25 @@
           </div>
         </div>
 
+        <!-- Горизонтальная панель фильтров -->
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Тип динамики цен
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+          </div>
+          <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+        </div>
+
         <!-- Toolbar -->
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
-              <button data-range="1">1 г</button>
-              <button data-range="3">3 г</button>
-              <button data-range="5">5 л</button>
-              <button data-range="all" class="active">За всё время</button>
+              <button data-range="1">1 год</button>
+              <button data-range="3">3 года</button>
+              <button data-range="5">5 лет</button>
+              <button data-range="all" class="active">За все время</button>
             </div>
             <div class="btn-group">
               <button data-mode="absolute" class="active">Значения</button>
@@ -265,12 +296,12 @@
 
 // ── Конфиг серий ──────────────────────────────────────────────────────────
 const SERIES_CONFIG = {
-  // Первичный рынок: красный (все) + оттенки от тёплого к холодному
+  // Первичный рынок: красный (все) + оттенки от теплого к холодному
   '4.4':   { label: 'Первичный (все)',         color: '#E8341C', width: 3,   dash: false },
   '4.4.1': { label: 'Первичный — типовые',     color: '#FF8C00', width: 1.5, dash: true  },
   '4.4.2': { label: 'Первичный — улучшенное',  color: '#C44B8A', width: 1.5, dash: true  },
   '4.4.3': { label: 'Первичный — элитные',     color: '#8B3A9E', width: 1.5, dash: true  },
-  // Вторичный рынок: тёмно-синий (все) + оттенки зелёного/бирюзового
+  // Вторичный рынок: темно-синий (все) + оттенки зеленого/бирюзового
   '4.5':   { label: 'Вторичный (все)',          color: '#1A2B4A', width: 3,   dash: false },
   '4.5.1': { label: 'Вторичный — низкое кач.', color: '#0D7C56', width: 1.5, dash: true  },
   '4.5.2': { label: 'Вторичный — типовые',     color: '#1A9E7A', width: 1.5, dash: true  },
@@ -288,10 +319,7 @@ let currentMode = 'absolute';
 let currentTableCode = '4.4';
 
 // ── Навигация ──────────────────────────────────────────────────────────────
-api.categories().then(cats => {
-  document.getElementById('main-nav').innerHTML = cats.slice(0, 8).map(c =>
-    `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
-}).catch(() => {});
+api.categories().then(() => {}).catch(() => {});
 
 // ── Загрузка ───────────────────────────────────────────────────────────────
 async function init() {
@@ -304,6 +332,7 @@ async function init() {
 
   renderKPI();
   buildChart();
+  buildDropdown();
   buildTableTabs();
   renderTable();
 }
@@ -426,7 +455,7 @@ function buildChart() {
           const d = new Date(val);
           return d.getFullYear() + (d.getMonth() > 0 ? '-Q' + Math.ceil((d.getMonth()+1)/3) : '');
         },
-        rotate: 30,
+        rotate: 0,
       },
       axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
     },
@@ -530,20 +559,98 @@ document.querySelectorAll('[data-mode]').forEach(btn => {
   });
 });
 
-document.querySelectorAll('[data-code]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const code = btn.dataset.code;
-    if (activeSeries.has(code)) {
-      if (activeSeries.size > 1) {
-        activeSeries.delete(code);
-        btn.classList.remove('active');
-      }
-    } else {
-      activeSeries.add(code);
-      btn.classList.add('active');
+// ── Дропдаун «Тип динамики цен» с группами Первичный/Вторичный ────────────
+const SERIES_GROUPS = [
+  { label: 'Первичный рынок', codes: ['4.4', '4.4.1', '4.4.2', '4.4.3'] },
+  { label: 'Вторичный рынок', codes: ['4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'] },
+];
+
+function buildDropdown() {
+  const dropdown = document.getElementById('series-dropdown');
+  dropdown.innerHTML = '';
+  SERIES_GROUPS.forEach(group => {
+    const lbl = document.createElement('div');
+    lbl.className = 'filter-dropdown-group-label';
+    lbl.textContent = group.label;
+    dropdown.appendChild(lbl);
+    group.codes.forEach(code => {
+      const cfg = SERIES_CONFIG[code];
+      const item = document.createElement('div');
+      item.className = 'filter-dropdown-item';
+      item.dataset.code = code;
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = `cb-${code.replace(/\./g, '_')}`;
+      cb.checked = activeSeries.has(code);
+
+      const dot = document.createElement('span');
+      dot.className = 'kpi-dot';
+      dot.style.background = cfg.color;
+
+      const span = document.createElement('span');
+      span.textContent = cfg.label;
+
+      item.appendChild(cb);
+      item.appendChild(dot);
+      item.appendChild(span);
+      dropdown.appendChild(item);
+    });
+  });
+
+  // Делегированный обработчик — клик по строке/чекбоксу переключает серию
+  dropdown.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const item = e.target.closest('.filter-dropdown-item');
+    if (!item) return;
+    const code = item.dataset.code;
+    const cb = item.querySelector('input');
+
+    if (e.target !== cb) {
+      cb.checked = !cb.checked;
     }
+
+    if (cb.checked) {
+      activeSeries.add(code);
+    } else {
+      if (activeSeries.size <= 1) { cb.checked = true; return; }
+      activeSeries.delete(code);
+    }
+    updateFilterBtnState();
     buildChart();
   });
+}
+
+function syncDropdown() {
+  document.querySelectorAll('#series-dropdown input[type=checkbox]').forEach(cb => {
+    const code = cb.id.replace(/^cb-/, '').replace(/_/g, '.');
+    cb.checked = activeSeries.has(code);
+  });
+}
+
+function updateFilterBtnState() {
+  const btn = document.getElementById('btn-filter-series');
+  const allActive = ALL_CODES.every(c => activeSeries.has(c));
+  btn.classList.toggle('has-active', !allActive);
+}
+
+// Открыть/закрыть дропдаун
+document.getElementById('btn-filter-series').addEventListener('click', e => {
+  e.stopPropagation();
+  const dd = document.getElementById('series-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', () => {
+  document.getElementById('series-dropdown').style.display = 'none';
+});
+document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
+
+// Сброс — возвращаем дефолт (Первичный + Вторичный, агрегированные)
+document.getElementById('btn-reset-filters').addEventListener('click', () => {
+  activeSeries = new Set(['4.4', '4.5']);
+  syncDropdown();
+  updateFilterBtnState();
+  buildChart();
 });
 
 document.getElementById('btn-download-png')?.addEventListener('click', () => {
@@ -554,7 +661,7 @@ document.getElementById('btn-download-png')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  const title = encodeURIComponent('Цены на жильё по типам квартир (Росстат)');
+  const title = encodeURIComponent('Цены на жилье по типам квартир (Росстат)');
   const labels = encodeURIComponent('Первичный (все),Первичный — типовые,Первичный — улучшенное,Первичный — элитные,Вторичный (все),Вторичный — низкое,Вторичный — типовые,Вторичный — улучшенное,Вторичный — элитные');
   window.open(`${window.API_BASE}/multi/data.xlsx?codes=${ALL_CODES.join(',')}&title=${title}&labels=${labels}&filename=prices_rosstat`);
 });

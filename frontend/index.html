@@ -21,7 +21,7 @@
   <div class="header-inner">
     <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
     <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_total">Ипотека</a>
+      <a href="category.html?code=mortgage_base">Ипотека</a>
       <a href="category.html?code=prices">Цены</a>
       <a href="category.html?code=demand">Спрос</a>
       <a href="category.html?code=supply_volume">Ввод жилья</a>
@@ -60,15 +60,14 @@
     <div>
       <div class="section-title">Разделы статистики</div>
       <div class="category-grid" id="category-grid">
-        <!-- Skeleton -->
         <div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
-<div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
+        <div class="skeleton" style="height:160px;border-radius:12px"></div>
       </div>
     </div>
 
@@ -107,27 +106,53 @@ window.API_BASE = 'http://localhost:8001/api';
 <script>
 const CATEGORY_ICONS = {
   macro: '📊', supply_volume: '🏗️', supply_per_capita: '👤',
-  housing_stock: '🏘️', under_construction: '🔨', apartments: '🏠',
-  concentration: '📈', prices: '💰', demand: '🔑',
-  mortgage_total: '🏦', mortgage_base: '🆕', mortgage_secondary: '📋',
+  housing_stock: '🏘️', under_construction: '🔨', under_construction_domrf: '🏗️',
+  apartments: '🏠', concentration: '📈', prices: '💰', demand: '🔑',
+  mortgage_total: '🏦', mortgage_base: '🏦', mortgage_secondary: '📋',
   mortgage_debt: '⚠️', mortgage_domclick: '🖥️', mortgage_frankrg: '📰',
   mortgage_subsidy: '🎯', mortgage_igs: '🌳',
 };
 
-async function loadPage() {
-  // Категории
-  const categories = await api.categories();
-  document.getElementById('stat-indicators').textContent =
-    categories.reduce((s, c) => s + (c.indicators_count || 0), 0);
+// Разделы, скрытые на главной
+const HIDDEN_CATEGORIES = new Set(['mortgage_total', 'mortgage_secondary']);
 
+// Переопределяем счётчик показателей для разделов с комбо-страницами.
+// Значение = количество карточек которые видит пользователь на странице раздела.
+const VISIBLE_COUNT_OVERRIDE = {
+  supply_volume:          3,  // 2.1(комбо), share(комбо), per_capita(комбо)
+  under_construction_domrf: 8, // 6 комбо + uc_dev_activity + uc_sold_vs_ready
+  apartments:             3,  // 3 комбо
+  concentration:          2,  // ihh(комбо) + 3.6
+  prices:                 5,  // 4.1, prices-chart(комбо), 4.8, 4.9, apt_budget
+  mortgage_debt:          3,  // 3 комбо
+  mortgage_subsidy:       2,  // 2 комбо
+  mortgage_igs:           6,  // 6 комбо
+};
+
+async function loadPage() {
+  const allCategories = await api.categories();
+
+  // Фильтруем скрытые разделы
+  const categories = allCategories.filter(c => !HIDDEN_CATEGORIES.has(c.code));
+
+  // Счётчик показателей в hero — сумма видимых
+  const totalVisible = categories.reduce((s, c) => {
+    return s + (VISIBLE_COUNT_OVERRIDE[c.code] ?? c.indicators_count ?? 0);
+  }, 0);
+  document.getElementById('stat-indicators').textContent = totalVisible;
+
+  // Сетка карточек
   const grid = document.getElementById('category-grid');
-  grid.innerHTML = categories.map(c => `
-    <a href="category.html?code=${c.code}" class="category-card">
-      <div class="category-card-icon"><span>${CATEGORY_ICONS[c.code] || '📊'}</span></div>
-      <h3>${c.name}</h3>
-      <p class="category-card-count">${c.indicators_count} показателей</p>
-    </a>
-  `).join('');
+  grid.innerHTML = categories.map(c => {
+    const count = VISIBLE_COUNT_OVERRIDE[c.code] ?? c.indicators_count ?? 0;
+    return `
+      <a href="category.html?code=${c.code}" class="category-card">
+        <div class="category-card-icon"><span>${CATEGORY_ICONS[c.code] || '📊'}</span></div>
+        <h3>${c.name}</h3>
+        <p class="category-card-count">${count} показателей</p>
+      </a>
+    `;
+  }).join('');
 
   // Обновления
   const updates = await api.lastUpdate();

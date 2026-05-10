@@ -11,6 +11,85 @@
   <link rel="stylesheet" href="css/chart.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
+    /* Отключаем сайдбарный grid — на этой странице сайдбара нет */
+    .chart-layout { display: block; }
+    .chart-main { max-width: 100%; }
+
+    /* Горизонтальная панель фильтров */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-bar-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: var(--color-surface);
+      font-family: var(--font-body);
+      font-size: .83rem;
+      font-weight: 500;
+      color: var(--color-ink);
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      min-width: 320px;
+      justify-content: space-between;
+    }
+    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
+    .filter-bar-btn svg { flex-shrink: 0; }
+
+    .filter-bar-reset {
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: .83rem;
+      color: var(--color-muted);
+      cursor: pointer;
+      transition: all .15s;
+      margin-left: auto;
+    }
+    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* Дропдаун */
+    .filter-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 100%;
+      min-width: 320px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+      padding: 6px 0;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .filter-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      font-size: .83rem;
+      cursor: pointer;
+      transition: background .1s;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .filter-dropdown-item:hover { background: var(--color-bg); }
+    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
+    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
+
     .kpi-cards-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:28px; }
     .kpi-card-sm {
       background:var(--color-surface); border:1px solid var(--color-border);
@@ -46,7 +125,14 @@
 <header class="site-header">
   <div class="header-inner">
     <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav"></nav>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_base">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -59,32 +145,6 @@
 <main class="page-main">
   <div class="page-wrap">
     <div class="chart-layout">
-
-      <aside class="sidebar" id="filters-panel">
-        <div class="sidebar-heading">Фильтры</div>
-        <div class="filter-section">
-          <div class="filter-label">Регион</div>
-          <div class="filter-options">
-            <button class="filter-btn active">Россия</button>
-          </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-label">Комнатность</div>
-          <div class="filter-options">
-            <button class="filter-btn active" data-series="total"><span class="kpi-dot" style="background:#7B61FF;margin-right:4px"></span>Все типы</button>
-            <button class="filter-btn active" data-series="1k"><span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>1-комнатные</button>
-            <button class="filter-btn active" data-series="2k"><span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>2-комнатные</button>
-            <button class="filter-btn active" data-series="3k"><span class="kpi-dot" style="background:#F4A336;margin-right:4px"></span>3-комнатные</button>
-            <button class="filter-btn active" data-series="4k"><span class="kpi-dot" style="background:#0E7C56;margin-right:4px"></span>4-комнатные и более</button>
-          </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-label">Город</div>
-          <div class="filter-options">
-            <span style="font-size:.8rem;color:var(--color-muted);font-style:italic">Скоро</span>
-          </div>
-        </div>
-      </aside>
 
       <div class="chart-main">
         <div class="breadcrumb">
@@ -142,14 +202,25 @@
           </div>
         </div>
 
+        <!-- Горизонтальная панель фильтров -->
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Тип индикатора
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+          </div>
+          <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+        </div>
+
         <!-- Toolbar -->
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
-              <button data-range="1">1 г</button>
-              <button data-range="3">3 г</button>
-              <button data-range="5">5 л</button>
-              <button data-range="all" class="active">За всё время</button>
+              <button data-range="1">1 год</button>
+              <button data-range="3">3 года</button>
+              <button data-range="5">5 лет</button>
+              <button data-range="all" class="active">За все время</button>
             </div>
             <div class="btn-group">
               <button data-mode="absolute" class="active">Площадь, кв. м</button>
@@ -249,6 +320,7 @@ async function init() {
 
   updateKpi();
   buildChart();
+  buildDropdown();
   renderTable();
 }
 
@@ -336,7 +408,7 @@ function buildChart() {
     },
     xAxis: {
       type:'category', data:xData,
-      axisLabel:{ fontFamily:'IBM Plex Sans', fontSize:11, color:'#7A8B9A', rotate: xData.length > 36 ? 30 : 0 },
+      axisLabel:{ fontFamily:'IBM Plex Sans', fontSize:11, color:'#7A8B9A', rotate: 0 },
       axisLine:{ lineStyle:{ color:'#DDE2E8' } }, axisTick:{ show:false },
     },
     yAxis: {
@@ -377,14 +449,83 @@ document.querySelectorAll('[data-mode]').forEach(btn => {
     btn.classList.add('active'); currentMode = btn.dataset.mode; buildChart();
   });
 });
-document.querySelectorAll('[data-series]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const k = btn.dataset.series;
-    if (activeSeries.has(k)) {
-      if (activeSeries.size > 1) { activeSeries.delete(k); btn.classList.remove('active'); }
-    } else { activeSeries.add(k); btn.classList.add('active'); }
+// ── Фильтр серий: дропдаун ────────────────────────────────────────────────
+function buildDropdown() {
+  const dropdown = document.getElementById('series-dropdown');
+  dropdown.innerHTML = '';
+  KEYS.forEach(key => {
+    const item = document.createElement('div');
+    item.className = 'filter-dropdown-item';
+    item.dataset.key = key;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = `cb-${key}`;
+    cb.checked = activeSeries.has(key);
+
+    const dot = document.createElement('span');
+    dot.className = 'kpi-dot';
+    dot.style.background = COLORS[key];
+
+    const lbl = document.createElement('span');
+    lbl.textContent = LABELS[key];
+
+    item.appendChild(cb);
+    item.appendChild(dot);
+    item.appendChild(lbl);
+    dropdown.appendChild(item);
+  });
+
+  // Делегированный обработчик
+  dropdown.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const item = e.target.closest('.filter-dropdown-item');
+    if (!item) return;
+    const key = item.dataset.key;
+    const cb = item.querySelector('input');
+    if (e.target !== cb) cb.checked = !cb.checked;
+
+    if (cb.checked) {
+      activeSeries.add(key);
+    } else {
+      if (activeSeries.size <= 1) { cb.checked = true; return; }
+      activeSeries.delete(key);
+    }
+    updateFilterBtnState();
     buildChart();
   });
+}
+
+function syncDropdown() {
+  KEYS.forEach(key => {
+    const cb = document.getElementById(`cb-${key}`);
+    if (cb) cb.checked = activeSeries.has(key);
+  });
+}
+
+function updateFilterBtnState() {
+  const btn = document.getElementById('btn-filter-series');
+  const allActive = KEYS.every(k => activeSeries.has(k));
+  btn.classList.toggle('has-active', !allActive);
+}
+
+// Открыть/закрыть дропдаун
+document.getElementById('btn-filter-series').addEventListener('click', e => {
+  e.stopPropagation();
+  const dd = document.getElementById('series-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', () => {
+  document.getElementById('series-dropdown').style.display = 'none';
+});
+document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
+
+// Сбросить — возвращаем все серии
+document.getElementById('btn-reset-filters').addEventListener('click', () => {
+  activeSeries = new Set(KEYS);
+  syncDropdown();
+  updateFilterBtnState();
+  buildChart();
 });
 document.querySelectorAll('[data-table]').forEach(btn => {
   btn.addEventListener('click', () => {

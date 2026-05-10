@@ -23,13 +23,103 @@
     .table-tab { font-size:.8rem; font-weight:500; font-family:var(--font-body); padding:6px 24px; border:1px solid var(--color-border); border-radius:var(--radius); background:var(--color-surface); color:var(--color-muted); cursor:pointer; transition:all .15s; flex:1; text-align:center; }
     .table-tab.active { background:var(--color-ink); color:#fff; border-color:var(--color-ink); }
     .table-tab:hover:not(.active) { border-color:var(--color-accent); color:var(--color-accent); }
+    /* Горизонтальная панель фильтров */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-bar-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: var(--color-surface);
+      font-family: var(--font-body);
+      font-size: .83rem;
+      font-weight: 500;
+      color: var(--color-ink);
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+      min-width: 320px;
+      justify-content: space-between;
+    }
+    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
+    .filter-bar-btn svg { flex-shrink: 0; }
+
+    .filter-bar-reset {
+      padding: 7px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: transparent;
+      font-family: var(--font-body);
+      font-size: .83rem;
+      color: var(--color-muted);
+      cursor: pointer;
+      transition: all .15s;
+      margin-left: auto;
+    }
+    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* Дропдаун */
+    .filter-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 100%;
+      min-width: 320px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      z-index: 100;
+      padding: 6px 0;
+    }
+    .filter-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 18px;
+      font-size: .83rem;
+      cursor: pointer;
+      transition: background .1s;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .filter-dropdown-item:hover { background: var(--color-bg); }
+    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
+    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
+
+    /* Таблица */
+    .table-tabs { display: flex; gap: 4px; padding: 10px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); flex-wrap: wrap; }
+    .table-tab { font-size: .8rem; font-weight: 500; font-family: var(--font-body); padding: 6px 24px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); color: var(--color-muted); cursor: pointer; transition: all .15s; flex: 1; text-align: center; }
+    .table-tab.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
+    .table-tab:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* Убираем сайдбар */
+    .chart-layout { display: block; }
+    .chart-main { max-width: 100%; }
+
   </style>
 </head>
 <body>
 <header class="site-header">
   <div class="header-inner">
     <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav"></nav>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_base">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -40,33 +130,11 @@
 <main class="page-main">
   <div class="page-wrap">
     <div class="chart-layout">
-      <aside class="sidebar" id="filters-panel">
-        <div class="sidebar-heading">Фильтры</div>
-        <div class="filter-section">
-          <div class="filter-label">Регион</div>
-          <div class="filter-options">
-            <button class="filter-btn active">Россия</button>
-          </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-label">Тип строительства</div>
-          <div class="filter-options">
-            <button class="filter-btn active" data-series="total"><span class="kpi-dot" style="background:#1A2B4A;margin-right:4px"></span>Все проекты</button>
-            <button class="filter-btn active" data-series="active"><span class="kpi-dot" style="background:#E8341C;margin-right:4px"></span>Активные проекты</button>
-          </div>
-        </div>
-        <div class="filter-section">
-          <div class="filter-label">Город</div>
-          <div class="filter-options">
-            <span style="font-size:.8rem;color:var(--color-muted);font-style:italic">Скоро</span>
-          </div>
-        </div>
-      </aside>
 
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
-          <a href="category.html?code=under_construction_domrf">Строящееся жильё (БД ДОМ.РФ)</a><span class="breadcrumb-sep">›</span>
+          <a href="category.html?code=under_construction_domrf">Строящееся жилье (БД ДОМ.РФ)</a><span class="breadcrumb-sep">›</span>
           <span>Обеспеченность продаж новыми запусками</span>
         </div>
 
@@ -94,13 +162,24 @@
           </div>
         </div>
 
+        <!-- Горизонтальная панель фильтров -->
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Тип индикатора
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+          </div>
+          <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+        </div>
+
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
-              <button data-range="1">1 г</button>
-              <button data-range="3">3 г</button>
-              <button data-range="5">5 л</button>
-              <button data-range="all" class="active">За всё время</button>
+              <button data-range="1">1 год</button>
+              <button data-range="3">3 года</button>
+              <button data-range="5">5 лет</button>
+              <button data-range="all" class="active">За все время</button>
             </div>
             <div class="btn-group">
               <button data-mode="absolute" class="active">Значения</button>
@@ -144,6 +223,7 @@
 const CODE_TOTAL = 'uc_new_vs_sales_total', CODE_ACTIVE = 'uc_new_vs_sales_active';
 const COLORS = { total:'#1A2B4A', active:'#E8341C' };
 const LABELS = { total:'Все проекты', active:'Активные проекты' };
+const KEYS   = ['total', 'active'];
 const UNIT = '%';
 const CHART_TYPE = 'line';
 
@@ -156,6 +236,91 @@ function getFiltered(key) {
   return s.filter(p => p.date >= rangeStart(currentRange));
 }
 
+function buildDropdown() {
+  const dropdown = document.getElementById('series-dropdown');
+  dropdown.innerHTML = '';
+  KEYS.forEach(key => {
+    const item = document.createElement('div');
+    item.className = 'filter-dropdown-item';
+    item.dataset.key = key;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = `cb-${key}`;
+    cb.checked = activeSeries.has(key);
+
+    const dot = document.createElement('span');
+    dot.className = 'kpi-dot';
+    dot.style.background = COLORS[key];
+
+    const lbl = document.createElement('span');
+    lbl.textContent = LABELS[key];
+
+    item.appendChild(cb);
+    item.appendChild(dot);
+    item.appendChild(lbl);
+    dropdown.appendChild(item);
+  });
+
+  // Один делегированный обработчик на весь дропдаун
+  dropdown.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const item = e.target.closest('.filter-dropdown-item');
+    if (!item) return;
+    const key = item.dataset.key;
+    const cb = item.querySelector('input');
+    const nowChecked = cb.checked;
+
+    // Если кликнули не на чекбокс — вручную инвертируем
+    if (e.target !== cb) {
+      cb.checked = !nowChecked;
+    }
+
+    if (cb.checked) {
+      activeSeries.add(key);
+    } else {
+      if (activeSeries.size <= 1) { cb.checked = true; return; }
+      activeSeries.delete(key);
+    }
+    updateFilterBtnState();
+    buildChart();
+  });
+}
+
+function syncDropdown() {
+  KEYS.forEach(key => {
+    const cb = document.getElementById(`cb-${key}`);
+    if (cb) cb.checked = activeSeries.has(key);
+  });
+}
+
+function updateFilterBtnState() {
+  const btn = document.getElementById('btn-filter-series');
+  const allActive = KEYS.every(k => activeSeries.has(k));
+  btn.classList.toggle('has-active', !allActive);
+}
+
+// Открыть/закрыть дропдаун
+document.getElementById('btn-filter-series').addEventListener('click', e => {
+  e.stopPropagation();
+  const dd = document.getElementById('series-dropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', () => {
+  document.getElementById('series-dropdown').style.display = 'none';
+});
+document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
+
+// Сбросить
+document.getElementById('btn-reset-filters').addEventListener('click', () => {
+  activeSeries = new Set(KEYS);
+  syncDropdown();
+  updateFilterBtnState();
+  buildChart();
+});
+
+api.categories().then(() => {}).catch(() => {});
+
 async function init() {
   try { const cats = await api.categories(); document.getElementById('main-nav').innerHTML = cats.slice(0,6).map(c=>`<a href="category.html?code=${c.code}" class="nav-link">${c.name}</a>`).join(''); } catch(e) {}
   const resp = await fetch(`${window.API_BASE}/multi/data?codes=${CODE_TOTAL},${CODE_ACTIVE}`);
@@ -164,7 +329,7 @@ async function init() {
   allData.active = json[CODE_ACTIVE];
   const allSeries = [...(allData.total?.series||[]),...(allData.active?.series||[])];
   if (allSeries.length) { const last = allSeries.reduce((a,b)=>a.date>b.date?a:b); document.getElementById('chart-updated').textContent = last.label || fmtDate(last.date,'monthly'); }
-  updateKpi(); buildChart(); renderTable();
+  updateKpi(); buildDropdown(); buildChart(); renderTable();
 }
 
 function updateKpi() {

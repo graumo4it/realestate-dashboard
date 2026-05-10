@@ -1,8 +1,11 @@
 /**
  * Логика страницы chart.html
- * Правки: #1 МоМ, #2 убран «год назад», #3 ретроспектива, #5 чистые названия,
- *         #6 «За всё время», #7 объединённая KPI-плашка, #8 ползунок,
- *         п.п. для процентных показателей
+ * Правки v1.2:
+ *   - кнопки тулбара «1 год / 3 года / 5 лет»
+ *   - ось X: горизонтальные двухстрочные метки (янв.\n2024), без наклона
+ *   - ось Y: знак «-» для отрицательных, «%» если ед. изм. %, разделитель разрядов
+ *   - tooltip: единица только в значении, не в названии серии
+ *   - таблица: заголовки «Значение, ед.» / «ИЗМ. Г/Г» / «ИЗМ. М/М», значения динамики с ед.
  */
 (function () {
   const params  = new URLSearchParams(location.search);
@@ -33,6 +36,26 @@
     return indicator && indicator.unit === '%';
   }
 
+  // Количество знаков после запятой для оси Y на основе данных
+  function axisDecimals(data) {
+    const vals = data.filter(v => v != null).map(v => Math.abs(Number(v)));
+    if (!vals.length) return 0;
+    // Если все целые или >= 100 — без знаков
+    const allLarge = vals.every(v => v >= 100);
+    if (allLarge) return 0;
+    // Иначе смотрим на дробную часть
+    const hasDecimals = vals.some(v => (v % 1) !== 0);
+    if (!hasDecimals) return 0;
+    // Определяем нужную точность
+    const maxDecimals = vals.reduce((acc, v) => {
+      const s = v.toString();
+      const dot = s.indexOf('.');
+      if (dot === -1) return acc;
+      return Math.max(acc, s.length - dot - 1);
+    }, 0);
+    return Math.min(maxDecimals, 2);
+  }
+
   async function init() {
     try {
       const result = await api.indicatorData(indCode);
@@ -61,6 +84,11 @@
       elBreadCat.textContent = indicator.category.name;
       elBreadCat.href = `category.html?code=${indicator.category.code}`;
     }
+
+    // Breadcrumb — показываем название, не код
+    const elBreadCode = document.getElementById('breadcrumb-code');
+    if (elBreadCode) elBreadCode.textContent = cleanName(indicator.name);
+
     // Скрыть МоМ для годовых
     if (indicator.periodicity === 'annual') {
       document.querySelector('[data-mode="mom"]')?.remove();
@@ -78,7 +106,8 @@
     const last = pts[pts.length - 1];
     elKpiValue.textContent  = fmtValue(last.value);
     elKpiUnit.textContent   = indicator.unit || '';
-    elKpiPeriod.textContent = last.label || fmtDate(last.date, indicator.periodicity);
+    // KPI период — однострочный формат
+    elKpiPeriod.textContent = last.label || fmtDateInline(last.date, indicator.periodicity);
 
     const pp = isPp();
     const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
@@ -109,33 +138,98 @@
     const isBar   = indicator.chart_type === 'bar';
     const isDelta = currentMode === 'yoy' || currentMode === 'mom';
     const pp      = isPp();
+    const isPercent = indicator.unit === '%';
 
-    const xData = series.map(p => p.label || fmtDate(p.date, indicator.periodicity));
-    let yData, seriesName, yFmt, useBar;
+    // Метки оси X — двухстрочные для месячных, без наклона
+    const xData = series.map(p => {
+      if (p.label) {
+        // Если label содержит пробел (напр. «Янв 2024») — делаем двустрочным
+        if (indicator.periodicity === 'monthly' && p.label.includes(' ') && !p.label.startsWith('Q')) {
+          const parts = p.label.split(' ');
+          // «Январь 2024» → «янв.\n2024»
+          const mon = parts[0].slice(0, 3).toLowerCase() + '.';
+          return `${mon}\n${parts[parts.length - 1]}`;
+        }
+        return p.label;
+      }
+      return fmtDate(p.date, indicator.periodicity);
+    });
+
+    let yData, seriesName, useBar;
 
     if (currentMode === 'yoy') {
       yData = series.map(p => p.yoy_change_pct != null ? Number(p.yoy_change_pct) : null);
-      seriesName = pp ? 'Изм. г/г, п.п.' : 'Изм. г/г, %';
-      yFmt = v => pp ? `${v > 0 ? '+' : ''}${fmtNum(v, 2)} п.п.` : `${v > 0 ? '+' : ''}${fmtNum(v, 1)}%`;
+      seriesName = 'Значение';
       useBar = true;
     } else if (currentMode === 'mom') {
       yData = series.map(p => p.mom_change_pct != null ? Number(p.mom_change_pct) : null);
-      const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
-      seriesName = pp ? `Изм. ${momLabel}, п.п.` : `Изм. ${momLabel}, %`;
-      yFmt = v => pp ? `${v > 0 ? '+' : ''}${fmtNum(v, 2)} п.п.` : `${v > 0 ? '+' : ''}${fmtNum(v, 1)}%`;
+      seriesName = 'Значение';
       useBar = true;
     } else {
       yData = series.map(p => p.value != null ? Number(p.value) : null);
-      seriesName = indicator.unit || 'Значение';
-      yFmt = v => fmtValue(v, indicator.unit);
+      seriesName = 'Значение';
       useBar = isBar;
+    }
+
+    const dec = isDelta
+      ? (pp ? 2 : 1)
+      : axisDecimals(yData);
+
+    // Форматтер оси Y
+    const yAxisFormatter = v => {
+      if (isDelta) {
+        const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+        return pp
+          ? `${sign}${fmtNum(Math.abs(v), 2)} п.п.`
+          : `${sign}${fmtNum(Math.abs(v), 1)}%`;
+      }
+      if (isPercent) {
+        const sign = v < 0 ? '−' : '';
+        return `${sign}${fmtNum(Math.abs(v), dec)}%`;
+      }
+      // Абсолютные: разделитель разрядов, без единиц
+      const sign = v < 0 ? '−' : '';
+      return `${sign}${fmtNum(Math.abs(v), dec)}`;
+    };
+
+    // Форматтер tooltip — единица только в значении
+    const tooltipFormatter = p => {
+      const pt = p[0];
+      if (pt.value == null) return `${pt.axisValue}<br/><span style="color:#7A8B9A">нет данных</span>`;
+      const v = Number(pt.value);
+      let valStr;
+      if (isDelta) {
+        const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+        valStr = pp
+          ? `${sign}${fmtNum(Math.abs(v), 2)} п.п.`
+          : `${sign}${fmtNum(Math.abs(v), 1)}%`;
+      } else if (isPercent) {
+        valStr = `${fmtNum(v, dec)}%`;
+      } else {
+        valStr = fmtValue(v, indicator.unit);
+      }
+      // Однострочный период для tooltip (без \n)
+      const axisLabel = pt.axisValue.replace('\n', ' ');
+      return `<b>${axisLabel}</b><br/>Значение: <b>${valStr}</b>`;
+    };
+
+    // Интервал меток оси X — чтобы не слипались
+    const total = xData.length;
+    let xInterval = 'auto';
+    if (indicator.periodicity === 'monthly') {
+      if (total > 120) xInterval = 11;
+      else if (total > 60) xInterval = 5;
+      else if (total > 24) xInterval = 2;
+    } else if (indicator.periodicity === 'quarterly') {
+      if (total > 20) xInterval = 3;   // каждый год (каждые 4 квартала)
+      else if (total > 8) xInterval = 1;
     }
 
     chartInstance.setOption({
       animation: true,
       animationDuration: 200,
       animationEasing: 'cubicOut',
-      grid: { left: 60, right: 20, top: 20, bottom: 80 },
+      grid: { left: 72, right: 20, top: 20, bottom: 90 },
       dataZoom: [
         {
           type: 'slider',
@@ -175,26 +269,33 @@
         backgroundColor: '#0D1B2A',
         borderColor: '#0D1B2A',
         textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
-        formatter: p => {
-          const pt = p[0];
-          if (pt.value == null) return `${pt.axisValue}<br/><span style="color:#7A8B9A">нет данных</span>`;
-          return `<b>${pt.axisValue}</b><br/>${seriesName}: <b>${yFmt(pt.value)}</b>`;
-        },
+        formatter: tooltipFormatter,
       },
       xAxis: {
-        type: 'category', data: xData,
-        axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: xData.length > 36 ? 30 : 0 },
+        type: 'category',
+        data: xData,
+        axisLabel: {
+          fontFamily: 'IBM Plex Sans',
+          fontSize: 11,
+          color: '#7A8B9A',
+          rotate: 0,           // всегда горизонтально
+          interval: xInterval,
+          lineHeight: 16,      // для двустрочных меток
+        },
         axisLine: { lineStyle: { color: '#DDE2E8' } },
         axisTick: { show: false },
       },
       yAxis: {
         type: 'value',
         axisLabel: {
-          fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-          formatter: v => isDelta ? (pp ? `${v} п.п.` : `${v}%`) : fmtNum(v),
+          fontFamily: 'IBM Plex Mono',
+          fontSize: 11,
+          color: '#7A8B9A',
+          formatter: yAxisFormatter,
         },
         splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
-        axisLine: { show: false }, axisTick: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
       },
       series: [{
         name: seriesName,
@@ -220,27 +321,43 @@
   }
 
   function renderTable() {
-    const series  = [...getFiltered()].reverse();
-    const showMom = indicator.periodicity !== 'annual';
-    const pp      = isPp();
+    const series   = [...getFiltered()].reverse();
+    const showMom  = indicator.periodicity !== 'annual';
+    const pp       = isPp();
+    const isPercent = indicator.unit === '%';
     const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
+
+    // Единица для динамики: п.п. для процентных, % для остальных
+    const dynUnit = pp ? 'п.п.' : '%';
 
     const thead = document.querySelector('.data-table thead tr');
     if (thead) {
       thead.innerHTML = `
         <th>Период</th>
         <th style="text-align:right">Значение${indicator.unit ? ', ' + indicator.unit : ''}</th>
-        <th style="text-align:right">${pp ? 'Изм. г/г, п.п.' : 'Изм. г/г'}</th>
-        ${showMom ? `<th style="text-align:right">${pp ? `Изм. ${momLabel}, п.п.` : `Изм. ${momLabel}`}</th>` : ''}
+        <th style="text-align:right">ИЗМ. Г/Г</th>
+        ${showMom ? `<th style="text-align:right">ИЗМ. М/М</th>` : ''}
       `;
     }
 
+    // Форматтер значений динамики — с единицами
+    const fmtDyn = (val, isPpFlag) => {
+      if (val == null) return '—';
+      const n = Number(val);
+      const threshold = isPpFlag ? 0.001 : 0.05;
+      if (Math.abs(n) < threshold) return `<span class="delta flat">0 ${dynUnit}</span>`;
+      const cls = n > 0 ? 'up' : 'down';
+      const arrow = n > 0 ? '↑' : '↓';
+      const abs = isPpFlag ? fmtNum(Math.abs(n), 2) : fmtNum(Math.abs(n), 1);
+      return `<span class="delta ${cls}">${arrow} ${abs} ${dynUnit}</span>`;
+    };
+
     elTableBody.innerHTML = series.map(p => `
       <tr>
-        <td>${p.label || fmtDate(p.date, indicator.periodicity)}</td>
+        <td>${p.label ? p.label.replace('\n', ' ') : fmtDateInline(p.date, indicator.periodicity)}</td>
         <td class="num ${p.is_preliminary ? 'prelim' : ''}">${p.value != null ? fmtValue(p.value) : '—'}</td>
-        <td class="num">${deltaHtml(p.yoy_change_pct, pp)}</td>
-        ${showMom ? `<td class="num">${deltaHtml(p.mom_change_pct, pp)}</td>` : ''}
+        <td class="num">${fmtDyn(p.yoy_change_pct, pp)}</td>
+        ${showMom ? `<td class="num">${fmtDyn(p.mom_change_pct, pp)}</td>` : ''}
       </tr>
     `).join('');
   }

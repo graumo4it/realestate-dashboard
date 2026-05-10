@@ -2,7 +2,8 @@
  * Утилиты форматирования чисел, дат, динамики
  */
 
-const MONTHS_RU = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const MONTHS_RU = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+const MONTHS_RU_CAP = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 const MONTHS_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь',
                      'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
@@ -36,7 +37,24 @@ function fmtDate(dateStr, periodicity = 'monthly') {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (periodicity === 'annual') return d.getFullYear().toString();
-  return `${MONTHS_RU[d.getMonth()]} ${d.getFullYear()}`;
+  if (periodicity === 'quarterly') {
+    const q = Math.floor(d.getMonth() / 3) + 1;
+    return `Q${q} ${d.getFullYear()}`;
+  }
+  // monthly — двухстрочная метка: «янв.\n2024»
+  return `${MONTHS_RU[d.getMonth()]}.\n${d.getFullYear()}`;
+}
+
+// Однострочный вариант для мест где перенос не нужен (KPI, таблица)
+function fmtDateInline(dateStr, periodicity = 'monthly') {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (periodicity === 'annual') return d.getFullYear().toString();
+  if (periodicity === 'quarterly') {
+    const q = Math.floor(d.getMonth() / 3) + 1;
+    return `Q${q} ${d.getFullYear()}`;
+  }
+  return `${MONTHS_RU_CAP[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function fmtDateFull(dateStr) {
@@ -83,7 +101,7 @@ function cleanName(name) {
   let s = name.replace(/^\d+\.\d+\s+/, '');
   s = s.replace(/,\s*[^,]+$/, v => {
     const unit = v.replace(/^,\s*/, '').trim();
-    if (unit.length <= 20 && /^[\w\s\.\/]+$/.test(unit.replace(/[а-яёА-ЯЁ]/g, 'x'))) {
+    if (unit.length <= 20 && /^[\w\s\.\/]+$/.test(unit.replace(/[а-яеА-ЯЕ]/g, 'x'))) {
       return '';
     }
     return v;
