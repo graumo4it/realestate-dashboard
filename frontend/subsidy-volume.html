@@ -225,9 +225,9 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
-<script src="js/annual-toggle.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
 <script>
-const CODES   = {'semya': '6.37', 'lgota': '6.39', 'dalvos': '6.41', 'it': '6.43', 'regions': '6.45'};
+window.CODES = {'semya': '6.37', 'lgota': '6.39', 'dalvos': '6.41', 'it': '6.43', 'regions': '6.45'};
 const COLORS  = {'semya': '#E8341C', 'lgota': '#1A2B4A', 'dalvos': '#F4A336', 'it': '#2EC4B6', 'regions': '#8B5CF6'};
 const LABELS  = {'semya': 'Семейная', 'lgota': 'Льготная', 'dalvos': 'Дальневосточная', 'it': 'IT-ипотека', 'regions': 'Отдельные регионы'};
 const KEYS    = ['semya', 'dalvos', 'it', 'regions', 'lgota'];
@@ -240,8 +240,8 @@ let isAnnual  = false;
 
 const _deltaFn = deltaHtml;
 
-const _WEIGHT_CODES = {};
-let chartInstance = null, allData = {}, currentRange = null;
+window._WEIGHT_CODES = {};
+let chartInstance = null, allData = window.allData = {}, currentRange = null;
 let currentMode = 'absolute', currentTable = KEYS[0];
 let activeSeries = new Set(KEYS);
 
@@ -351,7 +351,7 @@ api.categories().then(() => {}).catch(() => {});
 async function init() {
   // Загружаем основные коды + весовые коды если нужно
   const allCodes = [...new Set([...Object.values(CODES), ...Object.values(_WEIGHT_CODES)])];
-  allData = await api.multiIndicatorData(allCodes.join(','));
+  allData = window.allData = await api.multiIndicatorData(allCodes.join(','));
   const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
   if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
   buildDropdown();

@@ -1,7 +1,7 @@
 # PROGRESS.md — Трекер разработки
 ## Дашборд «Статистика рынка жилой недвижимости России»
 
-> Последнее обновление: 10 мая 2026
+> Последнее обновление: 11 мая 2026 (вечер)
 > Ветка разработки: `v1.2-improvements`
 > Backend: порт **8001** | Frontend: порт **3000**
 > Путь: `/Users/egor/Работа/data hub/realestate-dashboard/`
@@ -44,6 +44,7 @@ source venv/bin/activate
 | 10 | GitHub Actions (CI + расписание парсеров) | ✅ | `.github/workflows/` |
 | 11 | Продакшн (VPS + Docker) | ⏳ | `docker-compose.prod.yml` |
 | 12 | Автодеплой при push в main | ✅ | `.github/workflows/deploy.yml` |
+| 13 | Переключатель «Месяц / Квартал / Год» на 17 комбо-страницах | ✅ | `frontend/js/period-toggle.js`, `migration/patch_combo_page.py` |
 
 ---
 
@@ -245,16 +246,217 @@ if (e.target !== cb) cb.checked = !cb.checked;
 - `frontend/debt-volume.html` (удалён дубликат + замена `KEYS` → `CHART_KEYS` + переписан `buildDropdown`)
 - `frontend/debt-overdue.html` (замена `KEYS` → `CHART_KEYS` + переписан `buildDropdown`)
 
-**TODO:** прогнать `grep -nE '\bKEYS\b' frontend/*.html` по всем 25 страницам с горизонтальной панелью — если копировался один и тот же шаблон, баг с двойным срабатыванием обработчика и/или с `KEYS` мог попасть и в другие файлы. Шаблон правильного `buildDropdown` теперь зафиксирован в debt-volume / debt-overdue.
+---
+
+## Блок правок v1.8 — 11 мая 2026
+
+### Массовое восстановление горизонтальной панели фильтров на комбо-страницах ✅
+
+**Корневая проблема.** В предыдущей итерации (v1.6) горизонтальная панель должна была быть добавлена на 25 файлов, но в значительной части из них **CSS-блок и JS-обработчики появились, а сама HTML-разметка кнопки / дропдауна / кнопки сброса — нет**. JS на верхнем уровне обращался к `getElementById('btn-filter-series').addEventListener(...)` → `null` → `TypeError`. Скрипт обрывался **до** вызова `init()`, поэтому KPI оставались пустыми (`—`), графики не строились, на скриншотах был полностью «лысый» вид страницы.
+
+Стандартный фикс на такой файл — два шага:
+1. **HTML:** перед `<div class="chart-toolbar">` вставить блок горизонтальной панели:
+   ```html
+   <div class="filter-bar" id="filter-bar">
+     <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+       <svg>…иконка-меню…</svg>
+       Тип индикатора
+       <svg>…шеврон…</svg>
+       <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+     </div>
+     <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+   </div>
+   ```
+2. **JS:** вызвать `buildDropdown()` в `init()` после загрузки данных (между `chart-updated` и `renderKPI()` / `updateKpi()` — точное место зависит от страницы).
+
+Эталон разметки: `subsidy-count.html`.
+
+**Затронутые файлы (15 шт.):**
+- IGS (6): `igs-volume`, `igs-rate`, `igs-term`, `igs-size`, `igs-payment`, `igs-count`
+- Mortgage (6): `mortgage-count`, `mortgage-volume`, `mortgage-rate`, `mortgage-term`, `mortgage-size`, `mortgage-payment`
+- UC (6): `uc-area`, `uc-new`, `uc-stock`, `uc-absorption`, `uc-new-vs-input`, `uc-new-vs-sales`
+- Прочее: `ihh-chart`, `combo-chart`
+
+### Доп.фикс: ReferenceError: KEYS ✅
+
+После добавления HTML и вызова `buildDropdown()` на следующих страницах вылез `ReferenceError: Can't find variable: KEYS` — функция определена, но константа `KEYS` нигде не объявлена:
+
+- `uc-absorption / uc-area / uc-new-vs-input / uc-new-vs-sales / uc-stock` — добавлено `const KEYS = ['total', 'active']` после `const LABELS`
+- `uc-new` — `KEYS` уже был
+- `ihh-chart` — добавлено `LABELS`/`COLORS`/`KEYS` с ключами `[CODE_AVG, CODE_MED]` (= кодами `'3.18'` / `'3.19'`)
+- `combo-chart` — добавлено `CODES`/`LABELS`/`COLORS`/`KEYS` с ключами-кодами `'2.2'` / `'2.3'`
+- `share-chart` — добавлено `LABELS`/`COLORS`/`KEYS = ['mzhs','izhs']` + `let activeSeries = new Set(KEYS)`
+
+### Переделка страниц со старого формата (сайдбар → горизонтальная панель) ✅
+
+Эти файлы оставались в формате `<aside class="sidebar">` с фильтром через `data-series`/`data-code` кнопки. Полная переделка по шаблону `subsidy-count.html`:
+
+1. Добавлен CSS-override `.chart-layout { display: block; }` + `.chart-main { max-width: 100% }` (без него после удаления aside контент превращался в узкий вертикальный столбец, потому что `chart-layout` в общем chart.css задан как grid c фиксированной шириной сайдбара)
+2. Добавлен CSS-блок `.filter-bar*` / `.filter-dropdown*`
+3. Удалён `<aside class="sidebar">` целиком
+4. Добавлена горизонтальная панель перед `chart-toolbar`
+5. Старый обработчик `[data-series]` / `[data-code]` заменён на функции `buildDropdown` / `syncDropdown` / `updateFilterBtnState` + обработчики `btn-filter-series` / `btn-reset-filters` / `series-dropdown`
+6. Добавлено `const KEYS` где не было
+7. `buildDropdown()` вызывается в `init()`
+
+**Затронутые файлы (6 шт.):**
+- `igs-count.html` — пересобран из шаблона `igs-volume`
+- `apartments-area.html` (5 серий: total + 1k–4k)
+- `apartments-count.html` (4 серии 1k–4k, KPI «Всего» — отдельная не-фильтруемая)
+- `apartments-share.html` (4 серии 1k–4k)
+- `per-capita-chart.html` (3 серии: total, mzhs, izhs)
+- `prices-chart.html` — спец-случай с двухуровневой группировкой:
+  - Дропдаун получил подзаголовки `Первичный рынок` / `Вторичный рынок` через CSS-класс `.filter-dropdown-group-label`
+  - 9 серий в `SERIES_CONFIG` (4.4 + 4.4.1–3, 4.5 + 4.5.1–4)
+  - Дефолт сброса — `['4.4', '4.5']` (только агрегаты)
+  - Двухуровневые вкладки таблицы и time-axis графика сохранены
+
+### Особые правки share-chart ✅
+
+В `share-chart.html` функция `buildChart` изначально строила обе серии (МЖС/ИЖС) жёстко, без оглядки на `activeSeries`. После добавления фильтра нужно было интегрировать его в построение графика — иначе галочка снимается, но обе линии остаются.
+
+Каждая из трёх веток (`absolute` / `yoy` / `mom`) переписана: серии собираются в массив через `if (activeSeries.has('mzhs')) series.push(...)`. Формулы расчёта долей и YoY/MoM в `buildComputed` не тронуты.
+
+### Унификация ширины фильтра по всем комбо-страницам ✅
+
+Скрипт: `scripts/unify_filter_width.py`
+
+В разных файлах `min-width` у `.filter-bar-btn` / `.filter-dropdown` гулял от 220px до 280px, на одних страницах текст пунктов дропдауна впритык к правому краю, на других — лишний воздух.
+
+Скрипт работает в два прохода:
+1. **Анализ:** парсит `const LABELS = {...}` и `SERIES_CONFIG = {...}` во всех 27 комбо-страницах, находит глобально самую длинную подпись. Формула ширины: `длина_симв × 8.5px + 90px` (8.5 px/символ для IBM Plex Sans 500 .83rem, 90 px на не-текстовые элементы — чекбокс, dot, отступы). Округление вверх до 10px.
+2. **Применение:** регекспом меняет `min-width: Npx;` в правилах `.filter-bar-btn` и `.filter-dropdown` на расчётное значение.
+
+Параметры в шапке скрипта (`SOURCE_DIR`, `OUTPUT_DIR`, `CHARS_TO_PX`, `NON_TEXT_PX`, `MIN_WIDTH`, `ROUND_TO`).
+
+**Результат прогона:** глобальный максимум — «Вторичный — низкое кач.» (23 симв.) в `prices-chart.html`. Унифицированный `min-width` = **290px**. Также подняты горизонтальные паддинги пунктов с `8px 14px` до `8px 18px` для запаса справа.
+
+### Сводка по корневым причинам ошибок
+
+| Симптом | Причина | Файлы |
+|---------|---------|-------|
+| `TypeError: null is not an object … btn-filter-series` | HTML-разметка фильтра отсутствует, JS обращается к null | 15 файлов из v1.8 |
+| `ReferenceError: Can't find variable: KEYS` | `buildDropdown()` обращается к `KEYS`, константа не объявлена | uc-* (5 файлов), ihh, combo, share |
+| Страница в виде узкого вертикального столбца | После удаления `<aside>` остался `<div class="chart-layout">` с grid из chart.css | prices-chart изначально, затем все переделанные старого формата |
+| Дропдаун пустой при открытии | `buildDropdown()` не вызывается в `init()` или падает с ReferenceError до наполнения | ihh-chart (после первого фикса HTML, до фикса KEYS) |
+| Текст пунктов дропдауна впритык к правому краю | `min-width` подобран без учёта длинных подписей | все файлы — унифицировано до 290px |
+
+---
+
+## Блок правок v1.9 — 11 мая 2026
+
+### Переключатель периодичности «Месяц | Квартал | Год» ✅
+
+На 17 комбо-страницах заменена бинарная кнопка **«Данные за год»** на сегментный
+переключатель из трёх кнопок **«Месяц | Квартал | Год»** в едином стиле с
+остальными `.btn-group` (1г/3г/5л/Всё, Значения/г-г/м-м). Принцип квартальной
+агрегации точно соответствует принципу годового расчёта на той же странице
+(sum / avg / wavg). Неполные кварталы и годы скрываются автоматически.
+
+**Архитектурное решение — universal-shim:** вместо ручной переделки каждой
+страницы вся логика помещена в один модуль `frontend/js/period-toggle.js`,
+который перехватывает старый API `AnnualToggle.injectAnnualBtn(toolbar, callback)`
+и рисует три кнопки вместо одной. Страницы продолжают работать со своей
+старой логикой `isAnnual`, не зная о подмене.
+
+**Файлы патча:**
+- `frontend/js/period-toggle.js` (v3.1) — модуль с агрегацией, UI и шимом
+- `migration/patch_combo_page.py` (v2) — миграционный скрипт, делает 5
+  минимальных безопасных подмен в HTML каждой страницы
+
+**Что делает `patch_combo_page.py`:**
+1. `<script src="js/annual-toggle.js">` → `<script src="js/period-toggle.js?v=4">`
+2. `const _WEIGHT_CODES` → `window._WEIGHT_CODES` (плюс унификация имени
+   `WEIGHT_CODES` → `_WEIGHT_CODES` на `mortgage-rate.html`)
+3. `const AGG_TYPE` → `window.AGG_TYPE`
+4. `const CODES` → `window.CODES`
+5. `let allData = {}` → `let allData = window.allData = {}` (плюс
+   зеркалирование всех последующих присваиваний)
+
+Дополнительно — для `share-chart.html` (специальный случай):
+- В `</body>` добавляется `<script src="…" data-period-shim="auto">` —
+  маркер для шима, что страница не зовёт `injectAnnualBtn` сама и нужен
+  авто-инжект переключателя в `.chart-toolbar`
+- Глобализация `let computed` → `let computed = window.computed = []`
+- Глобализация `function buildComputed` → `window.buildComputed = function`
+
+Скрипт **не трогает** разметку `filter-bar`, переменные `isAnnual` / `getFiltered`
+/ `_initAnnualBtn`, поведение кнопок «Изм. м/м», «Значения», «Изм. г/г», CSS.
+Идемпотентен — повторный прогон даёт SKIP, но обновляет `?v=N` cache-bust до
+актуальной версии.
+
+**Карта AGG_TYPE по страницам (угадывание по URL, если `window.AGG_TYPE` не задан):**
+
+- `sum` — combo-chart, share-chart, mortgage-count, mortgage-volume,
+  subsidy-count, subsidy-volume, igs-count, igs-volume, uc-new
+- `avg` — mortgage-size, mortgage-payment, igs-size, igs-payment
+- `wavg` — mortgage-rate, mortgage-term, igs-rate, igs-term
+
+**Wavg-страницы** используют реальные веса (объёмы выдач) из
+`window._WEIGHT_CODES`. Проверено числовым тестом: Q1 = 10.667 (правильный wavg)
+вместо 10.0 (что было бы при равных весах) для тестовых данных
+ставок [8,10,12] с весами [100,200,300].
+
+### Циклы отладки и найденные баги
+
+В ходе работы выявлено несколько неочевидных проблем JS, которые потребовали
+итераций. Все они задокументированы в технических решениях ниже:
+
+1. **`let X = window.X = …` — две разные ссылки.** Подмена `window.allData = newObject`
+   не обновляет локальную `let allData`. Решение: мутировать **внутренности**
+   существующего объекта (`entry.series = newSeries`), а не подменять ссылку.
+
+2. **То же для `computed`.** На `share-chart.html` есть промежуточная
+   `let computed = []` (массив долей МЖС/ИЖС). Подмена `window.computed = newArray`
+   не работает. Решение: мутировать массив через
+   `window.computed.length = 0; window.computed.push(...newItems)`.
+
+3. **`WEIGHT_CODES` vs `_WEIGHT_CODES`.** На `mortgage-rate.html` имя без
+   подчёркивания, на остальных wavg-страницах — с подчёркиванием. Это разные
+   версии шаблона. Скрипт миграции теперь первым делом унифицирует имя.
+
+4. **Гонка авто-инжекта и `injectAnnualBtn` страницы.** Цикл retry (макс 2 сек)
+   на странице с `annual-toggle.js` успевал вставить группу раньше, чем страница
+   сама вызовет `injectAnnualBtn` → дубликат кнопок. Решение: атрибут
+   `data-period-shim="auto"` на `<script>` — авто-инжект работает только на
+   страницах с этим маркером.
+
+5. **Кэш браузера держит старый JS.** Hard refresh не всегда помогает (Safari
+   агрессивно кэширует). Решение: cache-bust `?v=N` в URL скрипта. Текущая
+   версия `?v=4`. При следующих обновлениях модуля версия бампится.
+
+### Тесты (все зелёные на 11 мая 2026)
+
+Покрытие — 134 проверки:
+- 54 unit-теста агрегации (sum/avg/wavg, YoY/QoQ, неполные периоды)
+- 12 функциональных тестов `getFiltered`
+- 28 UI-тестов btn-group (3 кнопки, переключение, disabled-режим для
+  квартальных индикаторов 1.2/1.3)
+- 17 страниц реального проекта — все рендерят переключатель без JS-ошибок
+- 4 теста sum/avg-агрегации (mortgage-count, mortgage-size, mortgage-payment,
+  igs-count) — все 4 квартала совпадают с ожидаемыми значениями, `allData`
+  восстанавливается при возврате на «Месяц»
+- 4 теста wavg-агрегации с реальными весами (mortgage-rate, mortgage-term,
+  igs-rate, igs-term)
+- 3 теста `share-chart`: квартал → 12 точек, год → 3 точки, возврат → 36 точек
+- 17 тестов на отсутствие дубликатов btn-group
+
+### Исключённые из миграции страницы
+
+- `ihh-chart.html` — переключатель не нужен (показатель — индекс концентрации,
+  агрегация по месяцу/кварталу/году бессмысленна без специальной методики)
+- `prices-chart.html` — переключатель не нужен (показатель сам по себе
+  имеет смешанную периодичность 4.4/4.5 + подтипы 4.4.1–4.5.4)
+- `subsidy-ddu-count.html`, `subsidy-ddu-volume.html` — файлы отсутствуют
+  в проекте (упомянуты в ТЗ, но не созданы)
 
 ---
 
 ## Что в работе ⏳
 
-1. Горизонтальная панель — остальные файлы (subsidy-ddu-count/volume, apartments-*.html) — ждут файлов
-2. Аудит дропдаунов серий на 25 комбо-страницах: проверить на (а) ссылки на `KEYS` без префикса, (б) старый кастомный click-обработчик с ручной инверсией `cb.checked`. Шаблон-эталон — в debt-volume / debt-overdue после v1.7
-3. Расчётные индикаторы: 5.9, 5.10, 5.11, 5.12–5.15
-4. Деплой на VPS
+1. Аудит дропдаунов серий на 25+ комбо-страницах: проверить на (а) ссылки на `KEYS` без префикса, (б) старый кастомный click-обработчик с ручной инверсией `cb.checked`. Шаблон-эталон — в debt-volume / debt-overdue после v1.7. Часть аудита уже сделана в рамках v1.8
+2. Расчётные индикаторы: 5.9, 5.10, 5.11, 5.12–5.15
+3. Деплой на VPS
 
 ## Известные ограничения
 
@@ -287,3 +489,14 @@ if (e.target !== cb) cb.checked = !cb.checked;
 | mm_budget в млн руб. | Удобочитаемость: значения 1–3 вместо 1 000 000–3 000 000 |
 | Горизонтальная панель вместо сайдбара | Сайдбар убран с chart.html и всех комбо-страниц; панель с дропдауном серий только на комбо |
 | Дропдаун серий: `<label>` + `change`-listener | Кастомный `click` на родителе ловил bubble-событие дважды → галочка визуально возвращалась. `<label htmlFor>` штатно форвардит клик в `<input>`, `change` срабатывает ровно один раз |
+| `.chart-layout { display: block }` локальный override на комбо-страницах | В общем chart.css `.chart-layout` — grid c двумя колонками под сайдбар + контент. Без override после удаления `<aside>` правый трек получал только ширину под сайдбар, страница сжималась в столбик |
+| Ключи `LABELS`/`COLORS`/`KEYS` = коды индикаторов (`'2.2'`, `'3.18'` и т.п.) на части комбо-страниц | На страницах, где `activeSeries` исторически наполняется кодами (`new Set([CODE_AVG, CODE_MED])`), вводить новые ключи `'avg'`/`'med'` означало переписывать всю логику фильтрации. Использовать сами коды как ключи — менее инвазивно |
+| Унификация `min-width` фильтра скриптом | Подписи серий разной длины (от 6 до 23 симв.) → ширину нельзя угадать вручную для каждой страницы. Скрипт находит глобальный максимум и применяет одно значение ко всем 27 файлам |
+| Дроп-дроп «Тип динамики цен» в `prices-chart` с группами | 9 серий по двум рынкам — без группировки UX был бы плохим. Группы реализованы через `.filter-dropdown-group-label` (подзаголовок-разделитель внутри одного дропдауна) |
+| Universal-shim вместо переделки 17 страниц | Структура страниц очень разнородна (init в IIFE / в `init()` / без `injectAnnualBtn` вообще). Шим перехватывает `AnnualToggle.injectAnnualBtn` и работает поверх существующей логики страницы. Скрипт миграции делает только 5 простых regex-подмен, никакой логики не переписывает |
+| Мутация `entry.series`, а не подмена `window.allData` | `let allData = window.allData = {}` создаёт две ссылки на один объект. Присваивание `window.allData = newObj` обновляет только одну. Решение — менять `entry.series` внутри существующего объекта, обе ссылки видят изменение |
+| Мутация массива `computed` через `.length = 0; .push(...)` | Та же причина, что выше, но для массива. `window.computed = newArr` не обновляет локальную `let computed`. Очистка и push сохраняют идентичность массива |
+| Cache-bust `?v=N` в URL `period-toggle.js` | Safari кэширует JS даже после hard refresh. Параметр в URL заставляет браузер скачать свежую версию. Скрипт миграции умеет обновлять `?v=N` идемпотентно |
+| Атрибут `data-period-shim="auto"` на `<script>` | На `share-chart.html` нет вызова `AnnualToggle.injectAnnualBtn` в исходнике — нужен авто-инжект. Но на остальных страницах авто-инжект давал гонку с собственным вызовом страницы → дубликаты. Атрибут чётко разделяет два режима |
+| Унификация `WEIGHT_CODES` → `_WEIGHT_CODES` в `mortgage-rate.html` | Разные «возрастные» версии шаблона страницы. Скрипт миграции переименовывает все вхождения регексом `(?<!_)\bWEIGHT_CODES\b`, потом глобализует через `window._WEIGHT_CODES = ...` |
+| Угадывание `AGG_TYPE` по URL | Не все страницы объявляют `const AGG_TYPE`. Шим использует эвристику: `rate`/`term` → wavg, `size`/`payment`/`ihh`/`price` → avg, остальное → sum. Это работает на всех 17 мигрированных страницах |

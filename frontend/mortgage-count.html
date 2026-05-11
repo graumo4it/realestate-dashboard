@@ -209,7 +209,7 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
-<script src="js/annual-toggle.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
 <script>
 const CODE_PRIMARY   = '6.7';
 const CODE_SECONDARY = '6.13';
@@ -218,9 +218,9 @@ const FMT_DECIMALS   = 0;
 const UNIT           = 'ед.';
 const TOOLTIP_SFX    = ' ед.';
 const DOWNLOAD_NAME  = 'mortgage_count';
-const AGG_TYPE       = 'sum';
+window.AGG_TYPE = 'sum';
 
-let chartInstance = null, allData = {}, currentRange = null;
+let chartInstance = null, allData = window.allData = {}, currentRange = null;
 let currentMode = 'absolute', currentTable = 'total';
 let activeSeries = new Set(['primary', 'secondary']);
 let isAnnual = false;
@@ -231,7 +231,7 @@ api.categories().then(cats => {
 }).catch(()=>{});
 
 async function init() {
-  allData = await api.multiIndicatorData(`${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}`);
+  allData = window.allData = await api.multiIndicatorData(`${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}`);
   const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
   if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
   buildDropdown();

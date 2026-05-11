@@ -271,8 +271,8 @@
 <script>
 
 let chartInstance = null;
-let allData = {};          // {"2.2": {indicator, series}, "2.3": {indicator, series}}
-let computed = [];         // [{date, label, izhsShare, mzhsShare, izhsYoy, mzhsYoy}]
+let allData = window.allData = {};          // {"2.2": {indicator, series}, "2.3": {indicator, series}}
+let computed = window.computed = [];         // [{date, label, izhsShare, mzhsShare, izhsYoy, mzhsYoy}]
 let currentRange = null;   // null = все время, число = лет
 let currentMode = 'share'; // 'share' | 'yoy' | 'mom'
 let currentTable = 'izhs';
@@ -372,14 +372,14 @@ document.getElementById('btn-reset-filters').addEventListener('click', () => {
 api.categories().then(() => {}).catch(() => {});
 
 async function init() {
-  allData = await api.multiIndicatorData('2.2,2.3');
+  allData = window.allData = await api.multiIndicatorData('2.2,2.3');
 
   const dates = Object.values(allData).map(d => d.indicator.last_updated).filter(Boolean);
   if (dates.length)
     document.getElementById('chart-updated').textContent =
       new Date(dates[0]).toLocaleDateString('ru-RU');
 
-  computed = buildComputed(allData['2.2']?.series || [], allData['2.3']?.series || []);
+  computed = window.computed = buildComputed(allData['2.2']?.series || [], allData['2.3']?.series || []);
   renderKPI();
   buildChart();
   buildDropdown();
@@ -387,7 +387,7 @@ async function init() {
 }
 
 // ── Расчет долей и YoY в п.п. ─────────────────────────────────────────────
-function buildComputed(s22, s23) {
+window.buildComputed = function buildComputed(s22, s23) {
   // Объединяем по дате
   const map = {};
   s22.forEach(p => { map[p.date] = { date: p.date, label: p.label, p22: p }; });
@@ -667,5 +667,6 @@ document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
 
 init().catch(console.error);
 </script>
+<script src="js/period-toggle.js?v=4" data-period-shim="auto"></script>
 </body>
 </html>

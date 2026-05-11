@@ -215,10 +215,10 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
-<script src="js/annual-toggle.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
 <script>
-const CODES = { total: '6.3', primary: '6.9', secondary: '6.15' };
-const WEIGHT_CODES = { total: '6.2', primary: '6.8', secondary: '6.14' };
+window.CODES = { total: '6.3', primary: '6.9', secondary: '6.15' };
+window._WEIGHT_CODES = { total: '6.2', primary: '6.8', secondary: '6.14' };
 const COLORS = { total: '#E8341C', primary: '#1A2B4A', secondary: '#F4A336' };
 const LABELS = { total: 'Всего', primary: 'Первичный', secondary: 'Вторичный' };
 const FMT_DECIMALS = 2;
@@ -234,7 +234,7 @@ function deltaPpHtml(v) {
 }
 
 let chartInstance = null;
-let allData = {};
+let allData = window.allData = {};
 let activeSeries = new Set(['total', 'primary', 'secondary']);
 let currentRange = null;
 let currentMode  = 'absolute';
@@ -244,9 +244,9 @@ let isAnnual = false;
 api.categories().then(() => {}).catch(() => {});
 
 async function init() {
-  const allCodes = [...Object.values(CODES), ...Object.values(WEIGHT_CODES)];
+  const allCodes = [...Object.values(CODES), ...Object.values(_WEIGHT_CODES)];
   const uniqueCodes = [...new Set(allCodes)].join(',');
-  allData = await api.multiIndicatorData(uniqueCodes);
+  allData = window.allData = await api.multiIndicatorData(uniqueCodes);
 
   const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
   if (dates.length)
@@ -277,7 +277,7 @@ function getRawSeries(key) {
 }
 
 function getWeightSeries(key) {
-  return allData[WEIGHT_CODES[key]]?.series || [];
+  return allData[_WEIGHT_CODES[key]]?.series || [];
 }
 
 function getFiltered(key) {

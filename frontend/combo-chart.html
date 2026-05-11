@@ -214,15 +214,15 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
-<script src="js/annual-toggle.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
 <script>
-const CODES  = { '2.2': '2.2', '2.3': '2.3' };
+window.CODES = { '2.2': '2.2', '2.3': '2.3' };
 const LABELS = { '2.2': 'МЖС', '2.3': 'ИЖС' };
 const COLORS = { '2.2': '#1A2B4A', '2.3': '#F4A336' };
 const KEYS   = ['2.2', '2.3'];
 
 let chartInstance = null;
-let allData = {};
+let allData = window.allData = {};
 let currentRange = null;
 let currentMode = 'absolute';
 let currentTable = 'total';
@@ -318,7 +318,7 @@ api.categories().then(() => {}).catch(() => {});
 
 async function init() {
   const data = await api.multiIndicatorData('2.2,2.3');
-  allData = data;
+  allData = window.allData = data;
   const dates = Object.values(data).map(d => d.indicator.last_updated).filter(Boolean);
   if (dates.length)
     document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');

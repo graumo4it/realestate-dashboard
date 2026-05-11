@@ -217,9 +217,9 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
-<script src="js/annual-toggle.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
 <script>
-const CODES   = {'total': '6.71', 'build': '6.77', 'buy': '6.83'};
+window.CODES = {'total': '6.71', 'build': '6.77', 'buy': '6.83'};
 const COLORS  = {'total': '#E8341C', 'build': '#1A2B4A', 'buy': '#F4A336'};
 const LABELS  = {'total': 'Всего (ИЖС)', 'build': 'Строительство', 'buy': 'Покупка'};
 const KEYS    = ['total', 'build', 'buy'];
@@ -232,8 +232,8 @@ let isAnnual  = false;
 
 const _deltaFn = deltaHtml;
 
-const _WEIGHT_CODES = {};
-let chartInstance = null, allData = {}, currentRange = null;
+window._WEIGHT_CODES = {};
+let chartInstance = null, allData = window.allData = {}, currentRange = null;
 let currentMode = 'absolute', currentTable = KEYS[0];
 let activeSeries = new Set(KEYS);
 
@@ -343,7 +343,7 @@ api.categories().then(() => {}).catch(() => {});
 async function init() {
   // Загружаем основные коды + весовые коды если нужно
   const allCodes = [...new Set([...Object.values(CODES), ...Object.values(_WEIGHT_CODES)])];
-  allData = await api.multiIndicatorData(allCodes.join(','));
+  allData = window.allData = await api.multiIndicatorData(allCodes.join(','));
   const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
   if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
   buildDropdown();
