@@ -15,8 +15,9 @@
   let chartInstance = null;
   let allSeries     = [];
   let indicator     = null;
-  let currentMode   = 'absolute'; // 'absolute' | 'yoy' | 'mom'
-  let currentRange  = null;
+  let currentMode        = 'absolute'; // 'absolute' | 'yoy' | 'mom'
+  let currentRange       = null;
+  let currentPeriodicity = 'quarterly'; // 'quarterly' | 'annual' — только для квартальных
 
   const elTitle     = document.getElementById('chart-title');
   const elUnit      = document.getElementById('chart-unit');
@@ -98,6 +99,26 @@
       const momBtn = document.querySelector('[data-mode="mom"]');
       if (momBtn) momBtn.textContent = 'Изм. кв./кв.';
     }
+    // Инжектировать кнопки Квартал/Год для квартальных данных
+    if (indicator.periodicity === 'quarterly' && window.PeriodToggle) {
+      const toolbar = document.querySelector('.chart-toolbar');
+      PeriodToggle.injectButtons(toolbar, {
+        options: ['quarterly', 'annual'],
+        defaultValue: 'quarterly',
+        labels: { quarterly: 'Квартал', annual: 'Год' },
+      }, (periodicity) => {
+        currentPeriodicity = periodicity;
+        const momBtn = document.querySelector('[data-mode="mom"]');
+        if (momBtn) momBtn.style.display = periodicity === 'annual' ? 'none' : '';
+        if (periodicity === 'annual' && currentMode === 'mom') {
+          document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+          document.querySelector('[data-mode="absolute"]').classList.add('active');
+          currentMode = 'absolute';
+        }
+        buildChart();
+        renderTable();
+      });
+    }
   }
 
   function renderKPI() {
@@ -119,14 +140,39 @@
   }
 
   function getFiltered() {
-    if (!currentRange) return allSeries;
-    const pts = allSeries.filter(p => p.value != null);
-    if (!pts.length) return allSeries;
+    let series = allSeries;
+
+    // Агрегация квартальных → годовые
+    if (indicator.periodicity === 'quarterly' && currentPeriodicity === 'annual') {
+      const byYear = {};
+      for (const p of allSeries) {
+        if (p.value == null || !p.date) continue;
+        const year = p.date.slice(0, 4);
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push(Number(p.value));
+      }
+      series = Object.entries(byYear)
+        .filter(([, vals]) => vals.length === 4)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([year, vals]) => {
+          const sum = vals.reduce((a, b) => a + b, 0);
+          return { date: `${year}-01-01`, label: year, value: sum,
+                   yoy_change_pct: null, mom_change_pct: null };
+        });
+      for (let i = 1; i < series.length; i++) {
+        const prev = series[i - 1].value;
+        if (prev) series[i].yoy_change_pct = (series[i].value - prev) / Math.abs(prev) * 100;
+      }
+    }
+
+    if (!currentRange) return series;
+    const pts = series.filter(p => p.value != null);
+    if (!pts.length) return series;
     const lastDate = new Date(pts[pts.length - 1].date);
     const cutoff = new Date(lastDate);
     cutoff.setFullYear(cutoff.getFullYear() - currentRange);
     cutoff.setDate(1);
-    return allSeries.filter(p => new Date(p.date) >= cutoff);
+    return series.filter(p => new Date(p.date) >= cutoff);
   }
 
   function buildChart() {
