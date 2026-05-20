@@ -171,6 +171,7 @@ ComboPage.init({
   unit:      'кв. м',
   decimals:  1,
   fileName:  'apartments_area',
+  pointInTime: true,
   onData(allData) {
     ['total', '1k', '2k', '3k', '4k'].forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);

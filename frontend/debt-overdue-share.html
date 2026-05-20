@@ -152,6 +152,7 @@ ComboPage.init({
   unit:      '%',
   decimals:  2,
   fileName:  'debt_overdue_share',
+  pointInTime: true,
   onData(allData) {
     ['total', 'primary', 'secondary'].forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);

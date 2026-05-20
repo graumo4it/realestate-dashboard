@@ -69,12 +69,14 @@ window.ComboPage = (function () {
     // use % change — allow explicit override via config.isPp
     const isPp = config.isPp !== undefined ? Boolean(config.isPp) : (aggType === 'wavg');
     const sfx        = unit ? ' ' + unit : '';
+    // pointInTime: stock/snapshot indicators — skip Месяц/Квартал/Год toggle injection
+    const pointInTime = Boolean(config.pointInTime);
 
     return {
       keys, labels: config.labels, colors,
       valueCode, weightCode,
       aggType, chartType, stackBars, unit, decimals, fileName,
-      isPp, sfx,
+      isPp, sfx, pointInTime,
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
     };
@@ -497,7 +499,7 @@ window.ComboPage = (function () {
       _buildChart(cfg, state);
       _renderTable(cfg, state);
       _bindEvents(cfg, state, rebuild);
-      _injectAnnualToggle(cfg, state, rebuild);
+      if (!cfg.pointInTime) _injectAnnualToggle(cfg, state, rebuild);
     } catch (err) {
       console.error('ComboPage init error:', err);
       const container = document.getElementById('main-chart');

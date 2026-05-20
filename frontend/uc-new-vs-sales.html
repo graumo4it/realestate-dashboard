@@ -144,6 +144,7 @@ ComboPage.init({
   unit:      '%',
   decimals:  1,
   fileName:  'uc_new_vs_sales',
+  pointInTime: true,
   onData(allData) {
     ['total', 'active'].forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);

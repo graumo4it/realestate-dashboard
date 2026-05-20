@@ -145,6 +145,7 @@ ComboPage.init({
   unit:      'млн кв. м',
   decimals:  1,
   fileName:  'uc_area',
+  pointInTime: true,
   onData(allData) {
     ['total', 'active'].forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);

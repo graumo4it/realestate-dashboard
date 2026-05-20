@@ -152,6 +152,7 @@ ComboPage.init({
   unit:      'млн руб.',
   decimals:  0,
   fileName:  'debt_overdue',
+  pointInTime: true,
   onData(allData) {
     Object.keys(window.CODES).forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);
