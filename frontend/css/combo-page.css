@@ -129,6 +129,16 @@
   cursor: pointer;
 }
 .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
+.filter-dropdown-group-header {
+  padding: 8px 14px 4px;
+  font-size: .72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--color-muted);
+  pointer-events: none;
+  user-select: none;
+}
 
 /* ── Data table tabs ───────────────────────────────────────────────────── */
 .table-tabs {

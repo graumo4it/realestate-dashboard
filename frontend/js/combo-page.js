@@ -20,6 +20,13 @@
  *   hideMomForNonMonthly {boolean} hide М-М when quarterly/annual; auto-reset to Значения
  *   hideSeriesForPeriodicity {Object} { key: ['quarterly','annual'] } — hide series for specific periods
  *   initialActiveSeries {Array}  keys active in chart filter on load (default: all keys)
+ *   preProcess   {Function} (allData) => void — called before every render; mutate allData to inject virtual series
+ *   seriesTypes  {Object}   { key: 'bar'|'line' } — per-series type override (default: cfg.chartType)
+ *   stack100     {boolean}  render bars as 100%-stacked; data must already be in % (0–100)
+ *   labelGroups  {Array}    [{ header, keys[] }] — group separators in the series dropdown
+ *
+ * Null codes: config.codes[key] = null marks a virtual series — skipped during API fetch,
+ * populated by preProcess(). All keys with null codes require a preProcess hook.
  *
  * Extra codes: keys in config.codes that are NOT in config.keys are still fetched
  * and appear in allData (useful for KPI-only series like a pre-computed total).
@@ -53,9 +60,12 @@ window.ComboPage = (function () {
         weightCode[k] = null;
       }
     });
-    // Validate that all chart keys have codes
+    // Validate that all chart keys have codes (null = virtual series populated by preProcess)
     keys.forEach(k => {
-      if (!valueCode[k]) throw new Error(`ComboPage: config.codes["${k}"] is missing`);
+      if (valueCode[k] === undefined) throw new Error(`ComboPage: config.codes["${k}"] is missing`);
+      if (valueCode[k] === null && typeof config.preProcess !== 'function') {
+        console.warn(`ComboPage: codes["${k}"] is null but no preProcess hook provided — series will be empty`);
+      }
     });
 
     // Default colors from palette
@@ -93,6 +103,10 @@ window.ComboPage = (function () {
       initialActiveSeries,
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
+      preProcess:    typeof config.preProcess    === 'function' ? config.preProcess    : null,
+      seriesTypes:   config.seriesTypes   || null,
+      stack100:      Boolean(config.stack100),
+      labelGroups:   config.labelGroups   || null,
     };
   }
 
@@ -102,7 +116,7 @@ window.ComboPage = (function () {
   function _extractCodes(cfg) {
     const all = [];
     Object.keys(cfg.valueCode).forEach(k => {
-      all.push(cfg.valueCode[k]);
+      if (cfg.valueCode[k] !== null) all.push(cfg.valueCode[k]);  // null = virtual, skip API fetch
       if (cfg.weightCode[k]) all.push(cfg.weightCode[k]);
     });
     return [...new Set(all)];
@@ -177,7 +191,9 @@ window.ComboPage = (function () {
     if (!dropdown) return;
 
     dropdown.innerHTML = '';
-    cfg.keys.forEach(key => {
+
+    // Helper: render one checkbox item
+    function _renderItem(key) {
       const item = document.createElement('div');
       item.className = 'filter-dropdown-item';
       item.dataset.key = key;
@@ -198,7 +214,20 @@ window.ComboPage = (function () {
       item.appendChild(dot);
       item.appendChild(lbl);
       dropdown.appendChild(item);
-    });
+    }
+
+    if (cfg.labelGroups) {
+      // Grouped dropdown: render header dividers between groups
+      cfg.labelGroups.forEach(group => {
+        const hdr = document.createElement('div');
+        hdr.className = 'filter-dropdown-group-header';
+        hdr.textContent = group.header;
+        dropdown.appendChild(hdr);
+        group.keys.forEach(key => _renderItem(key));
+      });
+    } else {
+      cfg.keys.forEach(key => _renderItem(key));
+    }
 
     // One delegated listener — no per-item listeners
     dropdown.addEventListener('click', e => {
@@ -300,7 +329,10 @@ window.ComboPage = (function () {
         return isDelta ? (p[field] != null ? Number(p[field]) : null) : Number(p.value);
       });
 
-      if (cfg.chartType === 'bar' && !isDelta) {
+      // Per-series type override (seriesTypes) takes priority over global chartType
+      const effectiveType = cfg.seriesTypes?.[key] ?? cfg.chartType ?? 'bar';
+
+      if (effectiveType === 'bar' && !isDelta) {
         return {
           name: cfg.labels[key], type: 'bar',
           ...(cfg.stackBars ? { stack: 'total' } : {}),
@@ -358,11 +390,13 @@ window.ComboPage = (function () {
             if (p.value == null) return;
             const val = isDelta
               ? fmtDelta(p.value)
-              : fmtNum(p.value, cfg.decimals) + cfg.sfx;
+              : (cfg.stack100
+                  ? fmtNum(p.value, 1) + '%'
+                  : fmtNum(p.value, cfg.decimals) + cfg.sfx);
             html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
             if (!isDelta) stack += p.value;
           });
-          if (!isDelta && cfg.stackBars && seriesArr.length > 1)
+          if (!isDelta && cfg.stackBars && seriesArr.length > 1 && !cfg.stack100)
             html += `<span style="color:#aaa">Итого: <b>${fmtNum(stack, cfg.decimals)}${cfg.sfx}</b></span>`;
           return html;
         },
@@ -374,9 +408,12 @@ window.ComboPage = (function () {
       },
       yAxis: {
         type: 'value',
+        ...(cfg.stack100 && !isDelta ? { max: 100 } : {}),
         axisLabel: {
           fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-          formatter: v => isDelta ? fmtDelta(v) : fmtNum(v, cfg.decimals),
+          formatter: v => isDelta
+            ? fmtDelta(v)
+            : (cfg.stack100 ? fmtNum(v, 0) + '%' : fmtNum(v, cfg.decimals)),
         },
         splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
         axisLine: { show: false }, axisTick: { show: false },
@@ -507,8 +544,10 @@ window.ComboPage = (function () {
     const xlsxBtn = document.getElementById('btn-download-xlsx');
     if (xlsxBtn) {
       xlsxBtn.addEventListener('click', () => {
-        const codes  = cfg.keys.map(k => cfg.valueCode[k]).join(',');
-        const labels = encodeURIComponent(cfg.keys.map(k => cfg.labels[k]).join(','));
+        // Skip virtual (null) codes — they have no API-backed data
+        const realKeys = cfg.keys.filter(k => cfg.valueCode[k] !== null);
+        const codes    = realKeys.map(k => cfg.valueCode[k]).join(',');
+        const labels   = encodeURIComponent(realKeys.map(k => cfg.labels[k]).join(','));
         window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&filename=${cfg.fileName}`);
       });
     }
@@ -592,6 +631,7 @@ window.ComboPage = (function () {
 
     // Rebuild: called on range change + annual toggle
     function rebuild() {
+      if (cfg.preProcess) cfg.preProcess(state.allData);  // inject virtual series before render
       _buildChart(cfg, state);
       _renderTable(cfg, state);
       if (cfg.onData) cfg.onData(state.allData);
@@ -599,6 +639,7 @@ window.ComboPage = (function () {
 
     try {
       await _fetch(cfg, state);
+      if (cfg.preProcess) cfg.preProcess(state.allData);  // inject virtual series after first fetch
       _buildDropdown(cfg, state, rebuild);
       if (cfg.onData) cfg.onData(state.allData);
       _buildChart(cfg, state);
