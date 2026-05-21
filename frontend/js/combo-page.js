@@ -52,7 +52,7 @@ window.ComboPage = (function () {
     const weightCode = {};
     Object.keys(config.codes).forEach(k => {
       const c = config.codes[k];
-      if (typeof c === 'object' && c.value) {
+      if (c !== null && typeof c === 'object' && c.value) {
         valueCode[k]  = c.value;
         weightCode[k] = c.weight || null;
       } else {
