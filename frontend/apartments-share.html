@@ -9,86 +9,12 @@
   <link rel="stylesheet" href="css/variables.css"/>
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/chart.css"/>
+  <link rel="stylesheet" href="css/combo-page.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
-    /* Отключаем сайдбарный grid — на этой странице сайдбара нет */
+    /* Отключаем сайдбарный grid */
     .chart-layout { display: block; }
     .chart-main { max-width: 100%; }
-
-    /* Горизонтальная панель фильтров */
-    .filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .filter-bar-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: var(--color-surface);
-      font-family: var(--font-body);
-      font-size: .83rem;
-      font-weight: 500;
-      color: var(--color-ink);
-      cursor: pointer;
-      transition: all .15s;
-      position: relative;
-      min-width: 320px;
-      justify-content: space-between;
-    }
-    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
-    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
-    .filter-bar-btn svg { flex-shrink: 0; }
-
-    .filter-bar-reset {
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: transparent;
-      font-family: var(--font-body);
-      font-size: .83rem;
-      color: var(--color-muted);
-      cursor: pointer;
-      transition: all .15s;
-      margin-left: auto;
-    }
-    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
-
-    /* Дропдаун */
-    .filter-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      width: 100%;
-      min-width: 320px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      z-index: 100;
-      padding: 6px 0;
-      max-height: 360px;
-      overflow-y: auto;
-    }
-    .filter-dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      font-size: .83rem;
-      cursor: pointer;
-      transition: background .1s;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .filter-dropdown-item:hover { background: var(--color-bg); }
-    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
-    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
 
     .kpi-cards-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px; }
     .kpi-card-sm {
@@ -105,19 +31,6 @@
     }
     .kpi-card-sm .kpi-period { font-size:.7rem; color:var(--color-muted); margin-bottom:6px; }
     .kpi-card-sm .kpi-deltas { display:flex; gap:6px; flex-wrap:wrap; font-size:.75rem; }
-    .kpi-dot { display:inline-block; width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-    .table-tabs {
-      display:flex; gap:4px; padding:12px 20px;
-      border-bottom:1px solid var(--color-border); background:var(--color-bg);
-    }
-    .table-tab {
-      font-size:.8rem; font-weight:500; font-family:var(--font-body);
-      padding:6px 24px; border:1px solid var(--color-border);
-      border-radius:var(--radius); background:var(--color-surface);
-      color:var(--color-muted); cursor:pointer; transition:all .15s; flex:1; text-align:center;
-    }
-    .table-tab.active { background:var(--color-ink); color:#fff; border-color:var(--color-ink); }
-    .table-tab:hover:not(.active) { border-color:var(--color-accent); color:var(--color-accent); }
   </style>
 </head>
 <body>
@@ -145,7 +58,6 @@
 <main class="page-main">
   <div class="page-wrap">
     <div class="chart-layout">
-
       <div class="chart-main">
         <div class="breadcrumb">
           <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
@@ -207,7 +119,6 @@
           <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
         </div>
 
-        <!-- Toolbar -->
         <div class="chart-toolbar">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div class="btn-group">
@@ -217,7 +128,7 @@
               <button data-range="all" class="active">За все время</button>
             </div>
             <div class="btn-group">
-              <button data-mode="share" class="active">Структура, %</button>
+              <button data-mode="absolute" class="active">Структура, %</button>
               <button data-mode="yoy">Изм. г/г, п.п.</button>
               <button data-mode="mom">Изм. м/м, п.п.</button>
             </div>
@@ -237,18 +148,20 @@
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
           <div class="table-tabs">
-                      <button class="table-tab active" data-table="1k">1-комнатные</button>
+            <button class="table-tab active" data-table="1k">1-комнатные</button>
             <button class="table-tab" data-table="2k">2-комнатные</button>
             <button class="table-tab" data-table="3k">3-комнатные</button>
             <button class="table-tab" data-table="4k">4+ комнатные</button>
           </div>
           <table class="data-table">
-            <thead><tr id="table-head">
-              <th style="width:25%">Период</th>
-              <th style="width:25%;text-align:right">Доля, %</th>
-              <th style="width:25%;text-align:right">Изм. г/г, п.п.</th>
-              <th style="width:25%;text-align:right">Изм. м/м, п.п.</th>
-            </tr></thead>
+            <thead>
+              <tr>
+                <th style="width:25%">Период</th>
+                <th style="width:25%;text-align:right">Доля, %</th>
+                <th style="width:25%;text-align:right">Изм. г/г, п.п.</th>
+                <th style="width:25%;text-align:right">Изм. м/м, п.п.</th>
+              </tr>
+            </thead>
             <tbody id="data-table-body"></tbody>
           </table>
         </div>
@@ -264,294 +177,43 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/period-toggle.js"></script>
+<script src="js/combo-page.js"></script>
 <script>
-
-const CODES = {
+const _CODES_MAP = {
   '1k': 'apartments_share_1k',
   '2k': 'apartments_share_2k',
   '3k': 'apartments_share_3k',
   '4k': 'apartments_share_4k',
 };
-const KEYS   = ['1k','2k','3k','4k'];
-const LABELS = { '1k':'1-комнатные', '2k':'2-комнатные', '3k':'3-комнатные', '4k':'4+ комнатные' };
-const COLORS = { '1k':'#1A2B4A', '2k':'#E8341C', '3k':'#F4A336', '4k':'#0E7C56' };
 
-let allData      = {};
-let chartInstance = null;
-let currentRange  = null;
-let currentMode   = 'share';
-let currentTable  = '1k';
-let activeSeries  = new Set(KEYS);
+ComboPage.init({
+  codes:    { '1k': 'apartments_share_1k', '2k': 'apartments_share_2k',
+              '3k': 'apartments_share_3k', '4k': 'apartments_share_4k' },
+  labels:   { '1k': '1-комнатные', '2k': '2-комнатные', '3k': '3-комнатные', '4k': '4+ комнатные' },
+  keys:     ['1k', '2k', '3k', '4k'],
+  colors:   { '1k': '#1A2B4A', '2k': '#E8341C', '3k': '#F4A336', '4k': '#0E7C56' },
+  chartType:  'bar',
+  stack100:   true,
+  isPp:       true,
+  decimals:   1,
+  unit:       '%',
+  fileName:   'apartments-share',
+  onTableHeader: () => 'Доля, %',
 
-function getFiltered(key) {
-  const s = allData[key]?.series || [];
-  if (!currentRange) return s;
-  const cutoff = rangeStart(currentRange);
-  return s.filter(p => p.date >= cutoff);
-}
-
-async function init() {
-  try {
-    const cats = await api.categories();
-    const nav = document.getElementById('main-nav');
-    if (nav) nav.innerHTML = cats.slice(0,6).map(c =>
-      `<a href="category.html?code=${c.code}" class="nav-link">${c.name}</a>`
-    ).join('');
-  } catch(e) {}
-
-  const allCodes = Object.values(CODES).join(',');
-  const resp = await fetch(`${window.API_BASE}/multi/data?codes=${allCodes}`);
-  const json = await resp.json();
-  KEYS.forEach(k => { allData[k] = json[CODES[k]]; });
-
-  const allSeries = Object.values(allData).flatMap(d => d?.series || []);
-  if (allSeries.length) {
-    const last = allSeries.reduce((a,b) => a.date > b.date ? a : b);
-    document.getElementById('chart-updated').textContent = last.label || fmtDate(last.date, 'monthly');
-  }
-
-  updateKpi();
-  buildChart();
-  buildDropdown();
-  renderTable();
-}
-
-function updateKpi() {
-  KEYS.forEach(k => {
-    const s    = (allData[k]?.series || []).filter(p => p.value != null);
-    const last = s[s.length - 1];
-    if (!last) return;
-    document.getElementById(`kpi-${k}-value`).textContent  = fmtNum(Number(last.value), 1) + '%';
-    document.getElementById(`kpi-${k}-period`).textContent = last.label || '—';
-    // Для % показателей динамика в п.п.
-    document.getElementById(`kpi-${k}-deltas`).innerHTML =
-      `<span>г/г: ${deltaHtml(last.yoy_change_pct, true)}</span>` +
-      `<span>м/м: ${deltaHtml(last.mom_change_pct, true)}</span>`;
-  });
-}
-
-function buildChart() {
-  if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, {renderer:'canvas'});
-    window.addEventListener('resize', () => chartInstance.resize());
-  }
-
-  const isDelta = currentMode !== 'share';
-  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-
-  const allDates = [...new Set([...activeSeries].flatMap(k =>
-    getFiltered(k).map(p => p.date)
-  ))].sort();
-
-  const maps = {};
-  KEYS.forEach(k => { const m = {}; getFiltered(k).forEach(p => { m[p.date] = p; }); maps[k] = m; });
-
-  const xData = allDates.map(d => {
-    for (const k of activeSeries) { const p = maps[k][d]; if (p?.label) return p.label; }
-    return fmtDate(d, 'monthly');
-  });
-
-  const series = [...activeSeries].map(key => {
-    const data = allDates.map(d => {
-      const p = maps[key][d];
-      if (!p || p.value == null) return null;
-      return isDelta ? (p[field] != null ? Number(p[field]) : null) : Number(p.value);
+  onData(allData) {
+    ['1k', '2k', '3k', '4k'].forEach(k => {
+      const s    = (allData[_CODES_MAP[k]]?.series || []).filter(p => p.value != null);
+      const last = s[s.length - 1];
+      if (!last) return;
+      document.getElementById(`kpi-${k}-value`).textContent  = fmtNum(Number(last.value), 1) + '%';
+      document.getElementById(`kpi-${k}-period`).textContent = last.label || '—';
+      document.getElementById(`kpi-${k}-deltas`).innerHTML =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct, true)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct, true)}</span>`;
     });
-
-    if (!isDelta) {
-      return {
-        name: LABELS[key], type: 'bar', stack: 'total', data,
-        itemStyle: { color: COLORS[key] },
-        emphasis: { focus: 'series' }, barMaxWidth: 28,
-      };
-    }
-    return {
-      name: LABELS[key], type: 'line', data,
-      lineStyle: { color: COLORS[key], width: 2.5 },
-      itemStyle: { color: COLORS[key] },
-      symbol: allDates.length < 60 ? 'circle' : 'none', symbolSize: 4,
-      connectNulls: false,
-    };
-  });
-
-  chartInstance.setOption({
-    animation: true, animationDuration: 200,
-    legend: {
-      data: [...activeSeries].map(k => LABELS[k]),
-      top: 0, left: 0,
-      textStyle: { fontFamily:'IBM Plex Sans', fontSize:12, color:'#3D4F60' },
-      icon:'circle', itemWidth:10, itemHeight:10,
-    },
-    grid: { left:70, right:20, top:40, bottom:80 },
-    dataZoom: [
-      { type:'slider', bottom:8, height:24, borderColor:'#DDE2E8', backgroundColor:'#F2F4F7',
-        fillerColor:'rgba(26,43,74,0.10)',
-        handleStyle:{ color:'#1A2B4A', borderColor:'#1A2B4A', borderWidth:2 },
-        textStyle:{ fontFamily:'IBM Plex Sans', fontSize:10, color:'#7A8B9A' },
-        brushSelect:false, throttle:16 },
-      { type:'inside', throttle:16 },
-    ],
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: isDelta ? 'line' : 'shadow' },
-      backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
-      textStyle: { color:'#fff', fontFamily:'IBM Plex Sans', fontSize:13 },
-      formatter: params => {
-        let html = `<b>${params[0]?.axisValue}</b><br/>`;
-        let stackTotal = 0;
-        params.forEach(p => {
-          if (p.value == null) return;
-          const val = isDelta
-            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 2)} п.п.`
-            : fmtNum(p.value, 1) + '%';
-          html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-          if (!isDelta) stackTotal += p.value;
-        });
-        if (!isDelta && params.length > 1)
-          html += `<span style="color:#aaa">Итого: <b>${fmtNum(stackTotal, 1)}%</b></span>`;
-        return html;
-      },
-    },
-    xAxis: {
-      type:'category', data:xData,
-      axisLabel:{ fontFamily:'IBM Plex Sans', fontSize:11, color:'#7A8B9A', rotate: 0 },
-      axisLine:{ lineStyle:{ color:'#DDE2E8' } }, axisTick:{ show:false },
-    },
-    yAxis: {
-      type:'value',
-      max: isDelta ? undefined : 100,
-      axisLabel:{
-        fontFamily:'IBM Plex Mono', fontSize:11, color:'#7A8B9A',
-        formatter: v => isDelta ? `${v > 0 ? '+' : ''}${fmtNum(v, 1)} п.п.` : `${v}%`,
-      },
-      splitLine:{ lineStyle:{ color:'#DDE2E8', type:'dashed' } },
-      axisLine:{ show:false }, axisTick:{ show:false },
-    },
-    series,
-  }, true);
-}
-
-function renderTable() {
-  const body = document.getElementById('data-table-body');
-  const rows = getFiltered(currentTable).slice().reverse();
-  body.innerHTML = rows.map(p => `<tr>
-    <td>${p.label || fmtDate(p.date, 'monthly')}</td>
-    <td class="num">${p.value != null ? fmtNum(Number(p.value), 1) + '%' : '—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct, true)}</td>
-    <td class="num">${deltaHtml(p.mom_change_pct, true)}</td>
-  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-document.querySelectorAll('[data-range]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range);
-    buildChart(); renderTable();
-  });
-});
-document.querySelectorAll('[data-mode]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentMode = btn.dataset.mode; buildChart();
-  });
-});
-// ── Фильтр серий: дропдаун ────────────────────────────────────────────────
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  KEYS.forEach(key => {
-    const item = document.createElement('div');
-    item.className = 'filter-dropdown-item';
-    item.dataset.key = key;
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = `cb-${key}`;
-    cb.checked = activeSeries.has(key);
-
-    const dot = document.createElement('span');
-    dot.className = 'kpi-dot';
-    dot.style.background = COLORS[key];
-
-    const lbl = document.createElement('span');
-    lbl.textContent = LABELS[key];
-
-    item.appendChild(cb);
-    item.appendChild(dot);
-    item.appendChild(lbl);
-    dropdown.appendChild(item);
-  });
-
-  // Делегированный обработчик
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const key = item.dataset.key;
-    const cb = item.querySelector('input');
-    if (e.target !== cb) cb.checked = !cb.checked;
-
-    if (cb.checked) {
-      activeSeries.add(key);
-    } else {
-      if (activeSeries.size <= 1) { cb.checked = true; return; }
-      activeSeries.delete(key);
-    }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  KEYS.forEach(key => {
-    const cb = document.getElementById(`cb-${key}`);
-    if (cb) cb.checked = activeSeries.has(key);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  const allActive = KEYS.every(k => activeSeries.has(k));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-// Открыть/закрыть дропдаун
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  document.getElementById('series-dropdown').style.display = 'none';
-});
-document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
-
-// Сбросить — возвращаем все серии
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(KEYS);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-document.querySelectorAll('[data-table]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentTable = btn.dataset.table; renderTable();
-  });
-});
-
-document.getElementById('btn-download-png')?.addEventListener('click', () => {
-  if (!chartInstance) return;
-  const url = chartInstance.getDataURL({ type:'png', pixelRatio:2, backgroundColor:'#fff' });
-  const a = document.createElement('a'); a.href = url; a.download = 'apartments_share.png'; a.click();
-});
-document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  const codes = Object.values(CODES).join(',');
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&title=Квартирография%3A%20структура%20по%20комнатности&filename=apartments_share`);
-});
-
-init().catch(console.error);
+  },
+}).catch(console.error);
 </script>
 </body>
 </html>
