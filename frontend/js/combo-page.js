@@ -24,6 +24,7 @@
  *   seriesTypes  {Object}   { key: 'bar'|'line' } — per-series type override (default: cfg.chartType)
  *   stack100     {boolean}  render bars as 100%-stacked; data must already be in % (0–100)
  *   labelGroups  {Array}    [{ header, keys[] }] — group separators in the series dropdown
+ *   showOnlyInDelta {Array}  keys shown only in delta modes (г/г, м/м); hidden in Значения
  *
  * Null codes: config.codes[key] = null marks a virtual series — skipped during API fetch,
  * populated by preProcess(). All keys with null codes require a preProcess hook.
@@ -104,9 +105,10 @@ window.ComboPage = (function () {
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
       preProcess:    typeof config.preProcess    === 'function' ? config.preProcess    : null,
-      seriesTypes:   config.seriesTypes   || null,
-      stack100:      Boolean(config.stack100),
-      labelGroups:   config.labelGroups   || null,
+      seriesTypes:     config.seriesTypes   || null,
+      stack100:        Boolean(config.stack100),
+      labelGroups:     config.labelGroups   || null,
+      showOnlyInDelta: Array.isArray(config.showOnlyInDelta) ? config.showOnlyInDelta : null,
     };
   }
 
@@ -228,7 +230,10 @@ window.ComboPage = (function () {
         group.keys.forEach(key => _renderItem(key));
       });
     } else {
-      cfg.keys.forEach(key => _renderItem(key));
+      cfg.keys.forEach(key => {
+        if (cfg.showOnlyInDelta?.includes(key)) return; // auto-managed by mode, not user-controlled
+        _renderItem(key);
+      });
     }
 
     // One delegated listener — no per-item listeners
@@ -263,7 +268,11 @@ window.ComboPage = (function () {
   function _updateFilterBtnState(cfg, state) {
     const btn = document.getElementById('btn-filter-series');
     if (!btn) return;
-    const allActive = cfg.keys.every(k => state.activeSeries.has(k));
+    // Exclude showOnlyInDelta keys — they're auto-managed, not user-controlled
+    const dropdownKeys = cfg.showOnlyInDelta
+      ? cfg.keys.filter(k => !cfg.showOnlyInDelta.includes(k))
+      : cfg.keys;
+    const allActive = dropdownKeys.every(k => state.activeSeries.has(k));
     btn.classList.toggle('has-active', !allActive);
   }
 
@@ -289,15 +298,19 @@ window.ComboPage = (function () {
       window.addEventListener('resize', () => state.chartInstance.resize());
     }
 
-    // Respect hideSeriesForPeriodicity: only render visible series
-    const activeSeries = _getEffectiveActiveSeries(cfg, state);
+    const isDelta = state.currentMode !== 'absolute';
+    const field   = state.currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
+
+    // Respect hideSeriesForPeriodicity + showOnlyInDelta: only render visible series
+    const effectiveSeries = _getEffectiveActiveSeries(cfg, state);
+    const activeSeries = cfg.showOnlyInDelta
+      ? new Set([...effectiveSeries].filter(k =>
+          cfg.showOnlyInDelta.includes(k) ? isDelta : true))
+      : effectiveSeries;
 
     const allDates = [...new Set(
       [...activeSeries].flatMap(k => _getFiltered(k, cfg, state).map(p => p.date || p.label))
     )].sort();
-
-    const isDelta = state.currentMode !== 'absolute';
-    const field   = state.currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
 
     // Build per-key maps for fast lookup
     const maps = {};

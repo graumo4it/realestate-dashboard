@@ -147,7 +147,8 @@ ComboPage.init({
   colors:      { mzhs: '#1A2B4A', izhs: '#F4A336', total: '#E8341C' },
   chartType:   'bar',
   stackBars:   true,
-  seriesTypes: { total: 'line' },   // Всего — линия поверх стека в абс. режиме
+  seriesTypes:    { total: 'line' },   // Всего — линия в delta-режимах
+  showOnlyInDelta: ['total'],          // скрыть «Всего» в Значениях, показывать только в г/г и м/м
   aggType:     'sum',
   decimals:    0,
   unit:        ' тыс. кв. м',
