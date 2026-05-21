@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="css/variables.css"/>
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/chart.css"/>
+  <link rel="stylesheet" href="css/combo-page.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
     .kpi-cards-row {
@@ -29,103 +30,9 @@
     }
     .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 8px; }
     .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .78rem; }
-    .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    .table-tabs {
-      display: flex; gap: 4px; padding: 12px 20px;
-      border-bottom: 1px solid var(--color-border); background: var(--color-bg);
-    }
-    .table-tab {
-      font-size: .8rem; font-weight: 500; font-family: var(--font-body);
-      padding: 6px 24px; border: 1px solid var(--color-border);
-      border-radius: var(--radius); background: var(--color-surface);
-      color: var(--color-muted); cursor: pointer; transition: all .15s; flex: 1; text-align: center;
-    }
-    .table-tab.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
-    .table-tab:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
-    /* Горизонтальная панель фильтров */
-    .filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .filter-bar-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: var(--color-surface);
-      font-family: var(--font-body);
-      font-size: .83rem;
-      font-weight: 500;
-      color: var(--color-ink);
-      cursor: pointer;
-      transition: all .15s;
-      position: relative;
-      min-width: 320px;
-      justify-content: space-between;
-    }
-    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
-    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
-    .filter-bar-btn svg { flex-shrink: 0; }
-
-    .filter-bar-reset {
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: transparent;
-      font-family: var(--font-body);
-      font-size: .83rem;
-      color: var(--color-muted);
-      cursor: pointer;
-      transition: all .15s;
-      margin-left: auto;
-    }
-    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
-
-    /* Дропдаун */
-    .filter-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      width: 100%;
-      min-width: 320px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      z-index: 100;
-      padding: 6px 0;
-    }
-    .filter-dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 18px;
-      font-size: .83rem;
-      cursor: pointer;
-      transition: background .1s;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .filter-dropdown-item:hover { background: var(--color-bg); }
-    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
-    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
-
-    /* Таблица */
-    .table-tabs { display: flex; gap: 4px; padding: 10px 20px; border-bottom: 1px solid var(--color-border); background: var(--color-bg); flex-wrap: wrap; }
-    .table-tab { font-size: .8rem; font-weight: 500; font-family: var(--font-body); padding: 6px 24px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); color: var(--color-muted); cursor: pointer; transition: all .15s; flex: 1; text-align: center; }
-    .table-tab.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
-    .table-tab:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
-
     /* Убираем сайдбар */
     .chart-layout { display: block; }
     .chart-main { max-width: 100%; }
-
   </style>
 </head>
 <body>
@@ -192,7 +99,6 @@
           </div>
         </div>
 
-        <!-- Toolbar -->
         <!-- Горизонтальная панель фильтров -->
         <div class="filter-bar" id="filter-bar">
           <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
@@ -239,8 +145,8 @@
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
           <div class="table-tabs">
-            <button class="table-tab active" data-table="3.18">Средний ИХХ</button>
-            <button class="table-tab" data-table="3.19">Медианный ИХХ</button>
+            <button class="table-tab active" data-table="avg">Средний ИХХ</button>
+            <button class="table-tab" data-table="med">Медианный ИХХ</button>
           </div>
           <table class="data-table">
             <thead>
@@ -268,344 +174,40 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/period-toggle.js"></script>
+<script src="js/combo-page.js"></script>
 <script>
+ComboPage.init({
+  codes:    { avg: '3.18', med: '3.19' },
+  labels:   { avg: 'Средний ИХХ', med: 'Медианный ИХХ' },
+  keys:     ['avg', 'med'],
+  colors:   { avg: '#E8341C', med: '#1A2B4A' },
+  chartType: 'line',
+  decimals:  0,
+  unit:      ' ед.',
+  fileName:  'ihh-chart',
+  onData(allData) {
+    const sAvg = (allData['3.18']?.series || []).filter(p => p.value != null);
+    const sMed = (allData['3.19']?.series || []).filter(p => p.value != null);
+    const lAvg = sAvg[sAvg.length - 1];
+    const lMed = sMed[sMed.length - 1];
 
-const CODE_AVG = '3.18';  // ИХХ средний
-const CODE_MED = '3.19';  // ИХХ медианный
-
-// Для дропдауна «Тип индикатора» — ключами являются сами коды
-const LABELS = { [CODE_AVG]: 'Средний ИХХ', [CODE_MED]: 'Медианный ИХХ' };
-const COLORS = { [CODE_AVG]: '#E8341C', [CODE_MED]: '#1A2B4A' };
-const KEYS   = [CODE_AVG, CODE_MED];
-
-let chartInstance = null;
-let allData = {};
-let currentRange = null;
-let currentMode = 'absolute';
-let currentTable = CODE_AVG;
-let activeSeries = new Set([CODE_AVG, CODE_MED]);
-
-// ── Навигация ──────────────────────────────────────────────────────────────
-api.categories().then(() => {}).catch(() => {});
-
-// ── Загрузка ───────────────────────────────────────────────────────────────
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  KEYS.forEach(key => {
-    const item = document.createElement('div');
-    item.className = 'filter-dropdown-item';
-    item.dataset.key = key;
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = `cb-${key}`;
-    cb.checked = activeSeries.has(key);
-
-    const dot = document.createElement('span');
-    dot.className = 'kpi-dot';
-    dot.style.background = COLORS[key];
-
-    const lbl = document.createElement('span');
-    lbl.textContent = LABELS[key];
-
-    item.appendChild(cb);
-    item.appendChild(dot);
-    item.appendChild(lbl);
-    dropdown.appendChild(item);
-  });
-
-  // Один делегированный обработчик на весь дропдаун
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const key = item.dataset.key;
-    const cb = item.querySelector('input');
-    const nowChecked = cb.checked;
-
-    // Если кликнули не на чекбокс — вручную инвертируем
-    if (e.target !== cb) {
-      cb.checked = !nowChecked;
+    if (lAvg) {
+      document.getElementById('kpi-avg-value').textContent = fmtNum(Number(lAvg.value), 0);
+      document.getElementById('kpi-avg-period').textContent = lAvg.label || '—';
+      document.getElementById('kpi-avg-deltas').innerHTML =
+        `<span>г/г: ${deltaHtml(lAvg.yoy_change_pct)}</span>` +
+        `<span>м/м: ${deltaHtml(lAvg.mom_change_pct)}</span>`;
     }
-
-    if (cb.checked) {
-      activeSeries.add(key);
-    } else {
-      if (activeSeries.size <= 1) { cb.checked = true; return; }
-      activeSeries.delete(key);
+    if (lMed) {
+      document.getElementById('kpi-med-value').textContent = fmtNum(Number(lMed.value), 0);
+      document.getElementById('kpi-med-period').textContent = lMed.label || '—';
+      document.getElementById('kpi-med-deltas').innerHTML =
+        `<span>г/г: ${deltaHtml(lMed.yoy_change_pct)}</span>` +
+        `<span>м/м: ${deltaHtml(lMed.mom_change_pct)}</span>`;
     }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  KEYS.forEach(key => {
-    const cb = document.getElementById(`cb-${key}`);
-    if (cb) cb.checked = activeSeries.has(key);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  const allActive = KEYS.every(k => activeSeries.has(k));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-// Открыть/закрыть дропдаун
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  document.getElementById('series-dropdown').style.display = 'none';
-});
-document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
-
-// Сбросить
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(KEYS);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-
-api.categories().then(() => {}).catch(() => {});
-
-async function init() {
-  allData = await api.multiIndicatorData(CODE_AVG + ',' + CODE_MED);
-
-  const dates = Object.values(allData).map(d => d.indicator.last_updated).filter(Boolean);
-  if (dates.length)
-    document.getElementById('chart-updated').textContent =
-      new Date(dates[0]).toLocaleDateString('ru-RU');
-
-  renderKPI();
-  buildChart();
-  buildDropdown();
-  renderTable();
-}
-
-// ── Фильтрация по диапазону ────────────────────────────────────────────────
-function getFiltered(code) {
-  const series = allData[code]?.series || [];
-  if (!currentRange) return series;
-  const pts = series.filter(p => p.value != null);
-  if (!pts.length) return series;
-  const lastDate = new Date(pts[pts.length - 1].date);
-  const cutoff = new Date(lastDate);
-  cutoff.setFullYear(cutoff.getFullYear() - currentRange);
-  // Сдвиг −2 месяца (правило #3)
-  cutoff.setMonth(cutoff.getMonth() - 2);
-  return series.filter(p => new Date(p.date) >= cutoff);
-}
-
-// ── KPI ────────────────────────────────────────────────────────────────────
-function renderKPI() {
-  const sAvg = (allData[CODE_AVG]?.series || []).filter(p => p.value != null);
-  const sMed = (allData[CODE_MED]?.series || []).filter(p => p.value != null);
-  const lAvg = sAvg[sAvg.length - 1];
-  const lMed = sMed[sMed.length - 1];
-
-  if (lAvg) {
-    document.getElementById('kpi-avg-value').textContent = fmtNum(Number(lAvg.value), 0);
-    document.getElementById('kpi-avg-period').textContent = lAvg.label || '—';
-    document.getElementById('kpi-avg-deltas').innerHTML =
-      `<span>г/г: ${deltaHtml(lAvg.yoy_change_pct)}</span>` +
-      `<span>м/м: ${deltaHtml(lAvg.mom_change_pct)}</span>`;
-  }
-  if (lMed) {
-    document.getElementById('kpi-med-value').textContent = fmtNum(Number(lMed.value), 0);
-    document.getElementById('kpi-med-period').textContent = lMed.label || '—';
-    document.getElementById('kpi-med-deltas').innerHTML =
-      `<span>г/г: ${deltaHtml(lMed.yoy_change_pct)}</span>` +
-      `<span>м/м: ${deltaHtml(lMed.mom_change_pct)}</span>`;
-  }
-}
-
-// ── График ─────────────────────────────────────────────────────────────────
-function buildChart() {
-  if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
-    window.addEventListener('resize', () => chartInstance.resize());
-  }
-
-  const sAvg = getFiltered(CODE_AVG);
-  const sMed = getFiltered(CODE_MED);
-
-  // Объединяем даты
-  const allDates = [...new Set([...sAvg, ...sMed].map(p => p.date))].sort();
-  const mapAvg = {}; sAvg.forEach(p => { mapAvg[p.date] = p; });
-  const mapMed = {}; sMed.forEach(p => { mapMed[p.date] = p; });
-
-  const isDelta = currentMode !== 'absolute';
-  const field = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-
-  const xData = allDates.map(d => {
-    const p = mapAvg[d] || mapMed[d];
-    return p?.label || fmtDate(d, 'monthly');
-  });
-
-  const series = [];
-
-  if (activeSeries.has(CODE_AVG)) {
-    series.push({
-      name: 'Средний ИХХ',
-      type: 'line',
-      data: allDates.map(d => {
-        const p = mapAvg[d];
-        if (!p || p.value == null) return null;
-        return isDelta
-          ? (p[field] != null ? Number(p[field]) : null)
-          : Number(p.value);
-      }),
-      lineStyle: { color: '#E8341C', width: 2.5 },
-      itemStyle: { color: '#E8341C' },
-      symbol: allDates.length < 60 ? 'circle' : 'none',
-      symbolSize: 4,
-      connectNulls: false,
-    });
-  }
-
-  if (activeSeries.has(CODE_MED)) {
-    series.push({
-      name: 'Медианный ИХХ',
-      type: 'line',
-      data: allDates.map(d => {
-        const p = mapMed[d];
-        if (!p || p.value == null) return null;
-        return isDelta
-          ? (p[field] != null ? Number(p[field]) : null)
-          : Number(p.value);
-      }),
-      lineStyle: { color: '#1A2B4A', width: 2.5 },
-      itemStyle: { color: '#1A2B4A' },
-      symbol: allDates.length < 60 ? 'circle' : 'none',
-      symbolSize: 4,
-      connectNulls: false,
-    });
-  }
-
-  chartInstance.setOption({
-    animation: true, animationDuration: 200, animationEasing: 'cubicOut',
-    legend: {
-      data: ['Средний ИХХ', 'Медианный ИХХ'],
-      top: 0, left: 0,
-      textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 12, color: '#3D4F60' },
-      icon: 'circle', itemWidth: 10, itemHeight: 10,
-    },
-    grid: { left: 70, right: 20, top: 40, bottom: 80 },
-    dataZoom: [
-      {
-        type: 'slider', bottom: 8, height: 24,
-        borderColor: '#DDE2E8', backgroundColor: '#F2F4F7',
-        fillerColor: 'rgba(26,43,74,0.10)',
-        handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 },
-        selectedDataBackground: { lineStyle: { color: '#1A2B4A', width: 1 }, areaStyle: { color: 'rgba(26,43,74,0.08)' } },
-        dataBackground: { lineStyle: { color: '#DDE2E8', width: 1 }, areaStyle: { color: 'rgba(221,226,232,0.3)' } },
-        textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' },
-        brushSelect: false, throttle: 16,
-      },
-      { type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 16 },
-    ],
-    tooltip: {
-      trigger: 'axis', backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
-      textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
-      formatter: params => {
-        let html = `<b>${params[0]?.axisValue}</b><br/>`;
-        params.forEach(p => {
-          if (p.value == null) return;
-          const val = isDelta
-            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)}%`
-            : fmtNum(p.value, 0);
-          html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-        });
-        return html;
-      },
-    },
-    xAxis: {
-      type: 'category', data: xData,
-      axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: 0 },
-      axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-        formatter: v => isDelta ? (v > 0 ? '+' : '') + fmtNum(v, 1) + '%' : fmtNum(v, 0),
-      },
-      splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
-      axisLine: { show: false }, axisTick: { show: false },
-    },
-    series,
-  }, true);
-}
-
-// ── Таблица ────────────────────────────────────────────────────────────────
-function renderTable() {
-  const series = getFiltered(currentTable).slice().reverse();
-  const body = document.getElementById('data-table-body');
-
-  body.innerHTML = series.map(p => `<tr>
-    <td>${p.label || fmtDate(p.date, 'monthly')}</td>
-    <td class="num">${p.value != null ? fmtNum(Number(p.value), 0) : '—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
-    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
-  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-// ── Обработчики ────────────────────────────────────────────────────────────
-document.querySelectorAll('[data-range]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range);
-    buildChart(); renderTable();
-  });
-});
-
-document.querySelectorAll('[data-mode]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentMode = btn.dataset.mode;
-    buildChart();
-  });
-});
-
-document.querySelectorAll('[data-series]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const code = btn.dataset.series;
-    if (activeSeries.has(code)) {
-      if (activeSeries.size > 1) { activeSeries.delete(code); btn.classList.remove('active'); }
-    } else { activeSeries.add(code); btn.classList.add('active'); }
-    buildChart();
-  });
-});
-
-document.querySelectorAll('[data-table]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTable = btn.dataset.table;
-    renderTable();
-  });
-});
-
-document.getElementById('btn-download-png')?.addEventListener('click', () => {
-  if (!chartInstance) return;
-  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
-  const a = document.createElement('a');
-  a.href = url; a.download = 'ihh_concentration.png'; a.click();
-});
-
-document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${CODE_AVG},${CODE_MED}`);
-});
-
-init().catch(console.error);
+  },
+}).catch(console.error);
 </script>
 </body>
 </html>
