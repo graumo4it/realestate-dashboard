@@ -15,8 +15,9 @@
  *   stackBars  {boolean} stack bars (default: true); false = grouped side-by-side
  *   onData     {Function} (allData) => void — called after fetch + every rebuild
  *   onTableHeader {Function} (mode) => string — optional table column override
- *   pointInTime  {boolean} stock/snapshot indicators — skip period toggle injection
- *   annualOnly   {boolean} annual-only data — hide period toggle AND М-М button entirely
+ *   pointInTime   {boolean} stock/snapshot indicators — skip period toggle injection
+ *   annualOnly    {boolean} annual-only data — hide period toggle AND М-М button entirely
+ *   quarterlyOnly {boolean} quarterly-only data — skip period toggle (data already quarterly, no aggregation)
  *   hideSeriesForPeriodicity {Object} { key: ['quarterly','annual'] } — hide series for specific periods
  *   initialActiveSeries {Array}  keys active in chart filter on load (default: all keys)
  *   preProcess   {Function} (allData) => void — called before every render; mutate allData to inject virtual series
@@ -85,9 +86,11 @@ window.ComboPage = (function () {
     const isPp = config.isPp !== undefined ? Boolean(config.isPp) : (aggType === 'wavg');
     const sfx        = unit ? ' ' + unit : '';
     // pointInTime: stock/snapshot indicators — skip Месяц/Квартал/Год toggle injection
-    const pointInTime = Boolean(config.pointInTime);
+    const pointInTime    = Boolean(config.pointInTime);
     // annualOnly: annual-only flow indicators — hide period toggle AND М-М button entirely
-    const annualOnly  = Boolean(config.annualOnly);
+    const annualOnly     = Boolean(config.annualOnly);
+    // quarterlyOnly: quarterly-only flow indicators — skip period toggle (no monthly/annual aggregation)
+    const quarterlyOnly  = Boolean(config.quarterlyOnly);
     // hideSeriesForPeriodicity: { key: ['quarterly','annual'] } — hide specific series for periods
     const hideSeriesForPeriodicity = config.hideSeriesForPeriodicity || null;
     // initialActiveSeries: keys initially checked in chart filter (default: all keys)
@@ -97,7 +100,7 @@ window.ComboPage = (function () {
       keys, labels: config.labels, colors,
       valueCode, weightCode,
       aggType, chartType, stackBars, unit, decimals, fileName,
-      isPp, sfx, pointInTime, annualOnly, hideSeriesForPeriodicity,
+      isPp, sfx, pointInTime, annualOnly, quarterlyOnly, hideSeriesForPeriodicity,
       initialActiveSeries,
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
@@ -618,7 +621,7 @@ window.ComboPage = (function () {
       _buildChart(cfg, state);
       _renderTable(cfg, state);
       _bindEvents(cfg, state, rebuild);
-      if (!cfg.pointInTime && !cfg.annualOnly) _injectPeriodToggle(cfg, state, rebuild);
+      if (!cfg.pointInTime && !cfg.annualOnly && !cfg.quarterlyOnly) _injectPeriodToggle(cfg, state, rebuild);
       // annualOnly: hide М-М button entirely (annual data never has month-over-month)
       if (cfg.annualOnly) {
         const momBtn = document.querySelector('[data-mode="mom"]');
