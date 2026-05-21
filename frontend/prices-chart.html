@@ -9,9 +9,10 @@
   <link rel="stylesheet" href="css/variables.css"/>
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/chart.css"/>
+  <link rel="stylesheet" href="css/combo-page.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
-    /* Отключаем сайдбарный grid из chart.css — на этой странице сайдбара нет */
+    /* Отключаем сайдбарный grid */
     .chart-layout { display: block; }
     .chart-main { max-width: 100%; }
 
@@ -33,87 +34,6 @@
     }
     .kpi-card-sm .kpi-period { font-size: .72rem; color: var(--color-muted); margin-bottom: 8px; }
     .kpi-card-sm .kpi-deltas { display: flex; gap: 8px; flex-wrap: wrap; font-size: .78rem; }
-    .kpi-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    /* Горизонтальная панель фильтров */
-    .filter-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .filter-bar-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: var(--color-surface);
-      font-family: var(--font-body);
-      font-size: .83rem;
-      font-weight: 500;
-      color: var(--color-ink);
-      cursor: pointer;
-      transition: all .15s;
-      position: relative;
-      min-width: 320px;
-      justify-content: space-between;
-    }
-    .filter-bar-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
-    .filter-bar-btn.has-active { border-color: var(--color-ink); background: var(--color-ink); color: #fff; }
-    .filter-bar-btn svg { flex-shrink: 0; }
-
-    .filter-bar-reset {
-      padding: 7px 14px;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      background: transparent;
-      font-family: var(--font-body);
-      font-size: .83rem;
-      color: var(--color-muted);
-      cursor: pointer;
-      transition: all .15s;
-      margin-left: auto;
-    }
-    .filter-bar-reset:hover { border-color: var(--color-accent); color: var(--color-accent); }
-
-    /* Дропдаун */
-    .filter-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      width: 100%;
-      min-width: 320px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-md);
-      z-index: 100;
-      padding: 6px 0;
-      max-height: 360px;
-      overflow-y: auto;
-    }
-    .filter-dropdown-group-label {
-      font-size: .68rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .08em; color: var(--color-muted);
-      padding: 8px 14px 4px;
-    }
-    .filter-dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      font-size: .83rem;
-      cursor: pointer;
-      transition: background .1s;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .filter-dropdown-item:hover { background: var(--color-bg); }
-    .filter-dropdown-item input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--color-ink); flex-shrink: 0; cursor: pointer; }
-    .filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
 
     /* Двухуровневые вкладки таблицы */
     .table-tabs-wrap {
@@ -136,7 +56,7 @@
     .table-tab-l1:hover:not(.active) { color: var(--color-ink); }
 
     .table-tabs-level2 {
-      display: flex; gap: 6px; padding: 10px 20px;
+      display: flex; gap: 6px; padding: 10px 20px; flex-wrap: wrap;
     }
     .table-tab-l2 {
       display: flex; align-items: center; gap: 5px;
@@ -147,6 +67,9 @@
     }
     .table-tab-l2.active { background: var(--color-ink); color: #fff; border-color: var(--color-ink); }
     .table-tab-l2:hover:not(.active) { border-color: var(--color-accent); color: var(--color-accent); }
+
+    /* Дропдаун — overflow для длинного списка */
+    #series-dropdown.filter-dropdown { max-height: 380px; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -255,14 +178,16 @@
           <div class="chart-source">Источник: Росстат (fedstat.ru)</div>
         </div>
 
-        <!-- Таблица -->
+        <!-- Таблица с двухуровневыми табами -->
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
+          <!-- Уровень 1: Первичный / Вторичный — управляется кастомным JS ниже -->
           <div class="table-tabs-wrap" id="table-tabs-wrap">
             <div class="table-tabs-level1" id="table-tabs-l1">
               <button class="table-tab-l1 active" data-market="primary">Первичный рынок</button>
               <button class="table-tab-l1" data-market="secondary">Вторичный рынок</button>
             </div>
+            <!-- Уровень 2: конкретные коды — data-table обрабатывается ComboPage -->
             <div class="table-tabs-level2" id="table-tabs-l2"></div>
           </div>
           <table class="data-table">
@@ -292,381 +217,94 @@
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
+<script src="js/period-toggle.js"></script>
+<script src="js/combo-page.js"></script>
 <script>
-
-// ── Конфиг серий ──────────────────────────────────────────────────────────
-const SERIES_CONFIG = {
-  // Первичный рынок: красный (все) + оттенки от теплого к холодному
-  '4.4':   { label: 'Первичный (все)',         color: '#E8341C', width: 3,   dash: false },
-  '4.4.1': { label: 'Первичный — типовые',     color: '#FF8C00', width: 1.5, dash: true  },
-  '4.4.2': { label: 'Первичный — улучшенное',  color: '#C44B8A', width: 1.5, dash: true  },
-  '4.4.3': { label: 'Первичный — элитные',     color: '#8B3A9E', width: 1.5, dash: true  },
-  // Вторичный рынок: темно-синий (все) + оттенки зеленого/бирюзового
-  '4.5':   { label: 'Вторичный (все)',          color: '#1A2B4A', width: 3,   dash: false },
-  '4.5.1': { label: 'Вторичный — низкое кач.', color: '#0D7C56', width: 1.5, dash: true  },
-  '4.5.2': { label: 'Вторичный — типовые',     color: '#1A9E7A', width: 1.5, dash: true  },
-  '4.5.3': { label: 'Вторичный — улучшенное',  color: '#2EC4B6', width: 1.5, dash: true  },
-  '4.5.4': { label: 'Вторичный — элитные',     color: '#3A86FF', width: 1.5, dash: true  },
+// ── Цвета и метки серий ────────────────────────────────────────────────────
+const _SERIES_COLORS = {
+  '4.4':   '#E8341C', '4.4.1': '#FF8C00', '4.4.2': '#C44B8A', '4.4.3': '#8B3A9E',
+  '4.5':   '#1A2B4A', '4.5.1': '#0D7C56', '4.5.2': '#1A9E7A', '4.5.3': '#2EC4B6', '4.5.4': '#3A86FF',
 };
 
-const ALL_CODES = Object.keys(SERIES_CONFIG);
+// ── ComboPage.init ─────────────────────────────────────────────────────────
+ComboPage.init({
+  codes: {
+    '4.4':   '4.4',   '4.4.1': '4.4.1', '4.4.2': '4.4.2', '4.4.3': '4.4.3',
+    '4.5':   '4.5',   '4.5.1': '4.5.1', '4.5.2': '4.5.2', '4.5.3': '4.5.3', '4.5.4': '4.5.4',
+  },
+  labels: {
+    '4.4':   'Первичный (все)',          '4.4.1': 'Первичный — типовые',
+    '4.4.2': 'Первичный — улучшенное',   '4.4.3': 'Первичный — элитные',
+    '4.5':   'Вторичный (все)',           '4.5.1': 'Вторичный — низкое кач.',
+    '4.5.2': 'Вторичный — типовые',      '4.5.3': 'Вторичный — улучшенное',
+    '4.5.4': 'Вторичный — элитные',
+  },
+  keys: ['4.4', '4.4.1', '4.4.2', '4.4.3', '4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'],
+  colors: _SERIES_COLORS,
+  chartType:           'line',
+  aggType:             'avg',
+  decimals:            0,
+  unit:                ' руб./кв.м',
+  fileName:            'prices-rosstat',
+  initialActiveSeries: ['4.4', '4.5'],
+  labelGroups: [
+    { header: 'Первичный рынок', keys: ['4.4', '4.4.1', '4.4.2', '4.4.3'] },
+    { header: 'Вторичный рынок', keys: ['4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'] },
+  ],
 
-let chartInstance = null;
-let allData = {};              // {code: {indicator, series}}
-let activeSeries = new Set(['4.4', '4.5']);
-let currentRange = null;
-let currentMode = 'absolute';
-let currentTableCode = '4.4';
+  onData(allData) {
+    // Обновляем 2 KPI-карточки
+    [['4.4', 'primary'], ['4.5', 'secondary']].forEach(([code, suffix]) => {
+      const s    = (allData[code]?.series || []).filter(p => p.value != null);
+      const last = s[s.length - 1];
+      if (!last) return;
+      document.getElementById(`kpi-${suffix}-value`).textContent   = fmtNum(Number(last.value), 0);
+      document.getElementById(`kpi-${suffix}-period`).textContent  = last.label || '—';
+      document.getElementById(`kpi-${suffix}-deltas`).innerHTML    =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
+        `<span>кв./кв.: ${deltaHtml(last.mom_change_pct)}</span>`;
+    });
+  },
+}).catch(console.error);
 
-// ── Навигация ──────────────────────────────────────────────────────────────
-api.categories().then(() => {}).catch(() => {});
 
-// ── Загрузка ───────────────────────────────────────────────────────────────
-async function init() {
-  allData = await api.multiIndicatorData(ALL_CODES.join(','));
+// ── Двухуровневые табы таблицы ─────────────────────────────────────────────
+// ComboPage обрабатывает [data-table] Level-2 через свой _bindEvents.
+// Этот скрипт управляет только Level-1 переключателем рынка и сборкой Level-2 DOM.
 
-  const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
-  if (dates.length)
-    document.getElementById('chart-updated').textContent =
-      new Date(dates[0]).toLocaleDateString('ru-RU');
-
-  renderKPI();
-  buildChart();
-  buildDropdown();
-  buildTableTabs();
-  renderTable();
-}
-
-// ── Фильтрация по диапазону ────────────────────────────────────────────────
-function getFiltered(code) {
-  const series = allData[code]?.series || [];
-  if (!currentRange) return series;
-  const pts = series.filter(p => p.value != null);
-  if (!pts.length) return series;
-  const lastDate = new Date(pts[pts.length - 1].date);
-  const cutoff = new Date(lastDate);
-  cutoff.setFullYear(cutoff.getFullYear() - currentRange);
-  cutoff.setMonth(cutoff.getMonth() - 2);
-  return series.filter(p => new Date(p.date) >= cutoff);
-}
-
-// ── KPI ────────────────────────────────────────────────────────────────────
-function renderKPI() {
-  ['4.4', '4.5'].forEach(code => {
-    const s = (allData[code]?.series || []).filter(p => p.value != null);
-    const last = s[s.length - 1];
-    if (!last) return;
-    const suffix = code === '4.4' ? 'primary' : 'secondary';
-    document.getElementById(`kpi-${suffix}-value`).textContent =
-      fmtNum(Number(last.value), 0);
-    document.getElementById(`kpi-${suffix}-period`).textContent = last.label || '—';
-    document.getElementById(`kpi-${suffix}-deltas`).innerHTML =
-      `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
-      `<span>кв./кв.: ${deltaHtml(last.mom_change_pct)}</span>`;
-  });
-}
-
-// ── График ─────────────────────────────────────────────────────────────────
-function buildChart() {
-  if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
-    window.addEventListener('resize', () => chartInstance.resize());
-  }
-
-  const isDelta = currentMode === 'yoy';
-  const field = 'yoy_change_pct';
-
-  // Для каждой серии строим свой массив точек {date, value/yoy}
-  // Используем xAxis на основе дат (time axis), чтобы годовые и квартальные
-  // корректно отображались на одной временной шкале
-  const series = [...activeSeries].map(code => {
-    const cfg = SERIES_CONFIG[code];
-    const pts = getFiltered(code).filter(p => p.value != null);
-
-    const data = pts.map(p => {
-      const val = isDelta
-        ? (p[field] != null ? Number(p[field]) : null)
-        : Number(p.value);
-      return [p.date, val];
-    }).filter(d => d[1] != null);
-
-    return {
-      name: cfg.label,
-      type: 'line',
-      data,
-      lineStyle: { color: cfg.color, width: cfg.width, type: cfg.dash ? 'dashed' : 'solid' },
-      itemStyle: { color: cfg.color },
-      symbol: 'circle',
-      symbolSize: pts.length <= 10 ? 6 : 3,
-      connectNulls: false,
-      encode: { x: 0, y: 1 },
-    };
-  });
-
-  // xLabels не нужны — используем time axis
-  const xLabels = null;
-
-  chartInstance.setOption({
-    animation: true, animationDuration: 200, animationEasing: 'cubicOut',
-    legend: {
-      data: series.map(s => s.name),
-      top: 0, left: 0,
-      textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#3D4F60' },
-      icon: 'circle', itemWidth: 10, itemHeight: 10,
-      type: 'scroll',
-    },
-    grid: { left: 80, right: 20, top: 50, bottom: 80 },
-    dataZoom: [
-      {
-        type: 'slider', bottom: 8, height: 24,
-        borderColor: '#DDE2E8', backgroundColor: '#F2F4F7',
-        fillerColor: 'rgba(26,43,74,0.10)',
-        handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 },
-        selectedDataBackground: { lineStyle: { color: '#1A2B4A', width: 1 }, areaStyle: { color: 'rgba(26,43,74,0.08)' } },
-        dataBackground: { lineStyle: { color: '#DDE2E8', width: 1 }, areaStyle: { color: 'rgba(221,226,232,0.3)' } },
-        textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' },
-        brushSelect: false, throttle: 16,
-      },
-      { type: 'inside', zoomOnMouseWheel: true, moveOnMouseMove: true, throttle: 16 },
-    ],
-    tooltip: {
-      trigger: 'axis', backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
-      textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 12 },
-      formatter: params => {
-        const d = new Date(params[0]?.value?.[0] || params[0]?.axisValue);
-        const qLabel = isNaN(d) ? (params[0]?.axisValue || '') :
-          d.getFullYear() + ' Q' + Math.ceil((d.getMonth()+1)/3);
-        let html = `<b>${qLabel}</b><br/>`;
-        params.forEach(p => {
-          if (p.value == null) return;
-          const val = isDelta
-            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)}%`
-            : fmtNum(p.value, 0) + ' руб.';
-          html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-        });
-        return html;
-      },
-    },
-    xAxis: {
-      type: 'time',
-      axisLabel: {
-        fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A',
-        formatter: val => {
-          const d = new Date(val);
-          return d.getFullYear() + (d.getMonth() > 0 ? '-Q' + Math.ceil((d.getMonth()+1)/3) : '');
-        },
-        rotate: 0,
-      },
-      axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-        formatter: v => isDelta
-          ? (v > 0 ? '+' : '') + fmtNum(v, 1) + '%'
-          : fmtNum(v, 0),
-      },
-      splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
-      axisLine: { show: false }, axisTick: { show: false },
-    },
-    series,
-  }, true);
-}
-
-// ── Вкладки таблицы ────────────────────────────────────────────────────────
-// Карта рынков → коды
-const MARKET_CODES = {
+const _MARKET_CODES = {
   primary:   ['4.4', '4.4.1', '4.4.2', '4.4.3'],
   secondary: ['4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'],
 };
-const MARKET_SUBTAB_LABELS = {
+const _SUBTAB_LABELS = {
   '4.4':   'Все',  '4.4.1': 'Типовые',    '4.4.2': 'Улучшенное', '4.4.3': 'Элитные',
   '4.5':   'Все',  '4.5.1': 'Низкое кач.','4.5.2': 'Типовые',    '4.5.3': 'Улучшенное', '4.5.4': 'Элитные',
 };
+let _currentMarket = 'primary';
 
-let currentMarket = 'primary';
-
-function buildTableTabs() {
-  // Уровень 1 — переключение рынка
-  document.querySelectorAll('[data-market]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-market]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentMarket = btn.dataset.market;
-      // При смене рынка выбираем первую вкладку уровня 2
-      currentTableCode = MARKET_CODES[currentMarket][0];
-      buildLevel2Tabs();
-      renderTable();
-    });
-  });
-
-  // Строим второй уровень для начального рынка
-  buildLevel2Tabs();
-}
-
-function buildLevel2Tabs() {
-  const codes = MARKET_CODES[currentMarket];
+function _buildLevel2Tabs(firstCode) {
   const l2 = document.getElementById('table-tabs-l2');
-  l2.innerHTML = codes.map(code => {
-    const cfg = SERIES_CONFIG[code];
-    const label = MARKET_SUBTAB_LABELS[code];
-    return `<button class="table-tab-l2${code === currentTableCode ? ' active' : ''}" data-table="${code}">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${cfg.color};flex-shrink:0"></span>
-      ${label}
-    </button>`;
-  }).join('');
-
-  l2.querySelectorAll('[data-table]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      l2.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentTableCode = btn.dataset.table;
-      renderTable();
-    });
-  });
+  l2.innerHTML = _MARKET_CODES[_currentMarket].map((code, i) =>
+    `<button class="table-tab-l2${(firstCode ? code === firstCode : i === 0) ? ' active' : ''}" data-table="${code}">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${_SERIES_COLORS[code]};flex-shrink:0"></span>
+      ${_SUBTAB_LABELS[code]}
+    </button>`
+  ).join('');
 }
 
-// ── Таблица ────────────────────────────────────────────────────────────────
-function renderTable() {
-  const series = getFiltered(currentTableCode).slice().reverse();
-  const body = document.getElementById('data-table-body');
-
-  body.innerHTML = series.map(p => `<tr>
-    <td>${p.label || p.date}</td>
-    <td class="num">${p.value != null ? fmtNum(Number(p.value), 0) + ' руб.' : '—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct)}</td>
-    <td class="num">${deltaHtml(p.mom_change_pct)}</td>
-  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-// ── Обработчики ────────────────────────────────────────────────────────────
-document.querySelectorAll('[data-range]').forEach(btn => {
+document.querySelectorAll('[data-market]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('[data-market]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range);
-    buildChart(); renderTable();
+    _currentMarket = btn.dataset.market;
+    _buildLevel2Tabs();
+    // Симулируем клик на первую вкладку уровня 2 — ComboPage обновит таблицу
+    document.querySelector('#table-tabs-l2 [data-table]')?.click();
   });
 });
 
-document.querySelectorAll('[data-mode]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentMode = btn.dataset.mode;
-    buildChart();
-  });
-});
-
-// ── Дропдаун «Тип динамики цен» с группами Первичный/Вторичный ────────────
-const SERIES_GROUPS = [
-  { label: 'Первичный рынок', codes: ['4.4', '4.4.1', '4.4.2', '4.4.3'] },
-  { label: 'Вторичный рынок', codes: ['4.5', '4.5.1', '4.5.2', '4.5.3', '4.5.4'] },
-];
-
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  SERIES_GROUPS.forEach(group => {
-    const lbl = document.createElement('div');
-    lbl.className = 'filter-dropdown-group-label';
-    lbl.textContent = group.label;
-    dropdown.appendChild(lbl);
-    group.codes.forEach(code => {
-      const cfg = SERIES_CONFIG[code];
-      const item = document.createElement('div');
-      item.className = 'filter-dropdown-item';
-      item.dataset.code = code;
-
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.id = `cb-${code.replace(/\./g, '_')}`;
-      cb.checked = activeSeries.has(code);
-
-      const dot = document.createElement('span');
-      dot.className = 'kpi-dot';
-      dot.style.background = cfg.color;
-
-      const span = document.createElement('span');
-      span.textContent = cfg.label;
-
-      item.appendChild(cb);
-      item.appendChild(dot);
-      item.appendChild(span);
-      dropdown.appendChild(item);
-    });
-  });
-
-  // Делегированный обработчик — клик по строке/чекбоксу переключает серию
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const code = item.dataset.code;
-    const cb = item.querySelector('input');
-
-    if (e.target !== cb) {
-      cb.checked = !cb.checked;
-    }
-
-    if (cb.checked) {
-      activeSeries.add(code);
-    } else {
-      if (activeSeries.size <= 1) { cb.checked = true; return; }
-      activeSeries.delete(code);
-    }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  document.querySelectorAll('#series-dropdown input[type=checkbox]').forEach(cb => {
-    const code = cb.id.replace(/^cb-/, '').replace(/_/g, '.');
-    cb.checked = activeSeries.has(code);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  const allActive = ALL_CODES.every(c => activeSeries.has(c));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-// Открыть/закрыть дропдаун
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  document.getElementById('series-dropdown').style.display = 'none';
-});
-document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
-
-// Сброс — возвращаем дефолт (Первичный + Вторичный, агрегированные)
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(['4.4', '4.5']);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-
-document.getElementById('btn-download-png')?.addEventListener('click', () => {
-  if (!chartInstance) return;
-  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
-  const a = document.createElement('a');
-  a.href = url; a.download = 'prices_rosstat.png'; a.click();
-});
-
-document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  const title = encodeURIComponent('Цены на жилье по типам квартир (Росстат)');
-  const labels = encodeURIComponent('Первичный (все),Первичный — типовые,Первичный — улучшенное,Первичный — элитные,Вторичный (все),Вторичный — низкое,Вторичный — типовые,Вторичный — улучшенное,Вторичный — элитные');
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${ALL_CODES.join(',')}&title=${title}&labels=${labels}&filename=prices_rosstat`);
-});
-
-init().catch(console.error);
+// Инициализируем уровень 2 для первичного рынка
+_buildLevel2Tabs('4.4');
 </script>
 </body>
 </html>
