@@ -140,6 +140,7 @@
               <th style="width:40%">Период</th>
               <th style="width:20%;text-align:right">Значение, тыс. кв. м</th>
               <th style="width:20%;text-align:right">Изм. г/г</th>
+              <th style="width:20%;text-align:right">Изм. м/м</th>
             </tr></thead>
             <tbody id="data-table-body"><tr><td colspan="4" class="skeleton" style="height:180px"></td></tr></tbody>
           </table>
@@ -156,284 +157,31 @@
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/period-toggle.js?v=4"></script>
+<script src="js/combo-page.js"></script>
 <script>
-window.CODES = { ytd: '5.12.33', ma12: '5.12.38' };
-const COLORS  = { ytd: '#E8341C', ma12: '#1A2B4A' };
-const LABELS  = { ytd: 'Для целевой обеспеченности 33 кв. м', ma12: 'Для целевой обеспеченности 38 кв. м' };
-const FMT_DECIMALS = 0;
-const TOOLTIP_SFX  = ' тыс. кв. м';
-const UNIT         = 'тыс. кв. м';
-const FILE_NAME    = 'sales-pace';
-
-const _FILTER_KEYS   = ['ytd', 'ma12'];
-const _FILTER_LABELS = { ytd: 'Для целевой обеспеченности 33 кв. м', ma12: 'Для целевой обеспеченности 38 кв. м' };
-const _FILTER_COLORS = { ytd: '#E8341C', ma12: '#1A2B4A' };
-
-let chartInstance = null;
-let allData = window.allData = {};
-let activeSeries = new Set(['ytd', 'ma12']);
-let currentRange = null;
-let currentMode  = 'absolute';
-let currentTable = 'ytd';
-let isAnnual = false;
-
-async function init() {
-  const codes = Object.values(CODES).join(',');
-  allData = window.allData = await api.multiIndicatorData(codes);
-
-  const dates = Object.values(allData).map(d => d.indicator?.last_updated).filter(Boolean);
-  if (dates.length)
-    document.getElementById('chart-updated').textContent =
-      new Date(dates[0]).toLocaleDateString('ru-RU');
-
-  buildDropdown();
-  renderKPI();
-  buildChart();
-  renderTable();
-
-  // Данные годовые — кнопки Месяц/Квартал/Год не нужны
-
-}
-
-function getRawSeries(key) {
-  return allData[CODES[key]]?.series || [];
-}
-
-function getFiltered(key) {
-  const series = getRawSeries(key).filter(p => p.value != null);
-
-  let result = series;
-
-  if (isAnnual === 'annual') {
-    // Берём только декабрь каждого года
-    result = series.filter(p => {
-      const m = new Date(p.date).getMonth() + 1;
-      return m === 12;
-    }).map(p => ({ ...p, label: String(new Date(p.date).getFullYear()) }));
-  } else if (isAnnual === 'quarterly') {
-    // Берём только последний месяц квартала (март, июнь, сентябрь, декабрь)
-    result = series.filter(p => {
-      const m = new Date(p.date).getMonth() + 1;
-      return m === 3 || m === 6 || m === 9 || m === 12;
+const CODES = { ytd: '5.12.33', ma12: '5.12.38' };
+ComboPage.init({
+  codes:     CODES,
+  labels:    { ytd: 'Для целевой обеспеченности 33 кв. м', ma12: 'Для целевой обеспеченности 38 кв. м' },
+  colors:    { ytd: '#E8341C', ma12: '#1A2B4A' },
+  keys:      ['ytd', 'ma12'],
+  chartType: 'line',
+  aggType:   'avg',
+  unit:      'тыс. кв. м',
+  decimals:  0,
+  fileName:  'housing-need-chart',
+  annualOnly: true,
+  onData(allData) {
+    ['ytd', 'ma12'].forEach(key => {
+      const series = allData[CODES[key]]?.series || [];
+      const last   = series.filter(p => p.value != null).pop();
+      if (!last) return;
+      document.getElementById(`kpi-${key}-value`).textContent  = fmtNum(Number(last.value), 0);
+      document.getElementById(`kpi-${key}-period`).textContent = `тыс. кв. м · ${last.label || last.date || '—'}`;
+      document.getElementById(`kpi-${key}-deltas`).innerHTML   = `<span>г/г: ${deltaHtml(last.yoy_change_pct, false)}</span>`;
     });
-  }
-
-  if (!currentRange) return result;
-  const pts = result.filter(p => p.value != null);
-  if (!pts.length) return result;
-  const lastDate = new Date(pts[pts.length - 1].date);
-  const cutoff = new Date(lastDate);
-  cutoff.setFullYear(cutoff.getFullYear() - currentRange);
-  cutoff.setMonth(cutoff.getMonth() - 2);
-  return result.filter(p => new Date(p.date) >= cutoff);
-}
-
-function renderKPI() {
-  ['ytd', 'ma12'].forEach(key => {
-    const s = getRawSeries(key).filter(p => p.value != null);
-    const last = s[s.length - 1];
-    if (!last) return;
-    document.getElementById(`kpi-${key}-value`).textContent = fmtNum(Number(last.value), FMT_DECIMALS);
-    document.getElementById(`kpi-${key}-period`).textContent = `${UNIT} · ${last.label || '—'}`;
-    document.getElementById(`kpi-${key}-deltas`).innerHTML =
-      `<span>г/г: ${deltaHtml(last.yoy_change_pct, false)}</span>`;
-  });
-}
-
-function buildChart() {
-  if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, { renderer: 'canvas' });
-    window.addEventListener('resize', () => chartInstance.resize());
-  }
-
-  const allDates = [...new Set(
-    [...activeSeries].flatMap(key => getFiltered(key).map(p => p.date || p.label))
-  )].sort();
-
-  const isDelta = currentMode !== 'absolute';
-  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-
-  const series = [...activeSeries].map(key => {
-    const map = {};
-    getFiltered(key).forEach(p => { map[p.date || p.label] = p; });
-    const data = allDates.map(d => {
-      const p = map[d];
-      if (!p || p.value == null) return null;
-      return isDelta ? (p[field] != null ? Number(p[field]) : null) : Number(p.value);
-    });
-    return {
-      name: LABELS[key], type: 'line', data,
-      lineStyle: { color: COLORS[key], width: 2.5 },
-      itemStyle: { color: COLORS[key] },
-      symbol: allDates.length < 60 ? 'circle' : 'none', symbolSize: 4, connectNulls: false,
-      areaStyle: null,
-    };
-  });
-
-  const xLabels = allDates.map(d => {
-    for (const key of activeSeries) {
-      const p = getFiltered(key).find(x => (x.date || x.label) === d);
-      if (p?.label) return p.label;
-    }
-    return d;
-  });
-
-  const MONTHS_SHORT   = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
-  const MONTHS_FULL_MAP = {'Январь':0,'Февраль':1,'Март':2,'Апрель':3,'Май':4,'Июнь':5,'Июль':6,'Август':7,'Сентябрь':8,'Октябрь':9,'Ноябрь':10,'Декабрь':11};
-  const shortLabels = xLabels.map(l => {
-    if (!l) return l;
-    const parts = l.split(' ');
-    if (parts.length === 2 && MONTHS_FULL_MAP[parts[0]] !== undefined)
-      return `${MONTHS_SHORT[MONTHS_FULL_MAP[parts[0]]]} ${parts[1]}`;
-    return l;
-  });
-
-  chartInstance.setOption({
-    animation: true, animationDuration: 200, animationEasing: 'cubicOut',
-    legend: { data: series.map(s => s.name), top: 0, left: 0,
-      textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 12, color: '#3D4F60' },
-      icon: 'circle', itemWidth: 10, itemHeight: 10 },
-    grid: { left: 70, right: 20, top: 40, bottom: 80 },
-    dataZoom: [
-      { type: 'slider', bottom: 8, height: 24, borderColor: '#DDE2E8', backgroundColor: '#F2F4F7',
-        fillerColor: 'rgba(26,43,74,0.10)', handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 },
-        textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' }, brushSelect: false, throttle: 16 },
-      { type: 'inside', throttle: 16 },
-    ],
-    tooltip: {
-      trigger: 'axis', backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
-      textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
-      formatter: params => {
-        let html = `<b>${params[0]?.axisValue}</b><br/>`;
-        params.forEach(p => {
-          if (p.value == null) return;
-          const val = isDelta
-            ? `${p.value > 0 ? '+' : ''}${fmtNum(p.value, 1)}%`
-            : `${fmtNum(p.value, FMT_DECIMALS)}${TOOLTIP_SFX}`;
-          html += `<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-        });
-        return html;
-      },
-    },
-    xAxis: { type: 'category', data: shortLabels,
-      axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', rotate: 0, interval: 'auto' },
-      axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false } },
-    yAxis: { type: 'value',
-      axisLabel: { fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
-        formatter: v => isDelta
-          ? (v > 0 ? '+' : v < 0 ? '−' : '') + fmtNum(Math.abs(v), 1) + '%'
-          : fmtNum(v, 0) },
-      splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
-      axisLine: { show: false }, axisTick: { show: false } },
-    series,
-  }, true);
-}
-
-function renderTable() {
-  const series = getFiltered(currentTable).slice().reverse();
-  const body   = document.getElementById('data-table-body');
-  body.innerHTML = series.map(p => `<tr>
-    <td>${p.label || p.date}</td>
-    <td class="num">${p.value != null ? fmtNum(Number(p.value), FMT_DECIMALS) : '—'}</td>
-    <td class="num">${deltaHtml(p.yoy_change_pct, false)}</td>
-  </tr>`).join('') ||
-    '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-// Toolbar
-document.querySelectorAll('[data-range]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange = btn.dataset.range === 'all' ? null : Number(btn.dataset.range);
-    buildChart(); renderTable();
-  });
-});
-document.querySelectorAll('[data-mode]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentMode = btn.dataset.mode; buildChart();
-  });
-});
-document.querySelectorAll('[data-table]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-table]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active'); currentTable = btn.dataset.table; renderTable();
-  });
-});
-
-// Export
-document.getElementById('btn-download-png')?.addEventListener('click', () => {
-  if (!chartInstance) return;
-  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
-  const a = document.createElement('a'); a.href = url; a.download = FILE_NAME + '.png'; a.click();
-});
-document.getElementById('btn-download-xlsx')?.addEventListener('click', () => {
-  const xlsxUrl = `${window.API_BASE}/multi/data.xlsx?codes=${Object.values(CODES).join(',')}&labels=${encodeURIComponent('Для целевой обеспеченности 33 кв. м')}&title=Уровень потребности в жилье для достижения минимально приемлемых условий комфорта проживания)&filename=sales_pace`;
-  window.open(xlsxUrl);
-});
-
-// Dropdown
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  _FILTER_KEYS.forEach(key => {
-    const item = document.createElement('div');
-    item.className = 'filter-dropdown-item';
-    item.dataset.key = key;
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.id = `cb-${key}`; cb.checked = activeSeries.has(key);
-    const dot = document.createElement('span');
-    dot.className = 'kpi-dot'; dot.style.background = _FILTER_COLORS[key];
-    const lbl = document.createElement('span'); lbl.textContent = _FILTER_LABELS[key];
-    item.appendChild(cb); item.appendChild(dot); item.appendChild(lbl);
-    dropdown.appendChild(item);
-  });
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const key = item.dataset.key;
-    const cb = item.querySelector('input');
-    if (e.target !== cb) cb.checked = !cb.checked;
-    if (cb.checked) { activeSeries.add(key); }
-    else { if (activeSeries.size <= 1) { cb.checked = true; return; } activeSeries.delete(key); }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  _FILTER_KEYS.forEach(key => {
-    const cb = document.getElementById(`cb-${key}`);
-    if (cb) cb.checked = activeSeries.has(key);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  if (!btn) return;
-  const allActive = _FILTER_KEYS.every(k => activeSeries.has(k));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  const dd = document.getElementById('series-dropdown');
-  if (dd) dd.style.display = 'none';
-});
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(_FILTER_KEYS);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-
-init().catch(console.error);
+  },
+}).catch(console.error);
 </script>
 </body>
 </html>

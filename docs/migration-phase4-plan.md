@@ -10,15 +10,23 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 
 ## Текущее состояние
 
-### Уже мигрировано (10 страниц)
+### Уже мигрировано (27 страниц)
+
+**Phases 1–3 (10 страниц):**
 `igs-count`, `igs-rate`, `igs-term`, `igs-volume`, `mortgage-rate`, `mortgage-term`, `mortgage-volume`, `subsidy-count`, `subsidy-volume`, `uc-new`
 
-### Требуют миграции (27 страниц) — по батчам
+**Батч 4a — Simple (11 страниц) ✅:**
+`uc-absorption`, `uc-area`, `uc-new-vs-input`, `uc-new-vs-sales`, `uc-stock`, `debt-overdue`, `debt-overdue-share`, `debt-volume`, `apartments-area`, `apartments-count`, `per-capita-chart`
+
+**Батч 4b — Annual/PeriodToggle (6 страниц) ✅:**
+`housing-need-chart`, `housing-need-real-chart`, `housing-pace-chart`, `housing-pace-real-chart`, `sales-pace-chart`, `sales-pace-mm-chart`
+
+> Расширения ComboPage добавлены: `annualOnly`, `hideMomForNonMonthly`, `hideSeriesForPeriodicity`
+
+### Требуют миграции (10 страниц) — по батчам
 
 | Батч | Страницы | Характеристика |
 |------|----------|---------------|
-| **4a — Simple** (11) | `uc-absorption`, `uc-area`, `uc-new-vs-input`, `uc-new-vs-sales`, `uc-stock`, `debt-overdue`, `debt-overdue-share`, `debt-volume`, `apartments-area`, `apartments-count`, `per-capita-chart` | Стандартные CODES/LABELS, нет computed-рядов, чистый `sum`/`avg` |
-| **4b — PeriodToggle-ready** (6) | `housing-need-chart`, `housing-need-real-chart`, `housing-pace-chart`, `housing-pace-real-chart`, `sales-pace-chart`, `sales-pace-mm-chart` | Уже используют `PeriodToggle.injectButtons()`, нужно обернуть в ComboPage |
 | **4c — AnnualToggle** (6) | `combo-chart`, `igs-payment`, `igs-size`, `mortgage-count`, `mortgage-payment`, `mortgage-size` | Используют `AnnualToggle` — удалить + перенести на ComboPage |
 | **4d — Complex** (4) | `apartments-share`, `ihh-chart`, `prices-chart`, `share-chart` | `buildComputed()`, нестандартные вычисления, требуют `onData` hook или расширения ComboPage |
 
@@ -118,8 +126,8 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 ## Порядок работы
 
 ```
-Phase 4a (11 страниц) → коммит
-Phase 4b (6 страниц)  → коммит
+Phase 4a (11 страниц) → коммит ✅
+Phase 4b (6 страниц)  → коммит ✅
 Phase 4c (6 страниц)  → коммит
 Phase 4d (4 страницы) → коммит
 Phase 5  (shim removal) → коммит
