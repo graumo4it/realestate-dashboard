@@ -17,7 +17,6 @@
  *   onTableHeader {Function} (mode) => string — optional table column override
  *   pointInTime  {boolean} stock/snapshot indicators — skip period toggle injection
  *   annualOnly   {boolean} annual-only data — hide period toggle AND М-М button entirely
- *   hideMomForNonMonthly {boolean} hide М-М when quarterly/annual; auto-reset to Значения
  *   hideSeriesForPeriodicity {Object} { key: ['quarterly','annual'] } — hide series for specific periods
  *   initialActiveSeries {Array}  keys active in chart filter on load (default: all keys)
  *   preProcess   {Function} (allData) => void — called before every render; mutate allData to inject virtual series
@@ -89,8 +88,6 @@ window.ComboPage = (function () {
     const pointInTime = Boolean(config.pointInTime);
     // annualOnly: annual-only flow indicators — hide period toggle AND М-М button entirely
     const annualOnly  = Boolean(config.annualOnly);
-    // hideMomForNonMonthly: hide М-М button for quarterly/annual; auto-reset mode to Значения
-    const hideMomForNonMonthly = Boolean(config.hideMomForNonMonthly);
     // hideSeriesForPeriodicity: { key: ['quarterly','annual'] } — hide specific series for periods
     const hideSeriesForPeriodicity = config.hideSeriesForPeriodicity || null;
     // initialActiveSeries: keys initially checked in chart filter (default: all keys)
@@ -100,7 +97,7 @@ window.ComboPage = (function () {
       keys, labels: config.labels, colors,
       valueCode, weightCode,
       aggType, chartType, stackBars, unit, decimals, fileName,
-      isPp, sfx, pointInTime, annualOnly, hideMomForNonMonthly, hideSeriesForPeriodicity,
+      isPp, sfx, pointInTime, annualOnly, hideSeriesForPeriodicity,
       initialActiveSeries,
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
@@ -128,8 +125,7 @@ window.ComboPage = (function () {
   async function _fetch(cfg, state) {
     const codes = _extractCodes(cfg);
     const data  = await api.multiIndicatorData(codes.join(','));
-    // Assign to BOTH state and window — period-toggle.js shim mutates window.allData in-place
-    state.allData = window.allData = data;
+    state.allData = data;
 
     const dates = Object.values(data).map(d => d.indicator?.last_updated).filter(Boolean);
     if (dates.length) {
@@ -146,10 +142,9 @@ window.ComboPage = (function () {
     const wCode  = cfg.weightCode[key];
     const weight = wCode ? (state.allData[wCode]?.series || []) : [];
 
-    // Period-aware path: used by pages that inject PeriodToggle directly
-    // (hideMomForNonMonthly / hideSeriesForPeriodicity pages set state.currentPeriodicity)
+    // Non-monthly aggregation (quarterly or annual)
     const periodicity = state.currentPeriodicity;
-    if (periodicity && periodicity !== 'monthly') {
+    if (periodicity !== 'monthly') {
       let agg;
       if (cfg.aggType === 'wavg') {
         agg = window.PeriodToggle.aggregateWavg(raw, weight, periodicity);
@@ -160,21 +155,6 @@ window.ComboPage = (function () {
       const cutoff = new Date();
       cutoff.setFullYear(cutoff.getFullYear() - state.currentRange);
       return agg.filter(p => new Date(p.date) >= cutoff);
-    }
-
-    // Legacy annual path: isAnnual set by AnnualToggle shim callback
-    if (state.isAnnual) {
-      let agg;
-      if (cfg.aggType === 'wavg') {
-        agg = AnnualToggle.aggregateWavgSeries(raw, weight);
-      } else if (cfg.aggType === 'avg') {
-        agg = AnnualToggle.aggregateAnnualSeries(raw, 'avg');
-      } else {
-        agg = AnnualToggle.aggregateAnnualSeries(raw, 'sum');
-      }
-      if (!state.currentRange) return agg;
-      const cutYear = new Date().getFullYear() - state.currentRange;
-      return agg.filter(p => parseInt(p.label || p.date) >= cutYear);
     }
 
     // Monthly (raw) path
@@ -354,7 +334,7 @@ window.ComboPage = (function () {
           data,
           itemStyle: { color: cfg.colors[key] },
           emphasis: { focus: 'series' },
-          barMaxWidth: state.isAnnual ? 40 : 24,
+          barMaxWidth: state.currentPeriodicity !== 'monthly' ? 40 : 24,
         };
       }
       return {
@@ -472,7 +452,7 @@ window.ComboPage = (function () {
         ? fmtNum(Number(p.value), cfg.decimals) + cfg.sfx
         : '—';
       const yoyStr = deltaHtml(p.yoy_change_pct, cfg.isPp);
-      const momStr = state.isAnnual ? '—' : deltaHtml(p.mom_change_pct, cfg.isPp);
+      const momStr = state.currentPeriodicity !== 'monthly' ? '—' : deltaHtml(p.mom_change_pct, cfg.isPp);
       const label  = p.label || (p.date ? fmtDate(p.date, 'monthly') : '—');
       return `<tr>
         <td>${label}</td>
@@ -568,63 +548,42 @@ window.ComboPage = (function () {
     }
   }
 
-  // ── 11. _injectAnnualToggle ───────────────────────────────────────────
-  function _injectAnnualToggle(cfg, state, rebuild) {
+  // ── 11. _injectPeriodToggle ──────────────────────────────────────────────
+  function _injectPeriodToggle(cfg, state, rebuild) {
     const toolbar = document.querySelector('.chart-toolbar');
     if (!toolbar) return;
 
-    // Period-aware path: pages with hideMomForNonMonthly or hideSeriesForPeriodicity
-    // bypass the AnnualToggle shim and use PeriodToggle directly so we know the
-    // exact period ('monthly'/'quarterly'/'annual') before calling rebuild().
-    if (cfg.hideMomForNonMonthly || cfg.hideSeriesForPeriodicity) {
-      window.PeriodToggle.injectButtons(toolbar, {
-        options:      ['monthly', 'quarterly', 'annual'],
-        defaultValue: 'monthly',
-      }, period => {
-        state.currentPeriodicity = period;
-        state.isAnnual = (period === 'annual');
+    window.PeriodToggle.injectButtons(toolbar, {
+      options:      ['monthly', 'quarterly', 'annual'],
+      defaultValue: 'monthly',
+    }, period => {
+      state.currentPeriodicity = period;
 
-        if (cfg.hideMomForNonMonthly) {
-          const momBtn = document.querySelector('[data-mode="mom"]');
-          if (momBtn) {
-            const hide = period !== 'monthly';
-            momBtn.style.display = hide ? 'none' : '';
-            if (hide && state.currentMode === 'mom') {
-              document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-              const ab = document.querySelector('[data-mode="absolute"]');
-              if (ab) { ab.classList.add('active'); state.currentMode = 'absolute'; }
-            }
-          }
-        }
-
-        if (cfg.hideSeriesForPeriodicity) {
-          const eff = _getEffectiveActiveSeries(cfg, state);
-          if (!eff.has(state.currentTable)) {
-            const first = [...eff][0];
-            if (first) {
-              document.querySelectorAll('[data-table]').forEach(b => {
-                b.classList.toggle('active', b.dataset.table === first);
-              });
-              state.currentTable = first;
-            }
-          }
-        }
-
-        rebuild();
-      });
-      return;
-    }
-
-    // Legacy path via AnnualToggle shim (for all other pages)
-    AnnualToggle.injectAnnualBtn(toolbar, annual => {
-      state.isAnnual = annual;
+      // Hide М-М for non-monthly periods (quarterly/annual М-М is meaningless)
       const momBtn = document.querySelector('[data-mode="mom"]');
-      if (momBtn) momBtn.style.display = annual ? 'none' : '';
-      if (annual && state.currentMode === 'mom') {
-        document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-        const ab = document.querySelector('[data-mode="absolute"]');
-        if (ab) { ab.classList.add('active'); state.currentMode = 'absolute'; }
+      if (momBtn) {
+        const hide = period !== 'monthly';
+        momBtn.style.display = hide ? 'none' : '';
+        if (hide && state.currentMode === 'mom') {
+          document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+          const ab = document.querySelector('[data-mode="absolute"]');
+          if (ab) { ab.classList.add('active'); state.currentMode = 'absolute'; }
+        }
       }
+
+      if (cfg.hideSeriesForPeriodicity) {
+        const eff = _getEffectiveActiveSeries(cfg, state);
+        if (!eff.has(state.currentTable)) {
+          const first = [...eff][0];
+          if (first) {
+            document.querySelectorAll('[data-table]').forEach(b => {
+              b.classList.toggle('active', b.dataset.table === first);
+            });
+            state.currentTable = first;
+          }
+        }
+      }
+
       rebuild();
     });
   }
@@ -640,11 +599,10 @@ window.ComboPage = (function () {
       currentRange:       null,
       currentMode:        'absolute',
       currentTable:       cfg.keys[0],
-      isAnnual:           false,
-      currentPeriodicity: 'monthly',  // used by period-aware pages (hideMomForNonMonthly / hideSeriesForPeriodicity)
+      currentPeriodicity: 'monthly',
     };
 
-    // Rebuild: called on range change + annual toggle
+    // Rebuild: called on range change + period toggle
     function rebuild() {
       if (cfg.preProcess) cfg.preProcess(state.allData);  // inject virtual series before render
       _buildChart(cfg, state);
@@ -660,7 +618,7 @@ window.ComboPage = (function () {
       _buildChart(cfg, state);
       _renderTable(cfg, state);
       _bindEvents(cfg, state, rebuild);
-      if (!cfg.pointInTime && !cfg.annualOnly) _injectAnnualToggle(cfg, state, rebuild);
+      if (!cfg.pointInTime && !cfg.annualOnly) _injectPeriodToggle(cfg, state, rebuild);
       // annualOnly: hide М-М button entirely (annual data never has month-over-month)
       if (cfg.annualOnly) {
         const momBtn = document.querySelector('[data-mode="mom"]');

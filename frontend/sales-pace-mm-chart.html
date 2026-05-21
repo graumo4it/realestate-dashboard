@@ -171,7 +171,6 @@ ComboPage.init({
   unit:      'ед./мес.',
   decimals:  0,
   fileName:  'sales-pace-mm',
-  hideMomForNonMonthly:   true,
   hideSeriesForPeriodicity: { ytd: ['quarterly', 'annual'] },
   onData(allData) {
     ['ytd', 'ma12'].forEach(key => {
