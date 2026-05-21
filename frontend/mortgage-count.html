@@ -136,7 +136,7 @@
           <div class="kpi-card-sm">
             <div class="kpi-label">Всего</div>
             <div class="kpi-value" id="kpi-total-value">—</div>
-            <div class="kpi-period" id="kpi-period">ед. · —</div>
+            <div class="kpi-period" id="kpi-total-period">ед. · —</div>
             <div class="kpi-deltas" id="kpi-total-deltas"></div>
           </div>
           <div class="kpi-card-sm">
@@ -210,342 +210,34 @@
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/period-toggle.js?v=4"></script>
+<script src="js/combo-page.js"></script>
 <script>
-const CODE_PRIMARY   = '6.7';
-const CODE_SECONDARY = '6.13';
-const CODE_TOTAL     = '6.1';
-const FMT_DECIMALS   = 0;
-const UNIT           = 'ед.';
-const TOOLTIP_SFX    = ' ед.';
-const DOWNLOAD_NAME  = 'mortgage_count';
-window.AGG_TYPE = 'sum';
-
-let chartInstance = null, allData = window.allData = {}, currentRange = null;
-let currentMode = 'absolute', currentTable = 'total';
-let activeSeries = new Set(['primary', 'secondary']);
-let isAnnual = false;
-
-api.categories().then(cats => {
-  document.getElementById('main-nav').innerHTML = cats.slice(0,8).map(c =>
-    `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
-}).catch(()=>{});
-
-async function init() {
-  allData = window.allData = await api.multiIndicatorData(`${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}`);
-  const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
-  if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
-  buildDropdown();
-  renderKPI();
-  buildChart();
-  renderTable();
-
-  // Инжектируем кнопку «Год»
-  const toolbar = document.querySelector('.chart-toolbar');
-  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
-    isAnnual = annual;
-    // В годовом режиме убираем м/м (нет смысла)
-    const momBtn = document.querySelector('[data-mode="mom"]');
-    if (momBtn) momBtn.style.display = annual ? 'none' : '';
-    if (annual && currentMode === 'mom') {
-      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-      document.querySelector('[data-mode="absolute"]').classList.add('active');
-      currentMode = 'absolute';
-    }
-    buildChart();
-    renderTable();
-  });
-}
-
-function getFiltered(code) {
-  const s = allData[code]?.series || [];
-  if (isAnnual) return s; // агрегация сделает свое
-  if (!currentRange) return s;
-  const pts = s.filter(p=>p.value!=null);
-  if (!pts.length) return s;
-  const last = new Date(pts[pts.length-1].date);
-  const cutoff = new Date(last);
-  cutoff.setFullYear(cutoff.getFullYear()-currentRange);
-  cutoff.setDate(1);
-  return s.filter(p=>new Date(p.date)>=cutoff);
-}
-
-function getAggregated(code) {
-  const raw = allData[code]?.series || [];
-  if (!isAnnual) return getFiltered(code);
-  const agg = AnnualToggle.aggregateAnnualSeries(raw, AGG_TYPE);
-  if (!currentRange) return agg;
-  const cutYear = new Date().getFullYear() - currentRange;
-  return agg.filter(p => parseInt(p.date) >= cutYear);
-}
-
-function buildMerged(sP, sS) {
-  const map = {};
-  sP.forEach(p=>{ map[p.date]={date:p.date,label:p.label,pP:p}; });
-  sS.forEach(p=>{ if(!map[p.date]) map[p.date]={date:p.date,label:p.label}; map[p.date].pS=p; });
-  const arr = Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
-  return arr.map((m,i)=>{
-    const vP=m.pP?.value!=null?Number(m.pP.value):null;
-    const vS=m.pS?.value!=null?Number(m.pS.value):null;
-    const total=(vP??0)+(vS??0);
-    const prevP=m.pP?.prev_year_value!=null?Number(m.pP.prev_year_value):null;
-    const prevS=m.pS?.prev_year_value!=null?Number(m.pS.prev_year_value):null;
-    const prevTotal=(prevP??0)+(prevS??0);
-    const yoyTotal=(prevP!=null||prevS!=null)&&prevTotal!==0?(total-prevTotal)/Math.abs(prevTotal)*100:null;
-    let momTotal=null;
-    if(i>0){
-      const prev=arr[i-1];
-      const prevM=(prev.pP?.value!=null?Number(prev.pP.value):0)+(prev.pS?.value!=null?Number(prev.pS.value):0);
-      momTotal=prevM!==0?(total-prevM)/Math.abs(prevM)*100:null;
-    }
-    return {...m,vP,vS,total,yoyTotal,momTotal};
-  });
-}
-
-function buildMergedAnnual(aggP, aggS) {
-  // Для годового режима — оба ряда уже агрегированы
-  const map = {};
-  aggP.forEach(p=>{ map[p.label]={date:p.date,label:p.label,pP:p}; });
-  aggS.forEach(p=>{
-    if(!map[p.label]) map[p.label]={date:p.date,label:p.label};
-    map[p.label].pS=p;
-  });
-  const arr = Object.values(map).sort((a,b)=>a.label.localeCompare(b.label));
-  return arr.map((m,i)=>{
-    const vP=m.pP?.value!=null?Number(m.pP.value):null;
-    const vS=m.pS?.value!=null?Number(m.pS.value):null;
-    const total=(vP??0)+(vS??0);
-    let yoyTotal=null, momTotal=null;
-    if(i>0){
-      const prev=arr[i-1];
-      const prevT=(prev.pP?.value!=null?Number(prev.pP.value):0)+(prev.pS?.value!=null?Number(prev.pS.value):0);
-      if(prevT!==0) yoyTotal=(total-prevT)/Math.abs(prevT)*100;
-    }
-    return {...m,vP,vS,total,yoyTotal,momTotal};
-  });
-}
-
-function renderKPI() {
-  const sP=(allData[CODE_PRIMARY]?.series||[]).filter(p=>p.value!=null);
-  const sS=(allData[CODE_SECONDARY]?.series||[]).filter(p=>p.value!=null);
-  const lP=sP[sP.length-1], lS=sS[sS.length-1];
-  if(!lP&&!lS) return;
-  const vP=lP?Number(lP.value):0, vS=lS?Number(lS.value):0;
-  const mergedAll=buildMerged(allData[CODE_PRIMARY]?.series||[],allData[CODE_SECONDARY]?.series||[]);
-  const lastM=mergedAll[mergedAll.length-1];
-  document.getElementById('kpi-total-value').textContent=fmtNum(vP+vS,FMT_DECIMALS);
-  document.getElementById('kpi-period').textContent=`${UNIT} · ${lP?.label||lS?.label||'—'}`;
-  document.getElementById('kpi-total-deltas').innerHTML=`<span>г/г: ${deltaHtml(lastM?.yoyTotal)}</span><span>м/м: ${deltaHtml(lastM?.momTotal)}</span>`;
-  document.getElementById('kpi-primary-value').textContent=fmtNum(vP,FMT_DECIMALS);
-  document.getElementById('kpi-primary-period').textContent=`${UNIT} · ${lP?.label||'—'}`;
-  document.getElementById('kpi-primary-deltas').innerHTML=`<span>г/г: ${deltaHtml(lP?.yoy_change_pct)}</span><span>м/м: ${deltaHtml(lP?.mom_change_pct)}</span>`;
-  document.getElementById('kpi-secondary-value').textContent=fmtNum(vS,FMT_DECIMALS);
-  document.getElementById('kpi-secondary-period').textContent=`${UNIT} · ${lS?.label||'—'}`;
-  document.getElementById('kpi-secondary-deltas').innerHTML=`<span>г/г: ${deltaHtml(lS?.yoy_change_pct)}</span><span>м/м: ${deltaHtml(lS?.mom_change_pct)}</span>`;
-}
-
-function buildChart() {
-  if(!chartInstance){
-    chartInstance=echarts.init(document.getElementById('main-chart'),null,{renderer:'canvas'});
-    window.addEventListener('resize',()=>chartInstance.resize());
-  }
-
-  let merged, sP, sS;
-  if (isAnnual) {
-    const aggP = getAggregated(CODE_PRIMARY);
-    const aggS = getAggregated(CODE_SECONDARY);
-    merged = buildMergedAnnual(aggP, aggS);
-    sP = aggP; sS = aggS;
-  } else {
-    sP = getFiltered(CODE_PRIMARY);
-    sS = getFiltered(CODE_SECONDARY);
-    const mergedFull = buildMerged(allData[CODE_PRIMARY]?.series||[], allData[CODE_SECONDARY]?.series||[]);
-    const filteredDates = new Set([...sP,...sS].map(p=>p.date));
-    merged = mergedFull.filter(p=>filteredDates.has(p.date));
-  }
-
-  const xData = merged.map(p=>p.label||fmtDate(p.date,'monthly'));
-  const isDelta = currentMode!=='absolute';
-  const field = currentMode==='yoy'?'yoy_change_pct':'mom_change_pct';
-  const totalField = currentMode==='yoy'?'yoyTotal':'momTotal';
-
-  const mapP={}; sP.forEach(p=>{mapP[p.date]=p;});
-  const mapS={}; sS.forEach(p=>{mapS[p.date]=p;});
-
-  const series=[];
-  if(!isDelta){
-    if(activeSeries.has('secondary')) series.push({name:'Вторичный',type:'bar',stack:'total',data:merged.map(p=>p.vS),itemStyle:{color:'#1A2B4A'},emphasis:{focus:'series'},barMaxWidth:isAnnual?40:24});
-    if(activeSeries.has('primary'))   series.push({name:'Первичный', type:'bar',stack:'total',data:merged.map(p=>p.vP),itemStyle:{color:'#F4A336'},emphasis:{focus:'series'},barMaxWidth:isAnnual?40:24});
-  } else {
-    if(activeSeries.has('primary'))   series.push({name:'Первичный', type:'line',data:merged.map(p=>mapP[p.date]?.[field]!=null?Number(mapP[p.date][field]):null),lineStyle:{color:'#F4A336',width:2},itemStyle:{color:'#F4A336'},symbol:'circle',symbolSize:4,connectNulls:false});
-    if(activeSeries.has('secondary')) series.push({name:'Вторичный',type:'line',data:merged.map(p=>mapS[p.date]?.[field]!=null?Number(mapS[p.date][field]):null),lineStyle:{color:'#1A2B4A',width:2},itemStyle:{color:'#1A2B4A'},symbol:'circle',symbolSize:4,connectNulls:false});
-    series.push({name:'Всего',type:'line',data:merged.map(p=>p[totalField]!=null?Number(p[totalField]):null),lineStyle:{color:'#E8341C',width:2.5},itemStyle:{color:'#E8341C'},symbol:'circle',symbolSize:4,connectNulls:false});
-  }
-
-  chartInstance.setOption({
-    animation:true,animationDuration:200,animationEasing:'cubicOut',
-    legend:{data:isDelta?['Первичный','Вторичный','Всего']:['Первичный','Вторичный'],top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
-    grid:{left:70,right:20,top:40,bottom:80},
-    dataZoom:[
-      {type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},selectedDataBackground:{lineStyle:{color:'#1A2B4A',width:1},areaStyle:{color:'rgba(26,43,74,0.08)'}},dataBackground:{lineStyle:{color:'#DDE2E8',width:1},areaStyle:{color:'rgba(221,226,232,0.3)'}},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},
-      {type:'inside',zoomOnMouseWheel:true,moveOnMouseMove:true,throttle:16},
-    ],
-    tooltip:{trigger:'axis',axisPointer:{type:isDelta?'line':'shadow'},backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
-      formatter:params=>{
-        let html=`<b>${params[0]?.axisValue}</b><br/>`,stack=0;
-        params.forEach(p=>{
-          if(p.value==null) return;
-          const val=isDelta?`${p.value>0?'+':''}${fmtNum(p.value,1)}%`:fmtNum(p.value,FMT_DECIMALS)+TOOLTIP_SFX;
-          html+=`<span style="color:${p.color}">●</span> ${p.seriesName}: <b>${val}</b><br/>`;
-          if(!isDelta&&p.seriesName!=='Всего') stack+=p.value;
-        });
-        if(!isDelta) html+=`<span style="color:#aaa">Всего: <b>${fmtNum(stack,FMT_DECIMALS)}${TOOLTIP_SFX}</b></span>`;
-        return html;
-      }
-    },
-    xAxis:{type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
-    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?(v>0?'+':'')+fmtNum(v,1)+'%':fmtNum(v,FMT_DECIMALS)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
-    series,
-  },true);
-}
-
-function renderTable() {
-  const body = document.getElementById('data-table-body');
-
-  if (isAnnual) {
-    // Годовой режим: агрегируем каждый ряд и строим merged
-    const aggP = getAggregated(CODE_PRIMARY);
-    const aggS = getAggregated(CODE_SECONDARY);
-    const aggT = AnnualToggle.aggregateAnnualSeries(allData[CODE_TOTAL]?.series||[], AGG_TYPE);
-    const aggTMap = {}; aggT.forEach(p=>{ aggTMap[p.label]=p; });
-
-    if (currentTable === 'total') {
-      const rows = buildMergedAnnual(aggP, aggS).reverse();
-      body.innerHTML = rows.map(p=>`<tr><td>${p.label}</td><td class="num">${fmtNum(p.total,FMT_DECIMALS)} ${UNIT}</td><td class="num">${deltaHtml(p.yoyTotal)}</td><td class="num">—</td></tr>`).join('');
-    } else {
-      const agg = currentTable==='primary' ? aggP : aggS;
-      body.innerHTML = agg.slice().reverse().map(p=>`<tr><td>${p.label}</td><td class="num">${p.value!=null?fmtNum(Number(p.value),FMT_DECIMALS)+' '+UNIT:'—'}</td><td class="num">${deltaHtml(p.yoy_change_pct)}</td><td class="num">—</td></tr>`).join('');
-    }
-    return;
-  }
-
-  const sP=getFiltered(CODE_PRIMARY),sS=getFiltered(CODE_SECONDARY);
-  const merged=buildMerged(sP,sS).reverse();
-  if(currentTable==='total'){
-    body.innerHTML=merged.map(p=>`<tr><td>${p.label||fmtDate(p.date,'monthly')}</td><td class="num">${fmtNum(p.total,FMT_DECIMALS)} ${UNIT}</td><td class="num">${deltaHtml(p.yoyTotal)}</td><td class="num">${deltaHtml(p.momTotal)}</td></tr>`).join('');
-  } else {
-    const code=currentTable==='primary'?CODE_PRIMARY:CODE_SECONDARY;
-    const s=getFiltered(code).slice().reverse();
-    body.innerHTML=s.map(p=>`<tr><td>${p.label||fmtDate(p.date,'monthly')}</td><td class="num">${p.value!=null?fmtNum(Number(p.value),FMT_DECIMALS)+' '+UNIT:'—'}</td><td class="num">${deltaHtml(p.yoy_change_pct)}</td><td class="num">${deltaHtml(p.mom_change_pct)}</td></tr>`).join('');
-  }
-}
-
-document.querySelectorAll('[data-range]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);
-    buildChart();renderTable();
-  });
-});
-document.querySelectorAll('[data-mode]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentMode=btn.dataset.mode; buildChart();
-  });
-});
-document.querySelectorAll('[data-series]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const k=btn.dataset.series;
-    if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active');}}
-    else{activeSeries.add(k);btn.classList.add('active');}
-    buildChart();
-  });
-});
-document.querySelectorAll('[data-table]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active'); currentTable=btn.dataset.table; renderTable();
-  });
-});
-document.getElementById('btn-download-png')?.addEventListener('click',()=>{
-  if(!chartInstance) return;
-  const url=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});
-  const a=document.createElement('a');a.href=url;a.download=DOWNLOAD_NAME+'.png';a.click();
-});
-document.getElementById('btn-download-xlsx')?.addEventListener('click',()=>{
-  const xlsxUrl = `${window.API_BASE}/multi/data.xlsx?codes=${CODE_PRIMARY},${CODE_SECONDARY},${CODE_TOTAL}&labels=Первичный%20рынок%2CВторичный%20рынок%2CВесь%20рынок&title=Количество%20предоставленных%20ипотечных%20кредитов%20в%20рублях&filename=mortgage_count`;
-  window.open(xlsxUrl);
-});
-
-// ── Горизонтальная панель: дропдаун «Тип индикатора» ──────────────────────
-const _FILTER_LABELS = {"primary": "Первичный", "secondary": "Вторичный"};
-const _FILTER_COLORS = {"primary": "#F4A336", "secondary": "#1A2B4A"};
-const _FILTER_KEYS   = ["primary", "secondary"];
-
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  _FILTER_KEYS.forEach(key => {
-    const item = document.createElement('div');
-    item.className = 'filter-dropdown-item';
-    item.dataset.key = key;
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = `cb-${key}`;
-    cb.checked = activeSeries.has(key);
-    const dot = document.createElement('span');
-    dot.className = 'kpi-dot';
-    dot.style.background = _FILTER_COLORS[key];
-    const lbl = document.createElement('span');
-    lbl.textContent = _FILTER_LABELS[key];
-    item.appendChild(cb); item.appendChild(dot); item.appendChild(lbl);
-    dropdown.appendChild(item);
-  });
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const key = item.dataset.key;
-    const cb = item.querySelector('input');
-    if (e.target !== cb) cb.checked = !cb.checked;
-    if (cb.checked) { activeSeries.add(key); }
-    else { if (activeSeries.size <= 1) { cb.checked = true; return; } activeSeries.delete(key); }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  _FILTER_KEYS.forEach(key => {
-    const cb = document.getElementById(`cb-${key}`);
-    if (cb) cb.checked = activeSeries.has(key);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  if (!btn) return;
-  const allActive = _FILTER_KEYS.every(k => activeSeries.has(k));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  const dd = document.getElementById('series-dropdown');
-  if (dd) dd.style.display = 'none';
-});
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(_FILTER_KEYS);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-
-init().catch(console.error);
+const CODES = { total: '6.1', primary: '6.7', secondary: '6.13' };
+ComboPage.init({
+  codes:     CODES,
+  labels:    { total: 'Всего', primary: 'Первичный', secondary: 'Вторичный' },
+  colors:    { total: '#E8341C', primary: '#1A2B4A', secondary: '#F4A336' },
+  keys:      ['total', 'primary', 'secondary'],
+  chartType: 'bar',
+  stackBars: true,
+  aggType:   'sum',
+  unit:      'ед.',
+  decimals:  0,
+  fileName:  'mortgage-count',
+  initialActiveSeries: ['primary', 'secondary'],
+  onData(allData) {
+    ['total', 'primary', 'secondary'].forEach(key => {
+      const series = allData[CODES[key]]?.series || [];
+      const last   = series.filter(p => p.value != null).pop();
+      if (!last) return;
+      document.getElementById(`kpi-${key}-value`).textContent  = fmtNum(Number(last.value), 0);
+      document.getElementById(`kpi-${key}-period`).textContent = `ед. · ${last.label || fmtDate(last.date, 'monthly') || '—'}`;
+      document.getElementById(`kpi-${key}-deltas`).innerHTML   =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct, false)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct, false)}</span>`;
+    });
+  },
+}).catch(console.error);
 </script>
 </body>
 </html>

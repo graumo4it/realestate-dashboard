@@ -218,296 +218,32 @@
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/period-toggle.js?v=4"></script>
+<script src="js/combo-page.js"></script>
 <script>
-window.CODES = {'total': '6.75', 'build': '6.81', 'buy': '6.87'};
-const COLORS  = {'total': '#E8341C', 'build': '#1A2B4A', 'buy': '#F4A336'};
-const LABELS  = {'total': 'Всего (ИЖС)', 'build': 'Строительство', 'buy': 'Покупка'};
-const KEYS    = ['total', 'build', 'buy'];
-const FMT     = 0;
-const UNIT    = 'руб.';
-const SFX     = ' руб.';
-const CHART_T = 'line';
-const FNAME   = 'igs-payment';
-let isAnnual  = false;
-
-const _deltaFn = deltaHtml;
-
-window._WEIGHT_CODES = {};
-let chartInstance = null, allData = window.allData = {}, currentRange = null;
-let currentMode = 'absolute', currentTable = KEYS[0];
-let activeSeries = new Set(KEYS);
-
-// Строим кнопки фильтров сайдбара динамически
-(function buildSidebarFilters() {
-  const container = document.getElementById('series-filters');
-  if (!container) return;
-  KEYS.forEach(key => {
-    const btn = document.createElement('button');
-    btn.className = 'filter-btn active';
-    btn.dataset.series = key;
-    btn.innerHTML = `<span class="kpi-dot" style="background:${COLORS[key]};margin-right:4px"></span>${LABELS[key]}`;
-    container.appendChild(btn);
-  });
-})();
-
-api.categories().then(cats => {
-  document.getElementById('main-nav').innerHTML = cats.slice(0,8).map(c =>
-    `<a href="category.html?code=${c.code}">${c.name}</a>`).join('');
-}).catch(()=>{});
-
-function buildDropdown() {
-  const dropdown = document.getElementById('series-dropdown');
-  dropdown.innerHTML = '';
-  KEYS.forEach(key => {
-    const item = document.createElement('div');
-    item.className = 'filter-dropdown-item';
-    item.dataset.key = key;
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.id = `cb-${key}`;
-    cb.checked = activeSeries.has(key);
-
-    const dot = document.createElement('span');
-    dot.className = 'kpi-dot';
-    dot.style.background = COLORS[key];
-
-    const lbl = document.createElement('span');
-    lbl.textContent = LABELS[key];
-
-    item.appendChild(cb);
-    item.appendChild(dot);
-    item.appendChild(lbl);
-    dropdown.appendChild(item);
-  });
-
-  // Один делегированный обработчик на весь дропдаун
-  dropdown.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.filter-dropdown-item');
-    if (!item) return;
-    const key = item.dataset.key;
-    const cb = item.querySelector('input');
-    const nowChecked = cb.checked;
-
-    // Если кликнули не на чекбокс — вручную инвертируем
-    if (e.target !== cb) {
-      cb.checked = !nowChecked;
-    }
-
-    if (cb.checked) {
-      activeSeries.add(key);
-    } else {
-      if (activeSeries.size <= 1) { cb.checked = true; return; }
-      activeSeries.delete(key);
-    }
-    updateFilterBtnState();
-    buildChart();
-  });
-}
-
-function syncDropdown() {
-  KEYS.forEach(key => {
-    const cb = document.getElementById(`cb-${key}`);
-    if (cb) cb.checked = activeSeries.has(key);
-  });
-}
-
-function updateFilterBtnState() {
-  const btn = document.getElementById('btn-filter-series');
-  const allActive = KEYS.every(k => activeSeries.has(k));
-  btn.classList.toggle('has-active', !allActive);
-}
-
-// Открыть/закрыть дропдаун
-document.getElementById('btn-filter-series').addEventListener('click', e => {
-  e.stopPropagation();
-  const dd = document.getElementById('series-dropdown');
-  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-});
-document.addEventListener('click', () => {
-  document.getElementById('series-dropdown').style.display = 'none';
-});
-document.getElementById('series-dropdown').addEventListener('click', e => e.stopPropagation());
-
-// Сбросить
-document.getElementById('btn-reset-filters').addEventListener('click', () => {
-  activeSeries = new Set(KEYS);
-  syncDropdown();
-  updateFilterBtnState();
-  buildChart();
-});
-
-api.categories().then(() => {}).catch(() => {});
-
-async function init() {
-  // Загружаем основные коды + весовые коды если нужно
-  const allCodes = [...new Set([...Object.values(CODES), ...Object.values(_WEIGHT_CODES)])];
-  allData = window.allData = await api.multiIndicatorData(allCodes.join(','));
-  const dates = Object.values(allData).map(d=>d.indicator?.last_updated).filter(Boolean);
-  if (dates.length) document.getElementById('chart-updated').textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
-  buildDropdown();
-  renderKPI(); buildChart(); renderTable();
-
-}
-
-function getFiltered(key) {
-  if (isAnnual) {
-    const raw = allData[CODES[key]]?.series || [];
-    let agg;
-    if (Object.keys(_WEIGHT_CODES).length > 0) {
-      const wCode = _WEIGHT_CODES[key];
-      const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
-      agg = AnnualToggle.aggregateWavgSeries(raw, wRaw);
-    } else {
-      agg = AnnualToggle.aggregateAnnualSeries(raw, 'avg');
-    }
-    if (!currentRange) return agg;
-    const cy = new Date().getFullYear() - currentRange;
-    return agg.filter(p => parseInt(p.label || p.date) >= cy);
-  }
-  const s = allData[CODES[key]]?.series || [];
-  if (!currentRange) return s;
-  const pts = s.filter(p=>p.value!=null);
-  if (!pts.length) return s;
-  const last = new Date(pts[pts.length-1].date);
-  const cutoff = new Date(last);
-  cutoff.setFullYear(cutoff.getFullYear()-currentRange);
-  cutoff.setDate(1);
-  return s.filter(p=>new Date(p.date)>=cutoff);
-}
-
-function renderKPI() {
-  KEYS.forEach(key => {
-    const s = (allData[CODES[key]]?.series||[]).filter(p=>p.value!=null);
-    const last = s[s.length-1];
-    if (!last) return;
-    const elV = document.getElementById(`kpi-${key}-value`);
-    const elP = document.getElementById(`kpi-${key}-period`);
-    const elD = document.getElementById(`kpi-${key}-deltas`);
-    if (elV) elV.textContent  = fmtNum(Number(last.value), FMT);
-    if (elP) elP.textContent  = last.label || '—';
-    if (elD) elD.innerHTML    = `<span>г/г: ${_deltaFn(last.yoy_change_pct)}</span><span>м/м: ${_deltaFn(last.mom_change_pct)}</span>`;
-  });
-}
-
-function buildChart() {
-  if (!chartInstance) {
-    chartInstance = echarts.init(document.getElementById('main-chart'), null, {renderer:'canvas'});
-    window.addEventListener('resize', ()=>chartInstance.resize());
-  }
-  const allDates = [...new Set([...activeSeries].flatMap(k=>getFiltered(k).map(p=>p.date||p.label)))].sort();
-  const isDelta = currentMode !== 'absolute';
-  const field   = currentMode === 'yoy' ? 'yoy_change_pct' : 'mom_change_pct';
-  const maps = {};
-  KEYS.forEach(k => { const m={}; getFiltered(k).forEach(p=>{m[p.date||p.label]=p;}); maps[k]=m; });
-  const xData = allDates.map(d => {
-    for (const k of activeSeries) { const p=maps[k][d]; if(p?.label) return p.label; }
-    return d;
-  });
-  const series = [...activeSeries].map(key => {
-    const data = allDates.map(d => {
-      const p = maps[key][d];
-      if (!p||p.value==null) return null;
-      return isDelta?(p[field]!=null?Number(p[field]):null):Number(p.value);
+const CODES = { total: '6.75', build: '6.81', buy: '6.87' };
+ComboPage.init({
+  codes:     CODES,
+  labels:    { total: 'Всего (ИЖС)', build: 'Строительство', buy: 'Покупка' },
+  colors:    { total: '#E8341C', build: '#1A2B4A', buy: '#F4A336' },
+  keys:      ['total', 'build', 'buy'],
+  chartType: 'line',
+  aggType:   'avg',
+  unit:      'руб.',
+  decimals:  0,
+  fileName:  'igs-payment',
+  onData(allData) {
+    ['total', 'build', 'buy'].forEach(key => {
+      const series = allData[CODES[key]]?.series || [];
+      const last   = series.filter(p => p.value != null).pop();
+      if (!last) return;
+      document.getElementById(`kpi-${key}-value`).textContent = fmtNum(Number(last.value), 0);
+      document.getElementById(`kpi-${key}-period`).textContent = last.label || fmtDate(last.date, 'monthly') || '—';
+      document.getElementById(`kpi-${key}-deltas`).innerHTML =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct, false)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct, false)}</span>`;
     });
-    if (CHART_T==='bar'&&!isDelta) {
-      return {name:LABELS[key],type:'bar',stack:'total',data,itemStyle:{color:COLORS[key]},emphasis:{focus:'series'},barMaxWidth:isAnnual?40:24};
-    }
-    return {name:LABELS[key],type:'line',data,lineStyle:{color:COLORS[key],width:2.5},itemStyle:{color:COLORS[key]},symbol:allDates.length<60?'circle':'none',symbolSize:4,connectNulls:false};
-  });
-  chartInstance.setOption({
-    animation:true,animationDuration:200,
-    legend:{data:[...activeSeries].map(k=>LABELS[k]),top:0,left:0,textStyle:{fontFamily:'IBM Plex Sans',fontSize:12,color:'#3D4F60'},icon:'circle',itemWidth:10,itemHeight:10},
-    grid:{left:70,right:20,top:40,bottom:80},
-    dataZoom:[{type:'slider',bottom:8,height:24,borderColor:'#DDE2E8',backgroundColor:'#F2F4F7',fillerColor:'rgba(26,43,74,0.10)',handleStyle:{color:'#1A2B4A',borderColor:'#1A2B4A',borderWidth:2},textStyle:{fontFamily:'IBM Plex Sans',fontSize:10,color:'#7A8B9A'},brushSelect:false,throttle:16},{type:'inside',throttle:16}],
-    tooltip:{trigger:'axis',axisPointer:{type:CHART_T==='bar'&&!isDelta?'shadow':'line'},backgroundColor:'#0D1B2A',borderColor:'#0D1B2A',textStyle:{color:'#fff',fontFamily:'IBM Plex Sans',fontSize:13},
-      formatter:params=>{
-        let html=`<b>${params[0]?.axisValue}</b><br/>`,stack=0;
-        params.forEach(p=>{
-          if(p.value==null) return;
-          const val=isDelta?((p.value>0?'+':'')+fmtNum(p.value,2)+'%'):fmtNum(p.value,FMT)+SFX;
-          html+='<span style="color:'+p.color+'">●</span> '+p.seriesName+': <b>'+val+'</b><br/>';
-          if(!isDelta) stack+=p.value;
-        });
-        if(!isDelta&&series.length>1) html+=`<span style="color:#aaa">Итого: <b>${fmtNum(stack,FMT)}${SFX}</b></span>`;
-        return html;
-      }
-    },
-    xAxis:{type:'category',data:xData,axisLabel:{fontFamily:'IBM Plex Sans',fontSize:11,color:'#7A8B9A',rotate:xData.length>36?30:0},axisLine:{lineStyle:{color:'#DDE2E8'}},axisTick:{show:false}},
-    yAxis:{type:'value',axisLabel:{fontFamily:'IBM Plex Mono',fontSize:11,color:'#7A8B9A',formatter:v=>isDelta?((v>0?'+':'')+fmtNum(v,2)+'%'):fmtNum(v,FMT)},splitLine:{lineStyle:{color:'#DDE2E8',type:'dashed'}},axisLine:{show:false},axisTick:{show:false}},
-    series,
-  },true);
-}
-
-function renderTable() {
-  const s = getFiltered(currentTable).slice().reverse();
-  document.getElementById('data-table-body').innerHTML = s.map(p=>`<tr>
-    <td>${p.label||(p.date?fmtDate(p.date,'monthly'):'—')}</td>
-    <td class="num">${p.value!=null?fmtNum(Number(p.value),FMT)+' '+UNIT:'—'}</td>
-    <td class="num">${_deltaFn(p.yoy_change_pct)}</td>
-    <td class="num">${isAnnual?'—':_deltaFn(p.mom_change_pct)}</td>
-  </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
-}
-
-document.addEventListener('click', e=>{
-  const btn = e.target.closest('[data-range]');
-  if(btn){document.querySelectorAll('[data-range]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentRange=btn.dataset.range==='all'?null:Number(btn.dataset.range);buildChart();renderTable()}
-});
-document.addEventListener('click', e=>{
-  const btn = e.target.closest('[data-mode]');
-  if(btn){document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentMode=btn.dataset.mode;buildChart()}
-});
-document.addEventListener('click', e=>{
-  const btn = e.target.closest('[data-series]');
-  if(btn){const k=btn.dataset.series;if(activeSeries.has(k)){if(activeSeries.size>1){activeSeries.delete(k);btn.classList.remove('active')}}else{activeSeries.add(k);btn.classList.add('active')}buildChart()}
-});
-document.addEventListener('click', e=>{
-  const btn = e.target.closest('[data-table]');
-  if(btn){document.querySelectorAll('[data-table]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');currentTable=btn.dataset.table;renderTable()}
-});
-document.getElementById('btn-download-png')?.addEventListener('click',()=>{if(!chartInstance)return;const a=document.createElement('a');a.href=chartInstance.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#fff'});a.download=FNAME+'.png';a.click()});
-document.getElementById('btn-download-xlsx')?.addEventListener('click',()=>{
-  const codes=Object.values(CODES).join(',');
-  const labels=encodeURIComponent(Object.values(LABELS).join(','));
-  window.open(`${window.API_BASE}/multi/data.xlsx?codes=${codes}&labels=${labels}&filename=${FNAME}`);
-});
-init().catch(console.error);
-
-// ── Кнопка «Год» ─────────────────────────────────────────────────────────
-
-function _getAgg(key) {
-  const raw = allData[CODES[key]]?.series || [];
-  if ('avg' === 'wavg') {
-    const wCode = _WEIGHT_CODES[key];
-    const wRaw  = wCode ? (allData[wCode]?.series || []) : [];
-    return AnnualToggle.aggregateWavgSeries(raw, wRaw);
-  }
-  return AnnualToggle.aggregateAnnualSeries(raw, 'avg');
-}
-
-function _annRange(agg) {
-  if (!currentRange) return agg;
-  const cy = new Date().getFullYear() - currentRange;
-  return agg.filter(p => parseInt(p.label || p.date) >= cy);
-}
-
-(function _initAnnualBtn() {
-  const toolbar = document.querySelector('.chart-toolbar');
-  AnnualToggle.injectAnnualBtn(toolbar, (annual) => {
-    isAnnual = annual;
-    const momBtn = document.querySelector('[data-mode="mom"]');
-    if (momBtn) momBtn.style.display = annual ? 'none' : '';
-    if (annual && currentMode === 'mom') {
-      document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
-      const ab = document.querySelector('[data-mode="absolute"]');
-      if (ab) { ab.classList.add('active'); currentMode = 'absolute'; }
-    }
-    buildChart();
-    renderTable();
-  });
-})();
-
+  },
+}).catch(console.error);
 </script>
 </body>
 </html>

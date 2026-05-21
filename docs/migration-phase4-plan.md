@@ -10,7 +10,7 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 
 ## Текущее состояние
 
-### Уже мигрировано (27 страниц)
+### Уже мигрировано (32 страницы)
 
 **Phases 1–3 (10 страниц):**
 `igs-count`, `igs-rate`, `igs-term`, `igs-volume`, `mortgage-rate`, `mortgage-term`, `mortgage-volume`, `subsidy-count`, `subsidy-volume`, `uc-new`
@@ -23,12 +23,16 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 
 > Расширения ComboPage добавлены: `annualOnly`, `hideMomForNonMonthly`, `hideSeriesForPeriodicity`
 
-### Требуют миграции (10 страниц) — по батчам
+**Батч 4c — AnnualToggle (5 страниц) ✅:**
+`igs-payment`, `igs-size`, `mortgage-count`, `mortgage-payment`, `mortgage-size`
+
+> Расширения ComboPage добавлены: `initialActiveSeries`, расцеплена `_renderTable` от `activeSeries`
+
+### Требуют миграции (5 страниц) — по батчам
 
 | Батч | Страницы | Характеристика |
 |------|----------|---------------|
-| **4c — AnnualToggle** (6) | `combo-chart`, `igs-payment`, `igs-size`, `mortgage-count`, `mortgage-payment`, `mortgage-size` | Используют `AnnualToggle` — удалить + перенести на ComboPage |
-| **4d — Complex** (4) | `apartments-share`, `ihh-chart`, `prices-chart`, `share-chart` | `buildComputed()`, нестандартные вычисления, требуют `onData` hook или расширения ComboPage |
+| **4d — Complex** (5) | `combo-chart`, `apartments-share`, `ihh-chart`, `prices-chart`, `share-chart` | `buildComputed()`, стековые бары + total-линия, нестандартные вычисления, требуют `onData` hook или расширения ComboPage |
 
 ---
 
@@ -76,14 +80,13 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 4. Передать агрегацию в `ComboPage.init()` через `aggType` + `codes: { key: { value, weight } }` для wavg
 5. `combo-chart.html` отдельно — у неё `buildMerged()` для total = sum(2.2, 2.3); перенести через `onData`
 
-**combo-chart.html специфика** (МЖС + ИЖС):
-- Вычисляет `total = v22 + v23` — реализовать через `onData: (data) => { data['total'] = ... }`
-- Добавить `'total'` в `keys` с `labels['total'] = 'Всего'`
-- Три вкладки таблицы (Всего / МЖС / ИЖС) — поддерживаются ComboPage через `[data-table]` вкладки
+**combo-chart.html специфика** (МЖС + ИЖС) — перенесена в 4d:
+- Смешанный bar/line по режиму, total-линия всегда в дельта-режиме, вычисленный total = sum(2.2, 2.3)
+- Несовместимо с текущим ComboPage без значительного расширения
 
-**igs-payment / igs-size**: `aggType: 'wavg'` с парами `{ value, weight }`.
-**mortgage-count**: `aggType: 'sum'`.
-**mortgage-payment / mortgage-size**: `aggType: 'wavg'`.
+**igs-payment / igs-size** ✅: `aggType: 'avg'` (расчётные показатели, веса не нужны), `onData` hook для 3 KPI.
+**mortgage-count** ✅: `aggType: 'sum'`, `chartType: 'bar'`, `stackBars: true`, `initialActiveSeries: ['primary', 'secondary']`.
+**mortgage-payment / mortgage-size** ✅: `aggType: 'avg'`, `onData` hook для 3 KPI.
 
 ### Батч 4d: Complex pages
 Требуют отдельного исследования перед миграцией.
@@ -128,8 +131,8 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 ```
 Phase 4a (11 страниц) → коммит ✅
 Phase 4b (6 страниц)  → коммит ✅
-Phase 4c (6 страниц)  → коммит
-Phase 4d (4 страницы) → коммит
+Phase 4c (5 страниц)  → коммит ✅
+Phase 4d (5 страниц)  → коммит
 Phase 5  (shim removal) → коммит
 ```
 

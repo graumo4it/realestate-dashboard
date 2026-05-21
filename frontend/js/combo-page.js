@@ -19,6 +19,7 @@
  *   annualOnly   {boolean} annual-only data — hide period toggle AND М-М button entirely
  *   hideMomForNonMonthly {boolean} hide М-М when quarterly/annual; auto-reset to Значения
  *   hideSeriesForPeriodicity {Object} { key: ['quarterly','annual'] } — hide series for specific periods
+ *   initialActiveSeries {Array}  keys active in chart filter on load (default: all keys)
  *
  * Extra codes: keys in config.codes that are NOT in config.keys are still fetched
  * and appear in allData (useful for KPI-only series like a pre-computed total).
@@ -81,12 +82,15 @@ window.ComboPage = (function () {
     const hideMomForNonMonthly = Boolean(config.hideMomForNonMonthly);
     // hideSeriesForPeriodicity: { key: ['quarterly','annual'] } — hide specific series for periods
     const hideSeriesForPeriodicity = config.hideSeriesForPeriodicity || null;
+    // initialActiveSeries: keys initially checked in chart filter (default: all keys)
+    const initialActiveSeries = config.initialActiveSeries || null;
 
     return {
       keys, labels: config.labels, colors,
       valueCode, weightCode,
       aggType, chartType, stackBars, unit, decimals, fileName,
       isPp, sfx, pointInTime, annualOnly, hideMomForNonMonthly, hideSeriesForPeriodicity,
+      initialActiveSeries,
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
     };
@@ -386,11 +390,17 @@ window.ComboPage = (function () {
     const body = document.getElementById('data-table-body');
     if (!body) return;
 
-    // If current table key is hidden by hideSeriesForPeriodicity, use first visible key
-    const effective = _getEffectiveActiveSeries(cfg, state);
+    // Table tabs are independent of the chart filter (activeSeries).
+    // Available table keys = all keys, filtered only by hideSeriesForPeriodicity rules.
+    // This lets users see data for any series in the table even if hidden from the chart.
+    const period = state.currentPeriodicity || 'monthly';
+    const availableForTable = new Set(cfg.keys.filter(k => {
+      const hf = cfg.hideSeriesForPeriodicity?.[k];
+      return !hf || !hf.includes(period);
+    }));
     let tableKey = state.currentTable;
-    if (!effective.has(tableKey)) {
-      tableKey = [...effective][0];
+    if (!availableForTable.has(tableKey)) {
+      tableKey = [...availableForTable][0];
       if (!tableKey) return;
     }
 
@@ -474,7 +484,7 @@ window.ComboPage = (function () {
     const resetBtn = document.getElementById('btn-reset-filters');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        state.activeSeries = new Set(cfg.keys);
+        state.activeSeries = new Set(cfg.initialActiveSeries || cfg.keys);
         _syncDropdown(cfg, state);
         _updateFilterBtnState(cfg, state);
         _buildChart(cfg, state);
@@ -572,7 +582,7 @@ window.ComboPage = (function () {
     const state = {
       allData:            {},
       chartInstance:      null,
-      activeSeries:       new Set(cfg.keys),
+      activeSeries:       new Set(cfg.initialActiveSeries || cfg.keys),
       currentRange:       null,
       currentMode:        'absolute',
       currentTable:       cfg.keys[0],
