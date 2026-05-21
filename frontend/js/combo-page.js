@@ -138,7 +138,9 @@ window.ComboPage = (function () {
 
   // ── 4. _getFiltered ───────────────────────────────────────────────────
   function _getFiltered(key, cfg, state) {
-    const raw    = state.allData[cfg.valueCode[key]]?.series || [];
+    // Null codes (virtual series) are injected by preProcess under allData[key] directly
+    const lookupCode = cfg.valueCode[key] ?? key;
+    const raw    = state.allData[lookupCode]?.series || [];
     const wCode  = cfg.weightCode[key];
     const weight = wCode ? (state.allData[wCode]?.series || []) : [];
 
