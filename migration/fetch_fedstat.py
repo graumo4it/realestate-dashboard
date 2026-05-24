@@ -44,6 +44,24 @@ CUMULATIVE_QUARTERS = {
     "4 квартал":       (10, "Q4"),
 }
 
+# Отдельные месяцы (period_filter="true_monthly")
+# Ключ — название месяца в нижнем регистре (dim33560 из fedstat)
+# Значение — (номер месяца, заглавный вариант для period_label)
+MONTH_NAMES = {
+    "январь":   (1,  "Январь"),
+    "февраль":  (2,  "Февраль"),
+    "март":     (3,  "Март"),
+    "апрель":   (4,  "Апрель"),
+    "май":      (5,  "Май"),
+    "июнь":     (6,  "Июнь"),
+    "июль":     (7,  "Июль"),
+    "август":   (8,  "Август"),
+    "сентябрь": (9,  "Сентябрь"),
+    "октябрь":  (10, "Октябрь"),
+    "ноябрь":   (11, "Ноябрь"),
+    "декабрь":  (12, "Декабрь"),
+}
+
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -202,15 +220,16 @@ INDICATORS = [
         "code":       "1.3",
         "name":       "Среднемесячная номинальная начисленная заработная плата работников организаций",
         "unit":       "руб.",
-        "periodicity": "monthly",
+        "periodicity": "quarterly",
         "period_type": "period",
         "category":   "macro",
         "source":     "rosstat",
         "divisor":    1,
         "years":      list(range(2017, 2027)),
-        # Берём строки для каждого конкретного месяца (не накопительный период)
-        # dim33560 должен быть одним из месяцев (без дефиса)
-        "period_filter": "monthly",   # специальный режим
+        # Росстат публикует зарплату как накопительные кварталы:
+        # «янв-мар», «янв-июн», «янв-сен», «янв-дек» из dim33560.
+        # Хранятся на 1-е число начального месяца квартала (CUMULATIVE_QUARTERS).
+        "period_filter": "monthly",   # читает CUMULATIVE_QUARTERS из dim33560
         "payload_base": (
             "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=57940"
             "&lineObjectIds=57940&lineObjectIds=57831&lineObjectIds=33560"
@@ -245,7 +264,355 @@ INDICATORS = [
             "&selectedFilterIds=57940_1692933"
         ),
         "year_param":  "selectedFilterIds=3_{year}",
-        "row_filter":  {"dim57831": "Российская Федерация", "dim57940": "Всего по обследуемым видам экономической деятельности"},
+        # С середины 2025 fedstat переключил dim57831 на «Российская Федерация
+        # без учета новых субъектов». Каждый period (dim33560) встречается ровно
+        # один раз → фильтруем только по виду деятельности (dim57940).
+        "row_filter":  {"dim57940": "Всего по обследуемым видам экономической деятельности"},
+    },
+
+    # ── 2.3 Ввод жилья МЖС / организации (fedstat 34118) ────────────────────
+    # dim58389=1836599 — «Жилые здания» — только организации (МЖС).
+    # ⚠️ В fedstat «Жилые здания» = организации, НЕ grand total.
+    #    Grand total «Жилые здания, жилые помещения в нежилых зданиях
+    #    и жилые дома, построенные населением» вычисляется ниже: 2.1 = 2.3 + 2.2
+    # period_filter=true_monthly — 12 отдельных строк (январь..декабрь) на год
+    # row_filter_by_year: 2023+ — «без учёта новых субъектов»
+    {
+        "fedstat_id": "34118",
+        "code":       "2.3",
+        "name":       "Объём ввода жилья МЖС (организации)",
+        "unit":       "тыс. кв. м",
+        "periodicity": "monthly",
+        "period_type": "period",
+        "category":   "supply_volume",
+        "source":     "rosstat",
+        "divisor":    1,
+        "years":      list(range(2012, 2027)),
+        "period_filter": "true_monthly",
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=57831&lineObjectIds=58389"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_34118"
+            "&selectedFilterIds=30611_950292"
+            "&selectedFilterIds=33560_1540283"   # январь
+            "&selectedFilterIds=33560_1540282"   # февраль
+            "&selectedFilterIds=33560_1540236"   # март
+            "&selectedFilterIds=33560_1540229"   # апрель
+            "&selectedFilterIds=33560_1540235"   # май
+            "&selectedFilterIds=33560_1540234"   # июнь
+            "&selectedFilterIds=33560_1540233"   # июль
+            "&selectedFilterIds=33560_1540228"   # август
+            "&selectedFilterIds=33560_1540276"   # сентябрь
+            "&selectedFilterIds=33560_1540273"   # октябрь
+            "&selectedFilterIds=33560_1540272"   # ноябрь
+            "&selectedFilterIds=33560_1540230"   # декабрь
+            "&selectedFilterIds=57831_1688487"   # Российская Федерация
+            "&selectedFilterIds=57831_1849012"   # РФ без учёта новых субъектов (с 01.01.2023)
+            "&selectedFilterIds=58389_1836599"   # Жилые здания (всего)
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  None,
+        "row_filter_by_year": {
+            "default": {"dim57831": "Российская Федерация"},
+            2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+        },
+    },
+
+    # ── 2.2 Ввод жилья ИЖС (fedstat 34118) ──────────────────────────────────
+    # Тот же endpoint, другой dim58389: 1754556 = «Жилые дома, построенные населением»
+    # 2.1 (Всего) рассчитывается SQL-скриптом: 2.1 = 2.3 + 2.2
+    {
+        "fedstat_id": "34118",
+        "code":       "2.2",
+        "name":       "Объем ввода жилья, построенного населением (ИЖС), тыс. кв. м",
+        "unit":       "тыс. кв. м",
+        "periodicity": "monthly",
+        "period_type": "period",
+        "category":   "supply_volume",
+        "source":     "rosstat",
+        "divisor":    1,
+        "years":      list(range(2012, 2027)),
+        "period_filter": "true_monthly",
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=57831&lineObjectIds=58389"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_34118"
+            "&selectedFilterIds=30611_950292"
+            "&selectedFilterIds=33560_1540283"   # январь
+            "&selectedFilterIds=33560_1540282"   # февраль
+            "&selectedFilterIds=33560_1540236"   # март
+            "&selectedFilterIds=33560_1540229"   # апрель
+            "&selectedFilterIds=33560_1540235"   # май
+            "&selectedFilterIds=33560_1540234"   # июнь
+            "&selectedFilterIds=33560_1540233"   # июль
+            "&selectedFilterIds=33560_1540228"   # август
+            "&selectedFilterIds=33560_1540276"   # сентябрь
+            "&selectedFilterIds=33560_1540273"   # октябрь
+            "&selectedFilterIds=33560_1540272"   # ноябрь
+            "&selectedFilterIds=33560_1540230"   # декабрь
+            "&selectedFilterIds=57831_1688487"   # Российская Федерация
+            "&selectedFilterIds=57831_1849012"   # РФ без учёта новых субъектов (с 01.01.2023)
+            "&selectedFilterIds=58389_1754556"   # Жилые дома, построенные населением (ИЖС)
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  None,
+        "row_filter_by_year": {
+            "default": {"dim57831": "Российская Федерация"},
+            2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+        },
+    },
+
+    # ── 4.4 Цены первичного рынка (fedstat 31452) ────────────────────────────
+    # dim63148=1855614 — «Первичный рынок жилья»; dim58849=1752264 — «Все типы квартир»
+    # period_filter=monthly: читает строки с «I квартал» … «IV квартал» из dim33560
+    {
+        "fedstat_id": "31452",
+        "code":       "4.4",
+        "name":       "Средняя стоимость сделок с жильем (Росстат)",
+        "unit":       "руб. / кв. м",
+        "periodicity": "quarterly",
+        "period_type": "period",
+        "category":   "prices",
+        "source":     "rosstat",
+        "divisor":    1,
+        "years":      list(range(2000, 2027)),
+        "period_filter": "monthly",   # CUMULATIVE_QUARTERS включает «i квартал» и т.п.
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=57831&lineObjectIds=58849&lineObjectIds=63148"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_31452"
+            "&selectedFilterIds=30611_950351"
+            "&selectedFilterIds=33560_1540222"   # I квартал
+            "&selectedFilterIds=33560_1540224"   # II квартал
+            "&selectedFilterIds=33560_1540226"   # III квартал
+            "&selectedFilterIds=33560_1540227"   # IV квартал
+            "&selectedFilterIds=57831_1688487"   # Российская Федерация
+            "&selectedFilterIds=57831_1849012"   # РФ без учёта новых субъектов
+            "&selectedFilterIds=58849_1752264"   # Все типы квартир
+            "&selectedFilterIds=63148_1855614"   # Первичный рынок жилья
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  None,
+        "row_filter_by_year": {
+            "default": {"dim57831": "Российская Федерация"},
+            2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+        },
+    },
+
+    # ── 4.5 Цены вторичного рынка (fedstat 31452) ────────────────────────────
+    # Тот же endpoint, другой dim63148: 1855615 = «Вторичный рынок жилья»
+    {
+        "fedstat_id": "31452",
+        "code":       "4.5",
+        "name":       "Средняя стоимость 1 кв. м на вторичном рынке (все типы квартир)",
+        "unit":       "руб. / кв. м",
+        "periodicity": "quarterly",
+        "period_type": "period",
+        "category":   "prices",
+        "source":     "rosstat",
+        "divisor":    1,
+        "years":      list(range(2000, 2027)),
+        "period_filter": "monthly",
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=57831&lineObjectIds=58849&lineObjectIds=63148"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_31452"
+            "&selectedFilterIds=30611_950351"
+            "&selectedFilterIds=33560_1540222"   # I квартал
+            "&selectedFilterIds=33560_1540224"   # II квартал
+            "&selectedFilterIds=33560_1540226"   # III квартал
+            "&selectedFilterIds=33560_1540227"   # IV квартал
+            "&selectedFilterIds=57831_1688487"   # Российская Федерация
+            "&selectedFilterIds=57831_1849012"   # РФ без учёта новых субъектов
+            "&selectedFilterIds=58849_1752264"   # Все типы квартир
+            "&selectedFilterIds=63148_1855615"   # Вторичный рынок жилья
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  None,
+        "row_filter_by_year": {
+            "default": {"dim57831": "Российская Федерация"},
+            2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+        },
+    },
+
+    # ── 4.4.1–4.4.3  Первичный рынок по типам квартир (fedstat 31452) ─────────
+    # dim63148=1855614 — «Первичный рынок жилья»
+    # dim58849: 1752262=средние/типовые, 1752261=улучшенные, 1752260=элитные
+    *[
+        {
+            "fedstat_id": "31452",
+            "code":        code,
+            "name":        name,
+            "unit":        "руб. / кв. м",
+            "periodicity": "quarterly",
+            "period_type": "period",
+            "category":    "prices",
+            "source":      "rosstat",
+            "divisor":     1,
+            "years":       list(range(2000, 2027)),
+            "period_filter": "monthly",
+            "payload_base": (
+                "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+                "&lineObjectIds=57831&lineObjectIds=58849&lineObjectIds=63148"
+                "&columnObjectIds=3"
+                "&selectedFilterIds=0_31452"
+                "&selectedFilterIds=30611_950351"
+                "&selectedFilterIds=33560_1540222"
+                "&selectedFilterIds=33560_1540224"
+                "&selectedFilterIds=33560_1540226"
+                "&selectedFilterIds=33560_1540227"
+                "&selectedFilterIds=57831_1688487"
+                "&selectedFilterIds=57831_1849012"
+                f"&selectedFilterIds=58849_{apt_id}"
+                "&selectedFilterIds=63148_1855614"   # Первичный рынок
+            ),
+            "year_param":  "selectedFilterIds=3_{year}",
+            "row_filter":  None,
+            "row_filter_by_year": {
+                "default": {"dim57831": "Российская Федерация"},
+                2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            },
+        }
+        for code, name, apt_id in [
+            ("4.4.1", "Средняя стоимость 1 кв. м на первичном рынке — квартиры среднего качества (типовые)", "1752262"),
+            ("4.4.2", "Средняя стоимость 1 кв. м на первичном рынке — квартиры улучшенного качества",        "1752261"),
+            ("4.4.3", "Средняя стоимость 1 кв. м на первичном рынке — элитные квартиры",                    "1752260"),
+        ]
+    ],
+
+    # ── 4.5.1–4.5.4  Вторичный рынок по типам квартир (fedstat 31452) ─────────
+    # dim63148=1855615 — «Вторичный рынок жилья»
+    # dim58849: 1752263=низкого качества, 1752262=средние/типовые,
+    #           1752261=улучшенные, 1752260=элитные
+    *[
+        {
+            "fedstat_id": "31452",
+            "code":        code,
+            "name":        name,
+            "unit":        "руб. / кв. м",
+            "periodicity": "quarterly",
+            "period_type": "period",
+            "category":    "prices",
+            "source":      "rosstat",
+            "divisor":     1,
+            "years":       list(range(2000, 2027)),
+            "period_filter": "monthly",
+            "payload_base": (
+                "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+                "&lineObjectIds=57831&lineObjectIds=58849&lineObjectIds=63148"
+                "&columnObjectIds=3"
+                "&selectedFilterIds=0_31452"
+                "&selectedFilterIds=30611_950351"
+                "&selectedFilterIds=33560_1540222"
+                "&selectedFilterIds=33560_1540224"
+                "&selectedFilterIds=33560_1540226"
+                "&selectedFilterIds=33560_1540227"
+                "&selectedFilterIds=57831_1688487"
+                "&selectedFilterIds=57831_1849012"
+                f"&selectedFilterIds=58849_{apt_id}"
+                "&selectedFilterIds=63148_1855615"   # Вторичный рынок
+            ),
+            "year_param":  "selectedFilterIds=3_{year}",
+            "row_filter":  None,
+            "row_filter_by_year": {
+                "default": {"dim57831": "Российская Федерация"},
+                2023: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2024: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2025: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+                2026: {"dim57831": "Российская Федерация без учета новых субъектов (с 01.01.2023)"},
+            },
+        }
+        for code, name, apt_id in [
+            ("4.5.1", "Средняя стоимость 1 кв. м на вторичном рынке — квартиры низкого качества",            "1752263"),
+            ("4.5.2", "Средняя стоимость 1 кв. м на вторичном рынке — квартиры среднего качества (типовые)", "1752262"),
+            ("4.5.3", "Средняя стоимость 1 кв. м на вторичном рынке — квартиры улучшенного качества",        "1752261"),
+            ("4.5.4", "Средняя стоимость 1 кв. м на вторичном рынке — элитные квартиры",                    "1752260"),
+        ]
+    ],
+
+    # ── 2.13 Благоустройство жилфонда (fedstat 43507) ────────────────────────
+    # Годовой показатель; decimal-разделитель — точка (обрабатывается extract_value)
+    # dim58274=1707676 — «Всего» (без разбивки город/село)
+    # Для этого индикатора «без новых субъектов» в dim57831 нет → только РФ
+    {
+        "fedstat_id": "43507",
+        "code":       "2.13",
+        "name":       "Доля жилфонда, обеспеченного всеми видами благоустройства",
+        "unit":       "%",
+        "periodicity": "annual",
+        "period_type": "point_in_time",
+        "category":   "housing_stock",
+        "source":     "rosstat",
+        "divisor":    1,
+        "years":      list(range(2013, 2026)),
+        "period_filter": None,
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=57831&lineObjectIds=58274"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_43507"
+            "&selectedFilterIds=30611_950473"
+            "&selectedFilterIds=33560_1558883"   # значение показателя за год
+            "&selectedFilterIds=57831_1688487"   # Российская Федерация
+            "&selectedFilterIds=58274_1707676"   # Всего
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  {"dim57831": "Российская Федерация", "dim58274": "Всего"},
+    },
+
+    # ── 5.1 Кол-во ДДУ (fedstat 38088 — Росреестр через EMISS) ──────────────
+    # ⚠️  EMISS 38088 содержит данные только за 2010–2016!
+    #    Данные 2017+ загружены из другого источника (Excel Росреестра)
+    #    и хранятся в БД; повторная загрузка через fetch_fedstat охватывает
+    #    только исторический период. DO NOTHING не затронет существующие точки.
+    #
+    # Регион: dim38488 (не dim57831!), РФ = 1576112
+    # period_filter=monthly: «I квартал»..«IV квартал» есть в CUMULATIVE_QUARTERS
+    {
+        "fedstat_id": "38088",
+        "code":       "5.1",
+        "name":       "Общее количество ДДУ (Росреестр)",
+        "unit":       "ед.",
+        "periodicity": "quarterly",
+        "period_type": "period",
+        "category":   "demand",
+        "source":     "rosreestr",
+        "divisor":    1,
+        "years":      list(range(2010, 2017)),   # данные в EMISS 38088 только до 2016
+        "period_filter": "monthly",
+        "payload_base": (
+            "lineObjectIds=0&lineObjectIds=30611&lineObjectIds=33560"
+            "&lineObjectIds=38488"
+            "&columnObjectIds=3"
+            "&selectedFilterIds=0_38088"
+            "&selectedFilterIds=30611_950475"
+            "&selectedFilterIds=33560_1540222"   # I квартал
+            "&selectedFilterIds=33560_1540224"   # II квартал
+            "&selectedFilterIds=33560_1540226"   # III квартал
+            "&selectedFilterIds=33560_1540227"   # IV квартал
+            "&selectedFilterIds=38488_1576112"   # Российская Федерация
+        ),
+        "year_param":  "selectedFilterIds=3_{year}",
+        "row_filter":  {"dim38488": "Российская Федерация"},
     },
 
     # ── 1.2 Среднедушевые денежные доходы (fedstat 57039) ────────────────────
@@ -530,6 +897,18 @@ def get_conn():
         password=os.getenv("DB_PASSWORD", ""),
     )
 
+def get_last_date(conn, code: str):
+    """Возвращает MAX(period_date) для индикатора с кодом code, или None."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT MAX(dp.period_date)
+            FROM data_points dp
+            JOIN indicators i ON i.id = dp.indicator_id
+            WHERE i.code = %s
+        """, (code,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
 def get_id(conn, table, col, val):
     with conn.cursor() as cur:
         cur.execute(f"SELECT id FROM {table} WHERE {col} = %s", (val,))
@@ -560,9 +939,9 @@ def upsert_points(conn, ind_id, points):
         psycopg2.extras.execute_values(cur, """
             INSERT INTO data_points (indicator_id, period_date, period_label, value)
             VALUES %s
-            ON CONFLICT (indicator_id, period_date) DO UPDATE SET value=EXCLUDED.value
+            ON CONFLICT (indicator_id, period_date) DO NOTHING
         """, [(ind_id, p["date"], p["label"], p["value"]) for p in points])
-    return len(points)
+        return cur.rowcount   # кол-во фактически вставленных строк
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -598,6 +977,13 @@ def main():
             continue
 
         try:
+            # Инкрементальный фильтр: загружаем только с последнего года в БД
+            last_date = get_last_date(conn, ind["code"])
+            start_year = last_date.year if last_date else ind["years"][0]
+            years_to_fetch = [y for y in ind["years"] if y >= start_year]
+            log.info(f"  Последняя точка в БД: {last_date} → загружаем с {start_year} "
+                     f"({len(years_to_fetch)} из {len(ind['years'])} лет)")
+
             # Инициализируем сессию (получаем cookies)
             client.init_session(ind["fedstat_id"])
             time.sleep(1)
@@ -605,17 +991,23 @@ def main():
             points = []
             period_filter = ind.get("period_filter")
 
-            for year in ind["years"]:
+            for year in years_to_fetch:
                 results = client.fetch_year(
                     ind["fedstat_id"], year,
                     ind["payload_base"], ind["year_param"]
                 )
 
                 if period_filter == "monthly":
-                    # Берём 4 квартальных накопительных периода: Q1/Q2/Q3/Q4
+                    # Берём квартальные периоды (накопительные или порядковые) из dim33560
+                    # Поддерживает row_filter_by_year (как quarters_in_row)
                     year_points = []
+                    rf_by_year = ind.get("row_filter_by_year")
+                    if rf_by_year:
+                        row_f = rf_by_year.get(year, rf_by_year.get("default", {}))
+                    else:
+                        row_f = ind.get("row_filter") or {}
                     for row in results:
-                        if not row_matches(row, ind.get("row_filter", {})):
+                        if not row_matches(row, row_f):
                             continue
                         period_str = row.get("dim33560", "").strip().lower()
                         if period_str not in CUMULATIVE_QUARTERS:
@@ -634,6 +1026,36 @@ def main():
                         })
                     points.extend(year_points)
                     log.info(f"  {year}: {len(year_points)} кварталов (из {len(results)} строк)")
+
+                elif period_filter == "true_monthly":
+                    # Помесячные данные: каждая строка = один конкретный месяц (dim33560)
+                    # Используется для ввода жилья (34118): 12 строк на год
+                    year_points = []
+                    rf_by_year = ind.get("row_filter_by_year")
+                    if rf_by_year:
+                        row_f = rf_by_year.get(year, rf_by_year.get("default", {}))
+                    else:
+                        row_f = ind.get("row_filter") or {}
+                    for row in results:
+                        if not row_matches(row, row_f):
+                            continue
+                        period_str = row.get("dim33560", "").strip().lower()
+                        if period_str not in MONTH_NAMES:
+                            continue   # пропускаем накопительные периоды и кварталы
+                        month_num, m_label = MONTH_NAMES[period_str]
+                        val = extract_value(row, year)
+                        if val is None:
+                            continue
+                        divisor = ind.get("divisor", 1)
+                        if divisor != 1:
+                            val = val / divisor
+                        year_points.append({
+                            "date":  date(year, month_num, 1),
+                            "label": f"{m_label} {year}",
+                            "value": round(val, 4),
+                        })
+                    points.extend(year_points)
+                    log.info(f"  {year}: {len(year_points)} месяцев (из {len(results)} строк)")
                 elif period_filter == "quarters_in_row":
                     # Формат доходов: кварталы в ключах одной строки
                     quarter_ids = ind.get("quarter_ids", {})
@@ -699,6 +1121,38 @@ def main():
             import traceback; traceback.print_exc()
 
         time.sleep(2)
+
+    # Расчёт 2.1 (Всего = МЖС + ИЖС), если в этом запуске были 2.3 или 2.2
+    # ⚠️  2.3 = «Жилые здания» (орг.) из fedstat; 2.2 = ИЖС из fedstat
+    #     2.1 (grand total) = 2.3 + 2.2 — «Жилые здания, жилые помещения
+    #     в нежилых зданиях и жилые дома, построенные населением»
+    processed_codes = {ind["code"] for ind in indicators_to_run}
+    if processed_codes & {"2.3", "2.2"}:
+        log.info(f"\n{'='*60}")
+        log.info("Расчёт 2.1 = 2.3 + 2.2 (Всего = МЖС + ИЖС, SQL, DO NOTHING)...")
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO data_points (indicator_id, period_date, period_label, value)
+                    SELECT i.id,
+                           a.period_date,
+                           a.period_label,
+                           round((a.value + b.value)::numeric, 4)
+                    FROM data_points a
+                    JOIN data_points b
+                      ON b.period_date   = a.period_date
+                     AND b.indicator_id  = (SELECT id FROM indicators WHERE code = '2.2')
+                    JOIN indicators i ON i.code = '2.1'
+                    WHERE a.indicator_id = (SELECT id FROM indicators WHERE code = '2.3')
+                    ON CONFLICT (indicator_id, period_date) DO NOTHING
+                """)
+                n21 = cur.rowcount
+            conn.commit()
+            log.info(f"  [OK] Добавлено новых точек 2.1: {n21}")
+            total += n21
+        except Exception as e:
+            conn.rollback()
+            log.error(f"  [ERROR] расчёт 2.1: {e}")
 
     # Обновляем materialized view
     try:

@@ -36,8 +36,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-DRY_RUN = "--dry-run" in sys.argv
-
 MONTHS_RU = [
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
     "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
@@ -75,12 +73,22 @@ def fetch_series(cur, indicator_id: int) -> dict:
     return {row[0]: float(row[1]) for row in cur.fetchall()}
 
 
-def main():
+def main(dry_run: bool = False) -> int:
+    """
+    Рассчитывает и записывает 3.5 = 3.3 / 3.4.
+
+    Параметры:
+        dry_run: если True — только расчёт, без записи в БД.
+
+    Возвращает количество записанных/обновлённых строк (0 при dry_run).
+    """
+    dry_run = dry_run or ("--dry-run" in sys.argv)
     log.info("=== Расчёт 3.5 — Средняя площадь квартир в возводимых МЖД ===")
-    if DRY_RUN:
+    if dry_run:
         log.info("Режим DRY RUN — данные в БД не записываются")
 
     conn = get_connection()
+    _n_rows = 0
     try:
         with conn:
             with conn.cursor() as cur:
@@ -115,9 +123,9 @@ def main():
 
                 log.info(f"Итого рассчитано: {len(rows)} точек")
 
-                if DRY_RUN:
+                if dry_run:
                     log.info("DRY RUN — пропускаем запись в БД")
-                    return
+                    return 0
 
                 execute_values(
                     cur,
@@ -133,7 +141,8 @@ def main():
                     """,
                     rows,
                 )
-                log.info(f"Записано/обновлено: {cur.rowcount} строк")
+                _n_rows = cur.rowcount
+                log.info(f"Записано/обновлено: {_n_rows} строк")
 
                 try:
                     log.info("Обновляем materialized view...")
@@ -145,10 +154,12 @@ def main():
                     log.warning(f"Не удалось обновить view: {e}")
 
         log.info("=== Готово. Проверьте: http://localhost:3000/chart.html?code=3.5 ===")
+        print(f"Upserted: {_n_rows} rows")
+        return _n_rows
 
     finally:
         conn.close()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(0 if main() is not None else 1)

@@ -53,8 +53,8 @@ log = logging.getLogger(__name__)
 
 DRY_RUN = "--dry-run" in sys.argv
 
-# Путь к файлу матрицы продаж
-MATRIX_PATH = Path(__file__).parent / "domrf_data" / "sales_matrix" / "Матрица продаж 01.2021-03.2026.xlsx"
+# Директория матрицы продаж (файл меняется с каждым обновлением — ищем динамически)
+MATRIX_DIR = Path(__file__).parent / "domrf_data" / "sales_matrix"
 
 # Месяц → номер
 MONTH_MAP = {
@@ -94,16 +94,24 @@ def parse_month_cell(value) -> tuple[int, int] | None:
     return year, MONTH_MAP[month_name]
 
 
+def _find_matrix_path() -> Path:
+    """Находит актуальный файл матрицы продаж (единственный .xlsx в директории)."""
+    files = sorted(MATRIX_DIR.glob("*.xlsx"))
+    if not files:
+        raise FileNotFoundError(f"Нет .xlsx файлов в {MATRIX_DIR}")
+    if len(files) > 1:
+        log.warning(f"Найдено {len(files)} файлов матрицы, используем последний: {files[-1].name}")
+    return files[-1]
+
+
 def load_matrix() -> dict:
     """
     Читает матрицу продаж и возвращает агрегированные данные по кварталам:
     {(year, quarter): {'rubles': float, 'sqm': float}}
     """
-    if not MATRIX_PATH.exists():
-        raise FileNotFoundError(f"Файл матрицы не найден: {MATRIX_PATH}")
-
-    log.info(f"Читаем матрицу продаж: {MATRIX_PATH}")
-    wb = load_workbook(MATRIX_PATH, read_only=True, data_only=True)
+    matrix_path = _find_matrix_path()
+    log.info(f"Читаем матрицу продаж: {matrix_path}")
+    wb = load_workbook(matrix_path, read_only=True, data_only=True)
     ws = wb.active
 
     # Определяем индексы нужных столбцов по заголовку

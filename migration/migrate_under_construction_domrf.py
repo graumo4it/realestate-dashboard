@@ -90,10 +90,12 @@ def parse_date_from_filename(filename: str):
 
 
 def find_matrix_files() -> list:
-    files = []
-    for pattern in ('*.xlsb', '*.xlsx'):
-        files.extend(MATRIX_DIR.glob(pattern))
-    return sorted([f for f in files if not f.name.startswith('~$')])
+    """Возвращает файлы матрицы, отсортированные по дате (хронологически).
+    Сортировка по дате файла, а не алфавитная — иначе "15.09" идёт раньше "18.08"."""
+    files = [f for f in MATRIX_DIR.glob('*.xlsb') if not f.name.startswith('~$')]
+    files += [f for f in MATRIX_DIR.glob('*.xlsx') if not f.name.startswith('~$')]
+    dated = [(parse_date_from_filename(f.name), f) for f in files]
+    return [f for d, f in sorted((d, f) for d, f in dated if d is not None)]
 
 
 def _norm_key(v) -> str:
@@ -107,25 +109,13 @@ def _norm_key(v) -> str:
 
 # ── Чтение Матрицы проектов ───────────────────────────────────────────────────
 
-def read_matrix(filepath: Path) -> pd.DataFrame:
-    """Читает файл Матрицы проектов и возвращает DataFrame только строящихся корпусов."""
-
+def _read_matrix_raw(filepath: Path) -> pd.DataFrame:
+    """Читает файл Матрицы проектов без какого-либо фильтра. Внутренняя функция."""
     if filepath.suffix == '.xlsx':
         df = pd.read_excel(filepath)
-        # Нормализуем заголовки
         df.columns = [str(c).strip() for c in df.columns]
-        # Фильтр статуса
-        status_col = None
-        for c in df.columns:
-            if c.lower() in ('статус корпуса', 'статус'):
-                status_col = c
-                break
-        if status_col is None:
-            return pd.DataFrame()
-        df = df[df[status_col].str.lower().str.strip() == 'строится'].copy()
-        return df.reset_index(drop=True)
+        return df
     else:
-        # xlsb
         rows_data = []
         with open_workbook(str(filepath)) as wb:
             with wb.get_sheet(1) as sheet:
@@ -138,19 +128,88 @@ def read_matrix(filepath: Path) -> pd.DataFrame:
                     if len(vals) < len(headers):
                         vals += [None] * (len(headers) - len(vals))
                     rows_data.append(vals[:len(headers)])
-
-        df = pd.DataFrame(rows_data, columns=headers)
-        # Фильтр статуса
-        status_col = None
-        for c in df.columns:
-            if c.lower() in ('статус корпуса', 'статус'):
-                status_col = c
-                break
-        if status_col is None:
+        if not rows_data:
             return pd.DataFrame()
-        df[status_col] = df[status_col].astype(str)
-        df = df[df[status_col].str.lower().str.strip() == 'строится'].copy()
-        return df.reset_index(drop=True)
+        df = pd.DataFrame(rows_data, columns=headers)
+        if status_col := next((c for c in df.columns if c.lower() in ('статус корпуса', 'статус')), None):
+            df[status_col] = df[status_col].astype(str)
+        return df
+
+
+def read_matrix(filepath: Path) -> pd.DataFrame:
+    """Читает файл Матрицы проектов и возвращает только строящиеся корпуса.
+    Используется для показателей площади (uc_area_*, uc_sold_vs_ready и т.д.)."""
+    df = _read_matrix_raw(filepath)
+    if df.empty:
+        return df
+    status_col = next((c for c in df.columns if c.lower() in ('статус корпуса', 'статус')), None)
+    if status_col is None:
+        return pd.DataFrame()
+    return df[df[status_col].str.lower().str.strip() == 'строится'].copy().reset_index(drop=True)
+
+
+def calc_new_projects(df_full: pd.DataFrame, target_month: date):
+    """
+    Считает новые проекты за target_month из снепшота СЛЕДУЮЩЕГО месяца.
+    Возвращает (new_total_mln, new_active_mln) или (None, None) если нет колонки Первая ПД.
+
+    Логика: берём ВСЕ корпуса (все статусы) с «Первая ПД» в target_month.
+    Снепшот следующего месяца уже содержит корпуса, зарегистрированные во второй
+    половине target_month (которых нет в снепшоте самого target_month).
+    """
+    if df_full.empty:
+        return None, None
+
+    first_pd_col = next((c for c in df_full.columns if 'первая пд' in c.lower()), None)
+    area_col     = next((c for c in df_full.columns if 'жилая площадь' in c.lower()), None)
+    if first_pd_col is None or area_col is None:
+        return None, None
+
+    period_start = target_month
+    period_end   = date(target_month.year, target_month.month,
+                        monthrange(target_month.year, target_month.month)[1])
+
+    dates = df_full[first_pd_col].apply(safe_date)
+    new_mask = dates.apply(
+        lambda d: d is not None and period_start <= (d.date() if hasattr(d, 'date') else d) <= period_end
+    )
+    area = df_full[area_col].apply(safe_float)
+
+    # Фильтр массовой перерегистрации: если ≥60% корпусов целевого месяца имеют
+    # одну и ту же дату — это системное событие в базе ДОМ.РФ (не реальные запуски).
+    # Исключаем строки с той датой-выбросом.
+    if new_mask.any():
+        month_dates = dates[new_mask].apply(lambda d: d.date() if hasattr(d, 'date') else d)
+        vc = month_dates.value_counts()
+        top_cnt = vc.iloc[0]
+        if top_cnt / new_mask.sum() >= 0.60:
+            top_date = vc.index[0]
+            print(f"  [!] Аномалия {target_month}: {top_cnt}/{new_mask.sum()} корпусов"
+                  f" на {top_date} — дата-выброс исключена", flush=True)
+            # Убираем только строки с аномальной датой, остальные оставляем
+            excl = month_dates == top_date
+            new_mask = new_mask.copy()
+            new_mask[new_mask] = ~excl.values
+
+    new_total = round(area[new_mask].sum() / 1_000_000, 4)
+
+    # Активные: строится + (готовность > 0 ИЛИ продано > 0)
+    status_col   = next((c for c in df_full.columns if c.lower() in ('статус корпуса', 'статус')), None)
+    ready_col    = next((c for c in df_full.columns if 'процент готовности по объекту' in c.lower()), None)
+    sold_cnt_col = next((c for c in df_full.columns
+                         if 'продано квартир' in c.lower() and ('шт' in c.lower() or 'количество' in c.lower())), None)
+
+    if status_col and (ready_col or sold_cnt_col):
+        строится_mask = df_full[status_col].astype(str).str.lower().str.strip() == 'строится'
+        ready = df_full[ready_col].apply(safe_float_pct) if ready_col else pd.Series([0.0] * len(df_full))
+        sold  = df_full[sold_cnt_col].apply(safe_float)  if sold_cnt_col else pd.Series([0.0] * len(df_full))
+        active_mask = строится_mask & ((ready > 0) | (sold > 0))
+        new_active = round(area[new_mask & active_mask].sum() / 1_000_000, 4)
+    else:
+        new_active = new_total  # fallback
+
+    return (new_total if new_total > 0 else None,
+            new_active if new_active > 0 else None)
 
 
 def safe_float(v) -> float:
@@ -162,13 +221,16 @@ def safe_float(v) -> float:
         return 0.0
 
 def safe_float_pct(v) -> float:
-    """Парсит процент готовности. Поддерживает '80%' и 0.8 и 80.0."""
+    """Парсит процент готовности/распроданности.
+    Поддерживает: '80%', '7,30%' (русская запятая), 0.8, 80.0."""
     if v is None:
         return 0.0
     if isinstance(v, str):
         v = v.strip()
         if v == '':
             return 0.0
+        # Нормализуем русскую запятую → точка
+        v = v.replace(',', '.')
         if v.endswith('%'):
             try:
                 return float(v[:-1])
@@ -256,7 +318,7 @@ def calc_from_matrix(df: pd.DataFrame, period_date: date) -> dict:
 
     area       = col('area')
     ready_pct  = col_pct('ready_pct')
-    sold_pct   = col('sold_pct')
+    sold_pct   = col_pct('sold_pct')   # col_pct: нормализует 0-1 → 0-100 как ready_pct
     sold_cnt   = col('sold_apt_cnt')
     sold_sqm   = col('sold_apt_sqm')
 
@@ -270,30 +332,24 @@ def calc_from_matrix(df: pd.DataFrame, period_date: date) -> dict:
     result['uc_area_active'] = round(area[active_mask].sum() / 1_000_000, 1)
 
     # Показатель 4: uc_new_total и uc_new_active
-    # Корпуса где «Первая ПД» попадает в месяц среза
-    first_pd_col = col_map.get('first_pd')
-    if first_pd_col:
-        period_start = period_date
-        period_end   = date(period_date.year, period_date.month,
-                            monthrange(period_date.year, period_date.month)[1])
-        first_pd_dates = df[first_pd_col].apply(safe_date)
-        new_mask = first_pd_dates.apply(
-            lambda d: d is not None and period_start <= (d.date() if hasattr(d, 'date') else d) <= period_end
-        )
-        result['uc_new_total']  = round(area[new_mask].sum() / 1_000_000, 1)
-        result['uc_new_active'] = round(area[new_mask & active_mask].sum() / 1_000_000, 1)
-    else:
-        result['uc_new_total']  = None
-        result['uc_new_active'] = None
+    # НЕ считаются здесь — используется снепшот СЛЕДУЮЩЕГО месяца.
+    # Значения проставляются из main() через calc_new_projects().
+    result['uc_new_total']  = None
+    result['uc_new_active'] = None
 
     # Показатель 9: uc_sold_vs_ready
     # sum(area × sold_pct) / sum(area × ready_pct)
-    weighted_sold  = (area * sold_pct).sum()
-    weighted_ready = (area * ready_pct).sum()
-    if weighted_ready > 0:
-        result['uc_sold_vs_ready'] = round(weighted_sold / weighted_ready, 4)
-    else:
+    # Оба в одном масштабе (0–100) благодаря col_pct.
+    # Если колонка «Распроданность» отсутствует — вернуть None, а не 0.
+    if col_map.get('sold_pct') is None:
         result['uc_sold_vs_ready'] = None
+    else:
+        weighted_sold  = (area * sold_pct).sum()
+        weighted_ready = (area * ready_pct).sum()
+        if weighted_ready > 0:
+            result['uc_sold_vs_ready'] = round(weighted_sold / weighted_ready, 4)
+        else:
+            result['uc_sold_vs_ready'] = None
 
     # Для показателя 8: сумма «Продано квартир, м2» (проданная жилая площадь)
     result['_sold_apt_sqm_total']  = sold_sqm.sum()
@@ -318,18 +374,19 @@ def load_db_series(cur, code: str) -> dict:
 
 def sum_last_12_months(series: dict, cutoff_date: date) -> float | None:
     """
-    Суммирует значения строго за 12 месяцев до cutoff_date.
-    Для апреля 2026 → апрель 2025 – март 2026.
+    Суммирует значения за 12 месяцев, включая cutoff_date (cutoff … cutoff-11).
+    Для ноября 2024 → декабрь 2023 – ноябрь 2024.
+    Для апреля 2026 → май 2025 – апрель 2026.
     Если хотя бы один месяц отсутствует → возвращает None.
     """
     vals = []
     d = date(cutoff_date.year, cutoff_date.month, 1)
     for _ in range(12):
-        d = (date(d.year, d.month, 1) - timedelta(days=1))
-        d = date(d.year, d.month, 1)
         if d not in series:
             return None
         vals.append(series[d])
+        d = (date(d.year, d.month, 1) - timedelta(days=1))
+        d = date(d.year, d.month, 1)
     return sum(vals)
 
 
@@ -391,6 +448,8 @@ def main():
             continue
 
         print(f"Читаю {filepath.name} → {period_date} ...", end=' ')
+
+        # Строится — для площадных метрик
         df = read_matrix(filepath)
         if df.empty:
             print("пропущено (пустой датафрейм)")
@@ -398,7 +457,20 @@ def main():
 
         calc = calc_from_matrix(df, period_date)
         pt_data[period_date] = calc
-        print(f"area_total={calc['uc_area_total']}, new_total={calc.get('uc_new_total')}")
+
+        # Новые проекты за ПРЕДЫДУЩИЙ месяц: берём все статусы из текущего снепшота.
+        # Снепшот M+1 содержит корпуса, зарегистрированные во второй половине M,
+        # которых ещё нет в снепшоте M (снятом ≈15-го числа).
+        prev_month = date((period_date - timedelta(days=1)).year,
+                          (period_date - timedelta(days=1)).month, 1)
+        if prev_month in pt_data:
+            df_full = _read_matrix_raw(filepath)
+            new_total, new_active = calc_new_projects(df_full, prev_month)
+            pt_data[prev_month]['uc_new_total']  = new_total
+            pt_data[prev_month]['uc_new_active'] = new_active
+            print(f"area_total={calc['uc_area_total']}, new({prev_month})={new_total}")
+        else:
+            print(f"area_total={calc['uc_area_total']}")
 
     print(f"\nОбработано файлов: {len(pt_data)}")
 
@@ -435,18 +507,27 @@ def main():
         sales_sqm_12 = sum_last_12_months(series_sales_sqm, period_date)  # продано кв. м
 
         # Для новых проектов за 12 месяцев — собираем из pt_data
+        # Окно: текущий месяц + 11 предыдущих (M … M-11).
+        # new_months_found считает сколько месяцев реально найдено в pt_data;
+        # показатель рассчитывается только если найдены все 12.
         new_total_12 = new_active_12 = 0.0
+        new_months_found = 0
         d = date(period_date.year, period_date.month, 1)
         for _ in range(12):
+            # Считаем только месяцы где first_pd колонка есть (uc_new_total не None).
+            # Старые файлы без first_pd дают None и не должны входить в счётчик.
+            if d in pt_data and pt_data[d].get('uc_new_total') is not None:
+                new_total_12  += pt_data[d]['uc_new_total']  or 0
+                new_active_12 += pt_data[d].get('uc_new_active') or 0
+                new_months_found += 1
             prev = (date(d.year, d.month, 1) - timedelta(days=1))
             d = date(prev.year, prev.month, 1)
-            if d in pt_data:
-                new_total_12  += pt_data[d].get('uc_new_total')  or 0
-                new_active_12 += pt_data[d].get('uc_new_active') or 0
 
         # Показатель 5: новые проекты / ввод МЖС, %
+        # Требуем ровно 12 месяцев по новым проектам, иначе первые точки будут
+        # занижены из-за неполного скользящего окна (данные с дек 2023).
         # ввод МЖС в тыс. кв. м → переводим в млн кв. м
-        if input_12 and input_12 > 0:
+        if input_12 and input_12 > 0 and new_months_found == 12:
             input_mln = input_12 / 1000
             if new_total_12 > 0:
                 add('uc_new_vs_input_total',  round(new_total_12  / input_mln * 100, 1))
@@ -461,7 +542,8 @@ def main():
 
         # Показатель 7: обеспеченность продаж новыми запусками, %
         # новые проекты (кв. м) / продано квартир (кв. м) × 100
-        if sales_sqm_12 and sales_sqm_12 > 0:
+        # Аналогично показателю 5: требуем 12 полных месяцев по новым проектам.
+        if sales_sqm_12 and sales_sqm_12 > 0 and new_months_found == 12:
             if new_total_12 > 0:
                 add('uc_new_vs_sales_total',  round(new_total_12  * 1_000_000 / sales_sqm_12 * 100, 1))
             if new_active_12 > 0:
@@ -498,6 +580,7 @@ def main():
     cur.close()
     conn.close()
     print(f"Готово. Всего записано точек: {inserted_total}")
+    print(f"Upserted: {inserted_total} rows")
 
 
 def print_setup_sql():

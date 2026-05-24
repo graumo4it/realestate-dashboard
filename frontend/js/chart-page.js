@@ -14,6 +14,7 @@
 
   let chartInstance = null;
   let allSeries     = [];
+  let annualSeries  = null; // официальные годовые значения из <code>.y, если есть
   let indicator     = null;
   let currentMode        = 'absolute'; // 'absolute' | 'yoy' | 'mom'
   let currentRange       = null;
@@ -62,6 +63,19 @@
       const result = await api.indicatorData(indCode);
       indicator = result.indicator;
       allSeries = result.series;
+
+      // Для квартальных показателей пробуем подгрузить официальные годовые значения
+      // из индикатора-двойника <code>.y (is_public=false, создаётся миграцией 003).
+      // Если двойника нет — getFiltered() падёт бэком на среднее из кварталов.
+      if (indicator.periodicity === 'quarterly') {
+        try {
+          const annResult = await api.indicatorData(indCode + '.y');
+          annualSeries = annResult.series.filter(p => p.value != null);
+        } catch {
+          annualSeries = null; // индикатора .y нет — будет avg-фолбэк
+        }
+      }
+
       renderMeta();
       renderKPI();
       buildChart();
@@ -117,12 +131,15 @@
         }
         buildChart();
         renderTable();
+        renderKPI();
       });
     }
   }
 
   function renderKPI() {
-    const pts = allSeries.filter(p => p.value != null);
+    // Баг 1: читаем отфильтрованный ряд, а не allSeries
+    const filtered = getFiltered();
+    const pts = filtered.filter(p => p.value != null);
     if (!pts.length) return;
     const last = pts[pts.length - 1];
     elKpiValue.textContent  = fmtValue(last.value);
@@ -134,7 +151,11 @@
     const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
     const yoyHtml = last.yoy_change_pct != null
       ? `<span style="margin-right:12px">г/г: ${deltaHtml(last.yoy_change_pct, pp)}</span>` : '';
-    const momHtml = (last.mom_change_pct != null && indicator.periodicity !== 'annual')
+    // Баг 1: скрывать кв./кв. дельту когда currentPeriodicity === 'annual'
+    const showMomDelta = last.mom_change_pct != null
+      && indicator.periodicity !== 'annual'
+      && currentPeriodicity !== 'annual';
+    const momHtml = showMomDelta
       ? `<span>${momLabel}: ${deltaHtml(last.mom_change_pct, pp)}</span>` : '';
     elKpiDelta.innerHTML = yoyHtml + momHtml;
   }
@@ -144,24 +165,35 @@
 
     // Агрегация квартальных → годовые
     if (indicator.periodicity === 'quarterly' && currentPeriodicity === 'annual') {
-      const byYear = {};
-      for (const p of allSeries) {
-        if (p.value == null || !p.date) continue;
-        const year = p.date.slice(0, 4);
-        if (!byYear[year]) byYear[year] = [];
-        byYear[year].push(Number(p.value));
-      }
-      series = Object.entries(byYear)
-        .filter(([, vals]) => vals.length === 4)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([year, vals]) => {
-          const sum = vals.reduce((a, b) => a + b, 0);
-          return { date: `${year}-01-01`, label: year, value: sum,
-                   yoy_change_pct: null, mom_change_pct: null };
-        });
-      for (let i = 1; i < series.length; i++) {
-        const prev = series[i - 1].value;
-        if (prev) series[i].yoy_change_pct = (series[i].value - prev) / Math.abs(prev) * 100;
+      if (annualSeries && annualSeries.length) {
+        // Официальные годовые значения из индикатора-двойника <code>.y
+        series = annualSeries.map(p => ({ ...p })); // копия, чтобы не мутировать
+        // Пересчитываем г/г поверх официальных значений (в .y нет YoY из БД)
+        for (let i = 1; i < series.length; i++) {
+          const prev = series[i - 1].value;
+          if (prev) series[i].yoy_change_pct = (series[i].value - prev) / Math.abs(prev) * 100;
+        }
+      } else {
+        // Фолбэк: среднее из 4 кварталов (погрешность < 0.2%)
+        const byYear = {};
+        for (const p of allSeries) {
+          if (p.value == null || !p.date) continue;
+          const year = p.date.slice(0, 4);
+          if (!byYear[year]) byYear[year] = [];
+          byYear[year].push(Number(p.value));
+        }
+        series = Object.entries(byYear)
+          .filter(([, vals]) => vals.length === 4)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([year, vals]) => {
+            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+            return { date: `${year}-01-01`, label: year, value: avg,
+                     yoy_change_pct: null, mom_change_pct: null };
+          });
+        for (let i = 1; i < series.length; i++) {
+          const prev = series[i - 1].value;
+          if (prev) series[i].yoy_change_pct = (series[i].value - prev) / Math.abs(prev) * 100;
+        }
       }
     }
 
@@ -368,7 +400,8 @@
 
   function renderTable() {
     const series   = [...getFiltered()].reverse();
-    const showMom  = indicator.periodicity !== 'annual';
+    // Баг 2: учитываем currentPeriodicity для квартальных в годовом режиме
+    const showMom  = indicator.periodicity !== 'annual' && currentPeriodicity !== 'annual';
     const pp       = isPp();
     const isPercent = indicator.unit === '%';
     const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
@@ -382,7 +415,7 @@
         <th>Период</th>
         <th style="text-align:right">Значение${indicator.unit ? ', ' + indicator.unit : ''}</th>
         <th style="text-align:right">ИЗМ. Г/Г</th>
-        ${showMom ? `<th style="text-align:right">ИЗМ. М/М</th>` : ''}
+        ${showMom ? `<th style="text-align:right">ИЗМ. ${momLabel.toUpperCase()}</th>` : ''}
       `;
     }
 

@@ -13,10 +13,34 @@ from app.services.data_service import (
     get_indicator_by_code,
     get_time_series,
     search_indicators,
+    IndicatorSummary,
 )
 from app.services.export_service import export_indicator_xlsx
 
 router = APIRouter(tags=["indicators"])
+
+
+def _summary_to_brief(s: IndicatorSummary) -> IndicatorBrief:
+    """Конвертирует внутренний IndicatorSummary в публичную схему IndicatorBrief.
+
+    IndicatorBrief содержит два поля для YoY (yoy_change / yoy_change_pct) —
+    оба заполняются одним значением из IndicatorSummary.
+    """
+    return IndicatorBrief(
+        id=s.id,
+        code=s.code,
+        name=s.name,
+        unit=s.unit,
+        periodicity=s.periodicity,
+        chart_type=s.chart_type,
+        last_updated=s.last_updated,
+        last_value=s.last_value,
+        last_value_formatted=s.last_value_formatted,
+        last_period_label=s.last_period_label,
+        yoy_change=s.yoy_change_pct,
+        yoy_change_pct=s.yoy_change_pct,
+        mom_change_pct=s.mom_change_pct,
+    )
 
 
 @router.get("/categories/{code}/indicators", response_model=List[IndicatorBrief])
@@ -24,7 +48,7 @@ def category_indicators(code: str, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.code == code).first()
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
-    return get_indicator_list_for_category(db, cat.id)
+    return [_summary_to_brief(s) for s in get_indicator_list_for_category(db, cat.id)]
 
 
 @router.get("/indicators/{code}", response_model=IndicatorFull)

@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import psycopg2
@@ -59,7 +59,18 @@ class BaseParser(ABC):
         try:
             raw = self._fetch_with_retry()
             records = self.parse(raw)
-            rows = self.upsert_to_db(records)
+
+            codes = list({r["indicator_code"] for r in records})
+            last_dates = self.get_last_dates(codes)
+            new_records = [
+                r for r in records
+                if r["period_date"] > last_dates.get(r["indicator_code"], date.min)
+            ]
+            log.info(
+                f"[{self.source_code}] Распарсено: {len(records)}, новых: {len(new_records)}"
+            )
+
+            rows = self.upsert_to_db(new_records)
             self._finish_job("success", rows)
             self._refresh_view()
             log.info(f"[{self.source_code}] Done. Rows upserted: {rows}")
@@ -113,6 +124,18 @@ class BaseParser(ABC):
                 else:
                     raise
 
+    def get_last_dates(self, codes: list[str]) -> dict[str, date]:
+        """Возвращает {indicator_code: max_period_date} для переданных кодов."""
+        with self.conn.cursor() as cur:
+            cur.execute("""
+                SELECT i.code, MAX(dp.period_date)
+                FROM data_points dp
+                JOIN indicators i ON i.id = dp.indicator_id
+                WHERE i.code = ANY(%s)
+                GROUP BY i.code
+            """, (codes,))
+            return {row[0]: row[1] for row in cur.fetchall()}
+
     def _get_indicator_id(self, cur, code: str) -> int | None:
         cur.execute("SELECT id FROM indicators WHERE code = %s", (code,))
         row = cur.fetchone()
@@ -138,9 +161,39 @@ class BaseParser(ABC):
                 execute_values(cur, """
                     INSERT INTO data_points (indicator_id, period_date, period_label, value)
                     VALUES %s
-                    ON CONFLICT (indicator_id, period_date)
-                    DO UPDATE SET value = EXCLUDED.value,
-                                  period_label = EXCLUDED.period_label
+                    ON CONFLICT (indicator_id, period_date) DO NOTHING
+                """, rows)
+            self.conn.commit()
+        return len(rows)
+
+    def upsert_update_to_db(self, records: list[dict]) -> int:
+        """
+        Upsert с перезаписью существующих значений (ON CONFLICT DO UPDATE).
+        Используется для индикаторов, данные которых ретроспективно уточняются
+        (например, субсидии ДОМ.РФ).
+        """
+        if not records:
+            return 0
+        with self.conn.cursor() as cur:
+            rows = []
+            for r in records:
+                ind_id = self._get_indicator_id(cur, r["indicator_code"])
+                if ind_id is None:
+                    log.warning(f"Unknown indicator code: {r['indicator_code']}")
+                    continue
+                rows.append((
+                    ind_id,
+                    r["period_date"],
+                    r.get("period_label"),
+                    r.get("value"),
+                ))
+            if rows:
+                execute_values(cur, """
+                    INSERT INTO data_points (indicator_id, period_date, period_label, value)
+                    VALUES %s
+                    ON CONFLICT (indicator_id, period_date) DO UPDATE
+                      SET value        = EXCLUDED.value,
+                          period_label = EXCLUDED.period_label
                 """, rows)
             self.conn.commit()
         return len(rows)

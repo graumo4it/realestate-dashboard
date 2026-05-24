@@ -100,6 +100,7 @@ def main():
         log.info("Режим DRY RUN — данные в БД не записываются")
 
     conn = get_connection()
+    _n_rows = 0
     try:
         with conn:
             with conn.cursor() as cur:
@@ -158,7 +159,8 @@ def main():
                     """,
                     rows,
                 )
-                log.info(f"Записано/обновлено в data_points: {cur.rowcount} строк")
+                _n_rows = cur.rowcount
+                log.info(f"Записано/обновлено в data_points: {_n_rows} строк")
 
                 try:
                     log.info("Обновляем materialized view...")
@@ -170,6 +172,7 @@ def main():
                     log.warning(f"Не удалось обновить view: {e} (данные записаны)")
 
         log.info("=== Готово. Проверьте: http://localhost:3000/chart.html?code=5.3 ===")
+        print(f"Upserted: {_n_rows} rows")
 
     finally:
         conn.close()

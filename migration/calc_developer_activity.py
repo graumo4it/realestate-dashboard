@@ -97,6 +97,7 @@ def main():
         log.info("Режим DRY RUN — данные в БД не записываются")
 
     conn = get_connection()
+    _n_rows = 0
     try:
         with conn:
             with conn.cursor() as cur:
@@ -152,7 +153,8 @@ def main():
                     """,
                     rows,
                 )
-                log.info(f"Записано: {cur.rowcount} строк")
+                _n_rows = cur.rowcount
+                log.info(f"Записано: {_n_rows} строк")
 
                 # Обновляем periodicity на annual
                 cur.execute(
@@ -170,6 +172,7 @@ def main():
                     log.warning(f"Не удалось обновить view: {e}")
 
         log.info("=== Готово. Проверьте: http://localhost:3000/chart.html?code=3.7 ===")
+        print(f"Upserted: {_n_rows} rows")
 
     finally:
         conn.close()

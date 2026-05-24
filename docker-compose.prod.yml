@@ -33,6 +33,26 @@ services:
       timeout: 10s
       retries: 3
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: parsers/Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.prod
+    environment:
+      DB_HOST: db
+    volumes:
+      # Файлы ДОМ.РФ кладутся вручную на VPS в эту папку
+      - ./migration/domrf_data:/app/migration/domrf_data:rw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     image: nginx:1.25-alpine
     restart: always

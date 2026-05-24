@@ -21,8 +21,23 @@
       border-bottom: 1px solid var(--color-border);
       transition: background .15s;
     }
-    .indicator-row:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-    .indicator-row:last-child  { border-radius: 0 0 var(--radius-lg) var(--radius-lg); border-bottom: none; }
+    .indicator-row:first-child { border-radius: 0; }  /* wrapper обрезает углы */
+    .indicator-row:last-child  { border-bottom: none; }
+
+    /* Заголовок подраздела */
+    .section-header {
+      padding: 8px 20px 7px;
+      background: var(--color-bg);
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--color-muted);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .section-header:not(:first-child) {
+      border-top: 2px solid var(--color-border);
+    }
     .indicator-row:hover { background: #fafbfc; }
     .indicator-row-wrap {
       background: var(--color-surface);
@@ -219,17 +234,45 @@ const COMBO_OVERRIDES = {
   ],
   under_construction_domrf: [
     { label: 'Жилая площадь МЖД: все vs активное строительство', url: 'uc-area.html',
-    parentCode: 'uc_area_total', hideCodes: ['uc_area_active'] },
+      parentCode: 'uc_area_total', hideCodes: ['uc_area_active'] },
     { label: 'Новые проекты: все vs активные', url: 'uc-new.html',
-    parentCode: 'uc_new_total', hideCodes: ['uc_new_active'] },
+      parentCode: 'uc_new_total', hideCodes: ['uc_new_active'] },
+  ],
+  market_balance: [
     { label: 'Новые проекты / ввод МЖС', url: 'uc-new-vs-input.html',
-    parentCode: 'uc_new_vs_input_total', hideCodes: ['uc_new_vs_input_active'] },
+      parentCode: 'uc_new_vs_input_total', hideCodes: ['uc_new_vs_input_active'] },
     { label: 'Запасы строящегося жилья', url: 'uc-stock.html',
-    parentCode: 'uc_stock_years_total', hideCodes: ['uc_stock_years_active'] },
+      parentCode: 'uc_stock_years_total', hideCodes: ['uc_stock_years_active'] },
     { label: 'Обеспеченность продаж новыми запусками', url: 'uc-new-vs-sales.html',
-    parentCode: 'uc_new_vs_sales_total', hideCodes: ['uc_new_vs_sales_active'] },
+      parentCode: 'uc_new_vs_sales_total', hideCodes: ['uc_new_vs_sales_active'] },
     { label: 'Коэффициент поглощения', url: 'uc-absorption.html',
-    parentCode: 'uc_absorption_total', hideCodes: ['uc_absorption_active'] },
+      parentCode: 'uc_absorption_total', hideCodes: ['uc_absorption_active'] },
+  ],
+};
+
+// ── SUBSECTIONS ───────────────────────────────────────────────────────────────
+// Определяет подразделы для конкретных категорий.
+// Если для catCode есть запись — рендер идёт по подразделам, иначе — плоский список.
+//
+// Коды в `codes[]`:
+//   • обычная карточка / parentCode-комбо → ind.code
+//   • append-комбо (parentCode=null)       → ind._comboUrl (URL страницы)
+const SUBSECTIONS = {
+  demand: [
+    { label: 'Общее',               codes: ['5.1', '5.3'] },
+    { label: 'Квартиры',            codes: ['5.8', '5.9', 'apt_area'] },
+    { label: 'Машиноместа',         codes: ['5.20', '5.22', '5.21'] },
+    { label: 'Доступность жилья',   codes: ['5.10', '5.11'] },
+    { label: 'Уровень потребности', codes: [
+      'housing-need-chart.html',
+      'housing-pace-chart.html',
+      'housing-need-real-chart.html',
+      'housing-pace-real-chart.html',
+    ]},
+  ],
+  prices: [
+    { label: 'Квартиры',    codes: ['4.4', '4.1', 'apt_budget'] },
+    { label: 'Машиноместа', codes: ['4.8', '4.9'] },
   ],
 };
 
@@ -335,12 +378,13 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
   document.getElementById('cat-name').textContent    = cat?.name || catCode;
   document.getElementById('page-heading').textContent = cat?.name || catCode;
   document.getElementById('page-sub').textContent =
-    `${rawIndicators.length} показателей · Данные обновляются автоматически`;
+    `${indicators.length} показателей`;
 
   const list = document.getElementById('indicator-list');
   list.innerHTML = '';
 
-  for (const ind of indicators) {
+  // ── Рендер одной строки индикатора ─────────────────────────────────────────
+  function renderRow(ind) {
     const isCombo = !!(ind._comboUrl);
     const href    = isCombo ? ind._comboUrl : `chart.html?code=${ind.code}`;
     const name    = isCombo ? ind._comboLabel : cleanName(ind.name);
@@ -349,12 +393,10 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
     const row     = document.createElement('div');
     row.className = 'indicator-row';
 
-    // Колонка «Динамика» (sparkline или пусто для комбо)
     const sparkEl = document.createElement('div');
     sparkEl.className = 'indicator-sparkline';
 
     if (isCombo) {
-      // Комбо-карточка: название + badge, вместо значения — «Сравнительный анализ»
       row.innerHTML = `
         <div class="indicator-name">
           <a href="${href}">${name}</a>
@@ -373,7 +415,6 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
         </div>
       `;
       row.appendChild(sparkEl);
-      // Sparkline для комбо — загружаем если есть sparkCode
       if (ind._sparkCode) {
         ((sparkCode, periodicity) => {
           (async () => {
@@ -387,7 +428,6 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
         })(ind._sparkCode, ind._sparkPeriodicity || 'annual');
       }
     } else {
-      // Обычная карточка
       row.innerHTML = `
         <div class="indicator-name">
           <a href="${href}">${name}</a>
@@ -399,14 +439,11 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
         <div style="text-align:center">${deltaHtml(ind.yoy_change_pct, pp)}</div>
       `;
       row.appendChild(sparkEl);
-
-      // Загрузка sparkline асинхронно
       ((code, periodicity) => {
         (async () => {
           try {
             const years = periodicity === 'annual' ? 10 : 2;
             let data = await api.indicatorData(code, rangeStart(years));
-            // Fallback: если точек мало (данные устарели) — берем все
             if (data.series.filter(p => p.value != null).length < 2) {
               data = await api.indicatorData(code, null);
             }
@@ -416,8 +453,34 @@ const categories = (await api.categories()).filter(c => !HIDDEN_CATEGORIES.inclu
         })();
       })(ind.code, ind.periodicity);
     }
+    return row;
+  }
 
-    list.appendChild(row);
+  // ── Рендер списка: с подразделами или плоский ──────────────────────────────
+  const subs = SUBSECTIONS[catCode];
+  if (subs) {
+    // Lookup: effectiveCode → ind
+    // append-комбо (parentCode=null) идентифицируются по _comboUrl
+    const byCode = {};
+    for (const ind of indicators) {
+      const key = ind._isComboOnly ? ind._comboUrl : ind.code;
+      byCode[key] = ind;
+    }
+    for (const sub of subs) {
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.textContent = sub.label;
+      list.appendChild(header);
+      for (const code of sub.codes) {
+        const ind = byCode[code];
+        if (ind) list.appendChild(renderRow(ind));
+      }
+    }
+  } else {
+    // Плоский рендер для категорий без подразделов
+    for (const ind of indicators) {
+      list.appendChild(renderRow(ind));
+    }
   }
 }
 

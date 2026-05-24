@@ -145,6 +145,7 @@ def main():
         log.info("Режим DRY RUN — данные в БД не записываются")
 
     conn = get_connection()
+    _n_rows = 0
     try:
         with conn:
             with conn.cursor() as cur:
@@ -173,10 +174,12 @@ def main():
 
                 # Записываем 5.9
                 n = upsert_rows(cur, id_ytd, ytd_rows)
+                _n_rows += n
                 log.info(f"5.9 записано/обновлено: {n} строк")
 
                 # Записываем 5.9.ma12
                 n = upsert_rows(cur, id_ma12, ma12_rows)
+                _n_rows += n
                 log.info(f"5.9.ma12 записано/обновлено: {n} строк")
 
                 # Refresh materialized view
@@ -190,6 +193,7 @@ def main():
                     log.warning(f"Не удалось обновить view: {e} (данные записаны)")
 
         log.info("=== Готово ===")
+        print(f"Upserted: {_n_rows} rows")
 
     finally:
         conn.close()

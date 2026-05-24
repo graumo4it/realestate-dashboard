@@ -84,7 +84,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 ### Сервисы (`backend/app/services/`)
 
-- **`data_service.py`** — все SQL-запросы к `data_points_with_dynamics`. `get_indicator_list_for_category` возвращает `IndicatorBrief` с last value, YoY, MoM. `get_time_series` — полный ряд с динамикой.
+- **`data_service.py`** — все SQL-запросы к `data_points_with_dynamics`. `get_indicator_list_for_category` возвращает `List[IndicatorSummary]` (внутренний датакласс); роутер конвертирует в `IndicatorBrief` через `_summary_to_brief()`. Формула YoY/MoM вынесена в `_change_expr(value_col, prev_col, unit_col)` и используется в обоих запросах. Все строки доступаются по именам через `.mappings()`. `get_time_series` — полный ряд с динамикой.
 - **`export_service.py`** — генерация `.xlsx` через `openpyxl`. Используется для одиночного и мульти-экспорта.
 
 `window.API_BASE = 'http://localhost:8001/api'` — задаётся в каждом HTML-файле явно.
@@ -94,15 +94,15 @@ psql -U postgres -d realestate -f migration/001_init.sql
 ### Три «системных» страницы
 
 - **`index.html`** — сетка категорий + поиск (через `/api/categories` и `/api/search`)
-- **`category.html`** — список показателей раздела. Содержит JS-константу `COMBO_OVERRIDES` — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется)
-- **`chart.html`** — график одного показателя (`?code=6.1`). Поддерживает переключатели периода (1г/3г/5л/Всё), режима (Значения/г-г/м-м), таблицу, KPI-блок, блок «Связанные показатели»
+- **`category.html`** — список показателей раздела. Содержит JS-константу `COMBO_OVERRIDES` — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется). Константа `SUBSECTIONS` задаёт подразделы (section-headers) внутри страниц отдельных категорий; коды в ней — это «эффективные» коды карточек после применения `COMBO_OVERRIDES`. Категории с подразделами: `demand` (5 групп) и `prices` (2 группы).
+- **`chart.html`** — график одного показателя (`?code=6.1`). Поддерживает переключатели периода (1г/3г/5л/Всё), режима (Значения/г-г/м-м), переключатель Квартал/Год для квартальных индикаторов, таблицу, KPI-блок, блок «Связанные показатели». Для квартальных показателей в режиме «Год» загружает official companion-индикатор `<code>.y` (если существует) вместо агрегации кварталов.
 
-### 26 комбо-страниц
+### 37 комбо-страниц
 
 Используют `/api/multi/data?codes=...`. Каждая содержит:
 - Константы `CODES` (mapping имён в коды) и `LABELS` (подписи серий)
 - Опционально `KEYS` (массив ключей для фильтров серий) — **обязательно объявлять после `LABELS`**
-- Инициализацию `PeriodToggle.injectButtons(toolbar, ...)` или шим `AnnualToggle.injectAnnualBtn(...)`
+- Инициализацию `PeriodToggle.injectButtons(toolbar, ...)` (шим AnnualToggle **удалён**)
 - Горизонтальную панель фильтров серий
 
 **Эталон разметки** горизонтальной панели фильтров: `subsidy-count.html`.
@@ -114,9 +114,9 @@ psql -U postgres -d realestate -f migration/001_init.sql
 | `api.js` | `api.{categories,categoryIndicators,indicator,indicatorData,multiIndicatorData,...}` |
 | `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `deltaHtml`, `rangeStart`, `cleanName` |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
-| `chart-page.js` | Вся логика `chart.html` |
-| `period-toggle.js` | **v3.1.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons`, `detectPeriodicity`. Содержит шим `window.AnnualToggle` для обратной совместимости со старыми страницами. |
-| `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` |
+| `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
+| `period-toggle.js` | **v4.0.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons` (алиас `injectSelector`), `detectPeriodicity`. Шим `window.AnnualToggle` **удалён** — все страницы мигрированы на `PeriodToggle`. |
+| `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` (файл сохранён для истории) |
 
 #### period-toggle.js: типы агрегации
 
@@ -128,19 +128,59 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 Страницы с `wavg` задают `window.AGG_TYPE = 'wavg'` и `window._WEIGHT_CODES = { код_ставки: код_объёма }` до загрузки `period-toggle.js`.
 
+#### Расчёт динамики в period-toggle.js v4.0
+
+- **Годовой ряд**: YoY = к предыдущей точке (одновременно предыдущий год).
+- **Квартальный ряд**: YoY = к той же точке 4 квартала назад; QoQ = к предыдущему кварталу (сохраняется в `qoq_change_pct` и продублировано в `mom_change_pct` для обратной совместимости).
+- Неполные кварталы (< 3 месяцев с данными) и годы (< 12) исключаются.
+
 ## Парсеры (`parsers/`)
 
-Все парсеры наследуются от `BaseParser` (`parsers/base.py`). Шаблонный метод `run()`: подключение → `fetch_raw()` → `parse()` → `upsert_to_db()` → `REFRESH MATERIALIZED VIEW`. `upsert_to_db` использует `ON CONFLICT (indicator_id, period_date) DO UPDATE`.
+⚠️ Три парсера (`cbr.py`, `domrf.py`, `rosstat.py`) требуют переработки — никогда не запускались, данные загружены вручную через Excel-миграции. Детали и план: `PARSERS_PLAN.md`. `domrf_web.py` — готов и протестирован.
 
-| Парсер | Показатели | Расписание (GitHub Actions) |
-|--------|-----------|------------------------------|
-| `cbr.py` | 6.1–6.87 (ипотека) | Пн 06:00 UTC |
-| `domrf.py` | 3.1–3.7, 4.1, 4.8–4.9 | Ежедневно 04:00 UTC |
-| `rosstat.py` | 1.x, 2.1–2.13, 4.4–4.5 | Пн 06:30 UTC |
+Все парсеры наследуются от `BaseParser` (`parsers/base.py`). Шаблонный метод `run()`: подключение → `fetch_raw()` → `parse()` → фильтр новых периодов → `upsert_to_db()` → `REFRESH MATERIALIZED VIEW`.
 
-⚠️ `fetch_fedstat.py` и `migration/fetch_fedstat.py` — **только локально** (fedstat блокирует облачные IP, скорость ≤ 1 req/sec).
+**Принцип инкрементального обновления** (после переработки): `upsert_to_db` использует `ON CONFLICT DO NOTHING`; перед upsert отфильтровываются записи с `period_date ≤ MAX(period_date)` в БД для каждого индикатора — существующие данные не перезаписываются.
 
-Локальная альтернатива расписанию: `parsers/scheduler.py` (APScheduler).
+| Парсер | Показатели | Статус | Реальный источник |
+|--------|-----------|--------|-------------------|
+| `cbr.py` | 6.1–6.87 (ипотека) | ⚠️ Нужна переработка | `02_02_Mortgage.xlsx`, `02_03_Scpa_mortgage.xlsx`, `02_41_Mortgage_ihc.xlsx`, `Статистические_ряды.xlsx` с cbr.ru |
+| `domrf.py` | 3.x, 4.1, 4.8–4.9, 5.x (DomRF) | ⚠️ Нужна переработка → оркестратор | Локальные Excel в `migration/domrf_data/`, обработка через `migrate_*.py` |
+| `domrf_web.py` | 3.1–3.4, 3.17–3.19 (ЕИСЖС) | ✅ Готов | Скачивает `01_01_stockvariablesexsales.xlsx` с наш.дом.рф напрямую |
+| `rosstat.py` | 1.x, 2.x, 4.4–4.5, 5.1 | ⚠️ Нужна переработка → обёртка | `migration/fetch_fedstat.py` (POST-запросы к fedstat.ru) |
+
+**Рабочие компоненты** (не требуют изменений):
+- `migration/fetch_fedstat.py` — FedstatClient с корректными EMISS IDs и payload для: 1.2 (57039), 1.3 (57823), 2.9 (40454), 2.11 (40457), 2.12 (40456), 2.13.ext (40458). Запускать: `python migration/fetch_fedstat.py [код ...]`
+- `migration/migrate_apartments.py`, `migrate_matrix_projects.py`, `migrate_sales_matrix.py` — обработка файлов DomRF
+- `migration/migrate_subsidy_update.py` — субсидии CBR из `Статистические_ряды.xlsx`
+
+⚠️ fedstat.ru — **только локально** (облачные IP блокируются, скорость ≤ 1 req/sec). GitHub Actions для парсеров не создаются.
+
+**Расписание** (`parsers/scheduler.py`, APScheduler): CBR и Rosstat — 10-е число каждого месяца; DomRF (файловый оркестратор) и DomRF Web — 20-е число (DomRF в 10:00, DomRF Web в 10:30).
+
+⚠️ `domrf_web.py` доступен только с российских IP (ЕИСЖС геоблокирует зарубежные запросы).
+
+**CBR-конвенция дат**: колонка `01.02.2026` в Excel = данные **за январь 2026** (дата отчёта = первое число следующего месяца). При парсинге: `period_date = date(YYYY, MM-1, 1)`.
+
+## Annual companion-индикаторы (суффикс `.y`)
+
+Для показателей с квартальной периодичностью (сейчас: 1.2, 1.3) Росстат публикует **официальные годовые** значения, которые отличаются от механической агрегации кварталов. Они хранятся отдельно:
+
+| Код | Название | Скрипт загрузки |
+|-----|---------|-----------------|
+| `1.2.y` | Среднедушевые доходы населения (годовые) | `migration/load_rosstat_annual.py` |
+| `1.3.y` | Среднемесячная зарплата (годовая) | `migration/load_rosstat_annual.py` |
+
+Свойства companion-индикаторов: `periodicity='annual'`, `is_public=false` (скрыты из навигации, доступны через API). Миграция: `migration/003_annual_companion_indicators.sql`.
+
+```bash
+# Загрузить официальные годовые данные из Excel Росстата
+source venv/bin/activate
+cd migration
+python load_rosstat_annual.py --file1 urov_10kv.xlsx [--file2 zp.xlsx]
+```
+
+`parsers/rosstat.py` поддерживает `ANNUAL_COMPANION`: квартальные точки идут в основной код (1.2, 1.3), годовые строки — в `.y`-вариант.
 
 ## Расчётные индикаторы (`migration/calc_*.py`)
 
@@ -177,10 +217,28 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
 ## Текущий статус (май 2026)
 
 **В работе:**
-1. Кнопки «Квартал/Год» на `chart.html` для квартальных показателей (1.2, 1.3)
-2. Деплой на VPS
+1. Деплой на VPS
+2. Применить `migration/004_cleanup.sql` секции 7–8 (sort_order для `demand` и `prices`) — ожидает визуальной проверки страниц категорий
+3. **Переработка системы парсинга** (план: `PARSERS_PLAN.md`):
+   - Шаг 1: `parsers/base.py` — инкрементальное обновление (`get_last_dates()`, `DO NOTHING`)
+   - Шаг 2: `parsers/cbr.py` — переписать под правильные файлы CBR
+   - Шаг 3: `migration/fetch_fedstat.py` — добавить 7 новых EMISS-индикаторов (2.1, 2.2, 2.3, 4.4, 4.5, 2.13, 5.1)
+   - Шаг 4: `parsers/rosstat.py` (обёртка над fetch_fedstat.py) + `parsers/domrf.py` (оркестратор migrate_*.py)
 
-**Известные ограничения:** данные 2.13.ext только до 2015; парсеры domclick.py и rosreestr.py не реализованы.
+**Недавно завершено:**
+- ✅ **`parsers/domrf_web.py`** — новый готовый парсер: скачивает `01_01_stockvariablesexsales.xlsx` с наш.дом.рф, обновляет 3.1, 3.2, 3.3, 3.4, 3.17, 3.18, 3.19 (77 месяцев, 2020–2026); идемпотентен (повторный запуск → 0 новых строк); зарегистрирован в `scheduler.py` (day=20, hour=10, minute=30)
+- ✅ **Аудит системы парсинга**: все три парсера никогда не запускались; выявлены причины; составлен план переработки (`PARSERS_PLAN.md`); установлены зависимости (`requests`, `bs4`, `APScheduler` в venv)
+- ✅ **UX-правки `category.html`**: счётчик в подзаголовке теперь показывает `indicators.length` (кол-во видимых карточек после `COMBO_OVERRIDES`) вместо `rawIndicators.length` (всё из API); убрана надпись «Данные обновляются автоматически»
+- ✅ **Аудит и очистка БД** (`migration/004_cleanup.sql`, `migration/004_db_audit_report.md`): убраны легаси-префиксы «X.X» из 92 названий индикаторов; исправлены единицы 5.10 (`кв.м/зарплату`); добавлены CHECK-ограничения (`chk_periodicity`, `chk_period_type`, `chk_chart_type`); устранены конфликты sort_order в `categories`; устранены дубли названий (3.7/uc_dev_activity, uc_new_active/total, 5.14.xx, apartments 1k-4k, 18 ипотека ИЖС 6.70–6.87); удалены устаревшие 3.13/3.15. Итог: 180 индикаторов, 10 394 точки, 18 категорий, 0 дублей
+- ✅ **Новая категория «Сбалансированность рынка»** (`migration/005_market_balance.sql`): sort_order=11 (после «Спроса»); 9 индикаторов перенесены из `under_construction_domrf`; `under_construction_domrf` теперь содержит 3 видимые карточки
+- ✅ **Подразделы в Спросе и Ценах** (`frontend/category.html`): добавлена константа `SUBSECTIONS`; рефакторинг render loop с извлечением `renderRow()`; CSS `.section-header`; обновлены `COMBO_OVERRIDES` для `under_construction_domrf` и `market_balance`
+- ✅ Кнопки «Квартал/Год» на `chart.html` для квартальных показателей (1.2, 1.3) + загрузка official `.y`-companion
+- ✅ period-toggle.js v4.0: удалён шим AnnualToggle, добавлен QoQ
+- ✅ Миграция всех 37 комбо-страниц на единый `PeriodToggle.injectButtons`
+- ✅ Annual companion-индикаторы (1.2.y, 1.3.y, миграция 003 + load_rosstat_annual.py)
+- ✅ Новые комбо-страницы: housing-need-real-chart.html, housing-pace-real-chart.html
+
+**Известные ограничения:** данные 2.13.ext только до 2015; парсеры domclick.py и rosreestr.py не реализованы; GitHub Actions для парсеров не создаются (fedstat блокирует облачные IP).
 
 ## Agent skills
 

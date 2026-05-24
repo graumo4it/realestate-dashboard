@@ -187,6 +187,7 @@ def main():
     cur.close()
     conn.close()
     print(f"\nГотово. Записано точек: {inserted}")
+    print(f"Upserted: {inserted} rows")
 
 
 if __name__ == '__main__':
