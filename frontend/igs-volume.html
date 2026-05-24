@@ -104,8 +104,7 @@
         </div>
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
-          <div class="table-tabs"><button class="table-tab active" data-table="total">Всего (ИЖС)</button>
-<button class="table-tab" data-table="build">Строительство</button>
+          <div class="table-tabs"><button class="table-tab active" data-table="build">Строительство</button>
 <button class="table-tab" data-table="buy">Покупка</button></div>
           <table class="data-table">
             <thead><tr>
@@ -133,7 +132,7 @@ ComboPage.init({
   codes:     window.CODES,
   labels:    {'total':'Всего (ИЖС)','build':'Строительство','buy':'Покупка'},
   colors:    {'total':'#E8341C','build':'#1A2B4A','buy':'#F4A336'},
-  keys:      ['total','build','buy'],
+  keys:      ['build','buy'],
   chartType: 'bar',
   aggType:   'sum',
   unit:      'млн руб.',
