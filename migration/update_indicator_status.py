@@ -27,7 +27,7 @@ update_indicator_status.py
 
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg2
@@ -187,6 +187,84 @@ for entry in SCHEDULE:
         _CODE_SCHEDULE[code] = entry
 
 
+# ── Маппинг: код индикатора → source.code в БД ────────────────────────────────
+# Используется для определения даты последнего запуска парсера из update_jobs.
+# Только для парсируемых индикаторов (calc-индикаторы — не указываются).
+
+PARSER_SOURCE: dict[str, str] = {}
+
+def _map(codes: list[str], source: str):
+    for c in codes:
+        PARSER_SOURCE[c] = source
+
+# CBR: ипотека (02_02/02_03) + ИЖС/субсидии (02_41 + ДОМ.РФ API)
+_map([
+    "6.1","6.2","6.3","6.4","6.5","6.6","6.7","6.8","6.9","6.10",
+    "6.11","6.12","6.13","6.14","6.15","6.16","6.17","6.18","6.19","6.20",
+    "6.21","6.22","6.23","6.24","6.25","6.26","6.27",
+    "6.36","6.37","6.38","6.39","6.40","6.41","6.42","6.43","6.44","6.45",
+    "6.70","6.71","6.72","6.73","6.74","6.75","6.76","6.77","6.78","6.79",
+    "6.80","6.81","6.82","6.83","6.84","6.85","6.86","6.87",
+], "cbr")
+
+# DomRF Web: наш.дом.рф
+_map(["3.1","3.2","3.3","3.4","3.17","3.18","3.19"], "domrf")
+
+# DomRF оркестратор: migrate_apartments / migrate_matrix_projects / migrate_sales_matrix
+_map([
+    "3.6","4.1","4.8","4.9","5.8","5.20","5.21",
+    "apt_area","apt_budget","sales_apt_sqm","mm_price","mm_budget",
+    "apartments_count_1k","apartments_count_2k","apartments_count_3k",
+    "apartments_count_4k","apartments_count_total",
+    "apartments_area_1k","apartments_area_2k","apartments_area_3k",
+    "apartments_area_4k","apartments_area_total",
+    "apartments_share_1k","apartments_share_2k","apartments_share_3k","apartments_share_4k",
+    "uc_absorption_active","uc_absorption_total",
+    "uc_area_active","uc_area_total",
+    "uc_new_active","uc_new_total",
+    "uc_new_vs_input_active","uc_new_vs_input_total",
+    "uc_new_vs_sales_active","uc_new_vs_sales_total",
+    "uc_sold_vs_ready","uc_stock_years_active","uc_stock_years_total",
+], "domrf")
+
+# Rosstat / EMISS (fetch_fedstat.py)
+_map([
+    "1.3",
+    "2.1","2.2","2.3",
+    "2.9","2.11","2.12","2.13","2.13.ext",
+    "4.4","4.4.1","4.4.2","4.4.3",
+    "4.5","4.5.1","4.5.2","4.5.3","4.5.4",
+], "emiss")
+
+# Доходы населения (fetch_income_rosstat.py — rosstat.gov.ru)
+_map(["1.2","1.2.y"], "rosstat")
+
+# Росреестр (fetch_rosreestr_ddu.py)
+_map(["5.1"], "rosreestr")
+
+
+# ── Расчётные индикаторы (calc_*.py) ──────────────────────────────────────────
+# Для них дата берётся из MAX(data_points.created_at).
+
+CALC_CODES: set[str] = {
+    "1.1",                              # migrate_population
+    "1.3.y",                            # calc_annual_companion
+    "2.6","2.7","2.8",                  # calc_housing_per_capita
+    "2.10",                             # calc_housing_provision
+    "3.5",                              # calc_avg_apt_area
+    "3.7","uc_dev_activity",            # calc_developer_activity
+    "5.3",                              # calc_demand_activity
+    "5.9","5.9.ma12",                   # calc_sales_pace
+    "5.10",                             # calc_affordability
+    "5.11",                             # calc_affordability_fcp
+    "5.12.33","5.12.38",               # calc_housing_need
+    "5.13.33","5.13.38",
+    "5.14.33","5.14.38",
+    "5.15.33","5.15.38",
+    "5.22","5.22.ma12",                # calc_sales_pace_mm
+}
+
+
 # ── БД ─────────────────────────────────────────────────────────────────────────
 
 def _connect():
@@ -208,6 +286,41 @@ def fetch_last_dates(conn) -> dict[str, date | None]:
             LEFT JOIN data_points dp ON dp.indicator_id = i.id
             GROUP BY i.code
         """)
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def fetch_last_parser_runs(conn) -> dict[str, datetime | None]:
+    """
+    Возвращает {source_code: MAX(started_at)} из update_jobs.
+    Используется для столбца «Дата парсера».
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT s.code, MAX(uj.started_at)
+            FROM update_jobs uj
+            JOIN sources s ON s.id = uj.source_id
+            WHERE uj.status = 'success'
+            GROUP BY s.code
+        """)
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def fetch_last_calc_runs(conn) -> dict[str, datetime | None]:
+    """
+    Возвращает {indicator_code: MAX(created_at)} из data_points
+    для всех расчётных индикаторов из CALC_CODES.
+    Используется для столбца «Дата расчёта».
+    """
+    if not CALC_CODES:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT i.code, MAX(dp.created_at)
+            FROM indicators i
+            JOIN data_points dp ON dp.indicator_id = i.id
+            WHERE i.code = ANY(%s)
+            GROUP BY i.code
+        """, (list(CALC_CODES),))
         return {row[0]: row[1] for row in cur.fetchall()}
 
 
@@ -420,7 +533,15 @@ def _find_or_create_col(ws, header_text: str, after_col: int) -> int:
     return new_col
 
 
-def update_excel(last_dates: dict[str, date | None], today: date) -> None:
+def update_excel(
+    last_dates: dict[str, date | None],
+    parser_runs: dict[str, object],
+    calc_runs: dict[str, object],
+    today: date,
+) -> None:
+    from openpyxl.utils import get_column_letter
+    from openpyxl.cell.cell import MergedCell
+
     wb = openpyxl.load_workbook(EXCEL_PATH)
     ws = wb.active
 
@@ -437,22 +558,41 @@ def update_excel(last_dates: dict[str, date | None], today: date) -> None:
     cod_col         = col_idx("Код")
     period_col_name = col_idx("Периодичность")
     last_pt_col     = col_idx("Последняя точка")
-    cnt_col         = col_idx("Кол-во точек")
 
-    # Целевые столбцы — «Актуальный период» и «Статус»
-    # Размещаем их сразу после «Последняя точка»
+    # Целевые столбцы (создаём/находим в нужном порядке после «Последняя точка»)
     anchor = last_pt_col or max_col
     actual_period_col = _find_or_create_col(ws, "Актуальный период", anchor)
-    status_col        = _find_or_create_col(ws, "Статус", actual_period_col)
+    status_col        = _find_or_create_col(ws, "Статус",            actual_period_col)
+    parser_run_col    = _find_or_create_col(ws, "Дата парсера",      status_col)
+    calc_run_col      = _find_or_create_col(ws, "Дата расчёта",      parser_run_col)
 
-    # Устанавливаем ширину новых столбцов
-    from openpyxl.utils import get_column_letter
-    ws.column_dimensions[get_column_letter(actual_period_col)].width = 18
-    ws.column_dimensions[get_column_letter(status_col)].width = 20
+    # Ширина столбцов
+    for col, width in [
+        (actual_period_col, 18),
+        (status_col,        22),
+        (parser_run_col,    18),
+        (calc_run_col,      18),
+    ]:
+        ws.column_dimensions[get_column_letter(col)].width = width
 
-    # Собираем координаты объединённых ячеек (openpyxl возвращает MergedCell
-    # для всех ячеек диапазона кроме верхней левой — запись в них вызовет ошибку)
-    from openpyxl.cell.cell import MergedCell
+    def _write(cell, value, fill=None, align="left"):
+        """Безопасная запись: пропускает MergedCell."""
+        if isinstance(cell, MergedCell):
+            return
+        cell.value = value
+        if fill:
+            cell.fill = _fill(fill)
+        cell.alignment = Alignment(horizontal=align)
+        cell.font = Font(size=10)
+
+    def _fmt_dt(dt_val) -> str:
+        """Форматирует datetime → 'ДД.ММ.ГГГГ ЧЧ:ММ' или '' если None."""
+        if dt_val is None:
+            return ""
+        try:
+            return dt_val.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return str(dt_val)
 
     updated = 0
     for row in range(DATA_START, ws.max_row + 1):
@@ -466,28 +606,26 @@ def update_excel(last_dates: dict[str, date | None], today: date) -> None:
         periodicity = str(periodicity).strip() if periodicity else ""
 
         actual_date = last_dates.get(code)
-
-        # Форматируем «Актуальный период»
+        status_text, clr = compute_status(code, actual_date, today)
         period_str = format_period(actual_date, periodicity)
 
-        # Статус
-        status_text, clr = compute_status(code, actual_date, today)
+        _write(ws.cell(row, actual_period_col), period_str, fill=clr, align="center")
+        _write(ws.cell(row, status_col),        status_text, fill=clr, align="left")
 
-        # Записываем «Актуальный период» (пропускаем объединённые ячейки)
-        ap_cell = ws.cell(row, actual_period_col)
-        if not isinstance(ap_cell, MergedCell):
-            ap_cell.value = period_str
-            ap_cell.fill = _fill(clr)
-            ap_cell.alignment = Alignment(horizontal="center")
-            ap_cell.font = Font(size=10)
+        # «Дата парсера»: из update_jobs по source_code индикатора
+        parser_source = PARSER_SOURCE.get(code)
+        if parser_source and code not in CALC_CODES:
+            run_dt = parser_runs.get(parser_source)
+            _write(ws.cell(row, parser_run_col), _fmt_dt(run_dt), align="center")
+        else:
+            _write(ws.cell(row, parser_run_col), "", align="center")
 
-        # Записываем «Статус»
-        st_cell = ws.cell(row, status_col)
-        if not isinstance(st_cell, MergedCell):
-            st_cell.value = status_text
-            st_cell.fill = _fill(clr)
-            st_cell.alignment = Alignment(horizontal="left")
-            st_cell.font = Font(size=10)
+        # «Дата расчёта»: из MAX(data_points.created_at) для calc-индикаторов
+        if code in CALC_CODES:
+            calc_dt = calc_runs.get(code)
+            _write(ws.cell(row, calc_run_col), _fmt_dt(calc_dt), align="center")
+        else:
+            _write(ws.cell(row, calc_run_col), "", align="center")
 
         updated += 1
 
@@ -514,12 +652,20 @@ def main():
 
     conn = _connect()
     try:
-        last_dates = fetch_last_dates(conn)
-        print(f"  Загружено из БД: {len(last_dates)} индикаторов")
+        last_dates   = fetch_last_dates(conn)
+        parser_runs  = fetch_last_parser_runs(conn)
+        calc_runs    = fetch_last_calc_runs(conn)
+        print(f"  Индикаторов из БД: {len(last_dates)}")
+        runs_str = ", ".join(
+            f"{k}: {v.strftime('%d.%m %H:%M')}"
+            for k, v in sorted(parser_runs.items()) if v
+        )
+        print(f"  Запусков парсеров: {len(parser_runs)} источников ({runs_str})")
+        print(f"  Расчётных кодов с данными: {len(calc_runs)}")
     finally:
         conn.close()
 
-    update_excel(last_dates, today)
+    update_excel(last_dates, parser_runs, calc_runs, today)
 
     # Вывод сводки статусов
     statuses: dict[str, int] = {}
