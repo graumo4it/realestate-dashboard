@@ -511,6 +511,91 @@ def _fill(hex_color: str) -> PatternFill:
     return PatternFill("solid", fgColor=hex_color)
 
 
+def _normalize_formatting(ws) -> None:
+    """
+    Приводит форматирование листа в порядок после добавления новых столбцов:
+      1. Удаляет пустые «хвостовые» столбцы (нет заголовка и нет данных)
+      2. Фиксирует заливку заголовков (alpha FF для 6-значных HEX-цветов)
+      3. Обновляет диапазоны объединённых ячеек (заголовок row1, футер)
+      4. Устанавливает ширину всех столбцов по таблице COLUMN_WIDTHS
+      5. Выставляет замороженную область (строки 1-2)
+    """
+    from openpyxl.utils import get_column_letter
+    from openpyxl.cell.cell import MergedCell
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    # ── 1. Удаляем пустые хвостовые столбцы ─────────────────────────────────
+    while ws.max_column > 1:
+        last_col = ws.max_column
+        cell = ws.cell(HEADER_ROW, last_col)
+        if isinstance(cell, MergedCell) or cell.value:
+            break
+        ws.delete_cols(last_col)
+
+    n_cols = ws.max_column  # актуальное число столбцов после очистки
+
+    # ── 2. Фиксируем заливку заголовков (6-значный HEX → добавляем FF) ──────
+    for col in range(1, n_cols + 1):
+        cell = ws.cell(HEADER_ROW, col)
+        if isinstance(cell, MergedCell):
+            continue
+        fill = cell.fill
+        if fill and fill.patternType == "solid":
+            rgb = fill.fgColor.rgb  # ARGB, 8 chars
+            if rgb.startswith("00") and rgb != "00000000":
+                # Непрозрачный цвет с нулевым alpha → заменяем на FF
+                correct_rgb = "FF" + rgb[2:]
+                cell.fill = PatternFill("solid", fgColor=correct_rgb)
+                cell.font = Font(bold=True, color="FFFFFF", size=10)
+                cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+    # ── 3. Обновляем объединённые ячейки ────────────────────────────────────
+    # Снимаем все мерджи, затем восстанавливаем с правильными диапазонами.
+    # Строка 1 (заголовок файла): охватывает все столбцы.
+    # Строки 151+ (легенда): каждая строка охватывает все столбцы.
+    merges_to_fix = {}  # {row: (start_col, old_end_col)}
+    for merge_range in list(ws.merged_cells.ranges):
+        min_row = merge_range.min_row
+        max_row = merge_range.max_row
+        min_col = merge_range.min_col
+        if min_row == max_row and min_col == 1:
+            merges_to_fix[min_row] = merge_range.max_col
+            ws.unmerge_cells(str(merge_range))
+
+    for row, _old_end in merges_to_fix.items():
+        ws.merge_cells(
+            start_row=row, start_column=1,
+            end_row=row, end_column=n_cols
+        )
+
+    # ── 4. Ширина столбцов ───────────────────────────────────────────────────
+    # Ключ — заголовок столбца, значение — желаемая ширина.
+    COLUMN_WIDTHS = {
+        "Код":                  10,
+        "Название":             55,
+        "Источник":             15,
+        "Периодичность":        14,
+        "Статус обновления":    28,
+        "Парсер / Скрипт":      30,
+        "Расписание":           28,
+        "Последняя точка":      14,
+        "Актуальный период":    18,
+        "Статус":               22,
+        "Дата парсера":         19,
+        "Дата расчёта":         19,
+        "Кол-во точек":         13,
+        "Примечания":           55,
+    }
+    for col in range(1, n_cols + 1):
+        cell = ws.cell(HEADER_ROW, col)
+        header_val = cell.value if not isinstance(cell, MergedCell) else None
+        if header_val and header_val in COLUMN_WIDTHS:
+            ws.column_dimensions[get_column_letter(col)].width = COLUMN_WIDTHS[header_val]
+
+    # ── 5. Заморозка области (строки 1-2) ────────────────────────────────────
+    ws.freeze_panes = "A3"
+
+
 def _find_or_create_col(ws, header_text: str, after_col: int) -> int:
     """
     Ищет столбец с заголовком header_text в строке HEADER_ROW.
@@ -630,14 +715,17 @@ def update_excel(
         updated += 1
 
     # Обновляем заголовок файла с датой обновления
+    import re
     title_cell = ws.cell(1, 1)
     if title_cell.value:
-        import re
         title_cell.value = re.sub(
             r"\d{2}\.\d{2}\.\d{4}",
             today.strftime("%d.%m.%Y"),
             str(title_cell.value),
         )
+
+    # ── Нормализация форматирования ──────────────────────────────────────────
+    _normalize_formatting(ws)
 
     wb.save(EXCEL_PATH)
     print(f"✅ Обновлено {updated} индикаторов в {EXCEL_PATH}")
