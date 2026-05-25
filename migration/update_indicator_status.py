@@ -450,9 +450,14 @@ def update_excel(last_dates: dict[str, date | None], today: date) -> None:
     ws.column_dimensions[get_column_letter(actual_period_col)].width = 18
     ws.column_dimensions[get_column_letter(status_col)].width = 20
 
+    # Собираем координаты объединённых ячеек (openpyxl возвращает MergedCell
+    # для всех ячеек диапазона кроме верхней левой — запись в них вызовет ошибку)
+    from openpyxl.cell.cell import MergedCell
+
     updated = 0
     for row in range(DATA_START, ws.max_row + 1):
-        code = ws.cell(row, cod_col).value if cod_col else None
+        code_cell = ws.cell(row, cod_col) if cod_col else None
+        code = code_cell.value if code_cell and not isinstance(code_cell, MergedCell) else None
         if not code or str(code).startswith("🗺"):
             continue
         code = str(code).strip()
@@ -468,19 +473,21 @@ def update_excel(last_dates: dict[str, date | None], today: date) -> None:
         # Статус
         status_text, clr = compute_status(code, actual_date, today)
 
-        # Записываем «Актуальный период»
+        # Записываем «Актуальный период» (пропускаем объединённые ячейки)
         ap_cell = ws.cell(row, actual_period_col)
-        ap_cell.value = period_str
-        ap_cell.fill = _fill(clr)
-        ap_cell.alignment = Alignment(horizontal="center")
-        ap_cell.font = Font(size=10)
+        if not isinstance(ap_cell, MergedCell):
+            ap_cell.value = period_str
+            ap_cell.fill = _fill(clr)
+            ap_cell.alignment = Alignment(horizontal="center")
+            ap_cell.font = Font(size=10)
 
         # Записываем «Статус»
         st_cell = ws.cell(row, status_col)
-        st_cell.value = status_text
-        st_cell.fill = _fill(clr)
-        st_cell.alignment = Alignment(horizontal="left")
-        st_cell.font = Font(size=10)
+        if not isinstance(st_cell, MergedCell):
+            st_cell.value = status_text
+            st_cell.fill = _fill(clr)
+            st_cell.alignment = Alignment(horizontal="left")
+            st_cell.font = Font(size=10)
 
         updated += 1
 
