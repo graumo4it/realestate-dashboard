@@ -15,6 +15,12 @@ cd backend && uvicorn app.main:app --reload --port 8001
 cd frontend && nohup python3 -m http.server 3000 > /tmp/frontend.log 2>&1 &
 lsof -ti:3000 | xargs kill -9  # остановить
 
+# Запустить планировщик (caffeinate не даёт Маку засыпать во время выполнения)
+source venv/bin/activate
+cd parsers && caffeinate -s nohup python scheduler.py > /tmp/scheduler.log 2>&1 &
+tail -f /tmp/scheduler.log   # следить за логами
+kill $(pgrep -f scheduler.py) # остановить
+
 # Запустить парсер вручную
 source venv/bin/activate
 cd parsers && python cbr.py      # или domrf.py, rosstat.py
@@ -156,7 +162,12 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 ⚠️ fedstat.ru — **только локально** (облачные IP блокируются, скорость ≤ 1 req/sec). GitHub Actions для парсеров не создаются.
 
-**Расписание** (`parsers/scheduler.py`, APScheduler): CBR и Rosstat — 10-е число каждого месяца; DomRF (файловый оркестратор) и DomRF Web — 20-е число (DomRF в 10:00, DomRF Web в 10:30).
+**Расписание** (`parsers/scheduler.py`, APScheduler):
+- 5-е, 08:00 UTC — `subsidy_first` (субсидии ДОМ.РФ, первый прогон)
+- 10-е, 08:00 UTC — `day10`: CBR → Росреестр (5.1) → Rosstat/EMISS (1.3, 2.x, 4.x) → fetch_income_rosstat (1.2) → calc_annual_companion (1.3.y) → calc_housing_per_capita (2.6/2.7/2.8) → население 1.1 → calc_housing_provision (2.10) → calc_housing_need (5.12–5.15)
+- 20-е, 10:00 UTC — `day20`: DomRF → DomRF Web → calc_avg_apt_area (3.5) → calc_affordability (5.10/5.11)
+
+DomRF требует ручной загрузки файлов в `migration/domrf_data/`.
 
 ⚠️ `domrf_web.py` доступен только с российских IP (ЕИСЖС геоблокирует зарубежные запросы).
 
@@ -164,39 +175,49 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 ## Annual companion-индикаторы (суффикс `.y`)
 
-Для показателей с квартальной периодичностью (сейчас: 1.2, 1.3) Росстат публикует **официальные годовые** значения, которые отличаются от механической агрегации кварталов. Они хранятся отдельно:
+Companion-индикаторы хранят **годовое** значение для квартальных рядов — отображаются на `chart.html` в режиме «Год». `periodicity='annual'`, `is_public=false`. Миграция: `migration/003_annual_companion_indicators.sql`.
 
-| Код | Название | Скрипт загрузки |
-|-----|---------|-----------------|
-| `1.2.y` | Среднедушевые доходы населения (годовые) | `migration/load_rosstat_annual.py` |
-| `1.3.y` | Среднемесячная зарплата (годовая) | `migration/load_rosstat_annual.py` |
+| Код | Название | Способ обновления |
+|-----|---------|-------------------|
+| `1.2.y` | Среднедушевые доходы населения (годовые) | Ручной: `load_rosstat_annual.py` (строка «Год» из `urov_10kv_Nkv-YYYY.xlsx`) |
+| `1.3.y` | Среднемесячная зарплата (годовая) | **Авто**: `calc_annual_companion.py` в scheduler (10-е, после rosstat.py) |
 
-Свойства companion-индикаторов: `periodicity='annual'`, `is_public=false` (скрыты из навигации, доступны через API). Миграция: `migration/003_annual_companion_indicators.sql`.
+**1.3.y = среднее четырёх кварталов 1.3** (`(Q1+Q2+Q3+Q4)/4`). Рассчитывается автоматически для каждого года, где все 4 квартала присутствуют.
 
+**1.2.y** — строка «Год» из файла `urov_10kv_Nkv-YYYY.xlsx` (rosstat.gov.ru/folder/13397). Обновляется вручную раз в год:
 ```bash
-# Загрузить официальные годовые данные из Excel Росстата
 source venv/bin/activate
 cd migration
-python load_rosstat_annual.py --file1 urov_10kv.xlsx [--file2 zp.xlsx]
+python load_rosstat_annual.py --file1 /tmp/urov_10kv_Nkv-YYYY.xlsx
 ```
 
-`parsers/rosstat.py` поддерживает `ANNUAL_COMPANION`: квартальные точки идут в основной код (1.2, 1.3), годовые строки — в `.y`-вариант.
+**1.2** (квартальные данные) — парсится автоматически скриптом `fetch_income_rosstat.py` (10-е, в scheduler): скачивает `urov_10kv_Nkv-YYYY.xlsx` напрямую с Росстата, читает квартальные строки.
 
 ## Расчётные индикаторы (`migration/calc_*.py`)
 
-Запускаются вручную; пишут результат напрямую в `data_points` и обновляют view.
+Пишут результат напрямую в `data_points` и обновляют view.
+
+**В составе scheduler (автоматически):**
+
+| Код | Скрипт | Триггер |
+|-----|--------|---------|
+| `1.3.y` Зарплата годовая | `calc_annual_companion.py` | После rosstat.py (10-е) |
+| `2.6`, `2.7`, `2.8` Ввод жилья на душу | `calc_housing_per_capita.py` | После rosstat.py (10-е) |
+| `2.10` Обеспеченность жильём | `calc_housing_provision.py` | После migrate_population (10-е) |
+| `3.5` Средняя площадь квартир | `calc_avg_apt_area.py` | После domrf_web.py (20-е) |
+| `3.7` Девелоперская активность | `calc_developer_activity.py` | В составе domrf.py (20-е) |
+| `5.3` Активность спроса | `calc_demand_activity.py` | В составе domrf.py (20-е) |
+| `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` | В составе domrf.py (20-е) |
+| `5.10` Доступность (зарплата/цена) | `calc_affordability.py` | После domrf_web.py (20-е) |
+| `5.11` Доступность (ФЦП) | `calc_affordability_fcp.py` | После domrf_web.py (20-е) |
+| `5.12–5.15 (.33/.38)` Потребность в жилье | `calc_housing_need.py` | После calc_housing_provision (10-е) |
+| `5.22`, `5.22.ma12` Темп продаж машиномест | `calc_sales_pace_mm.py` | В составе domrf.py (20-е) |
+
+**Только ручной запуск (раз в год):**
 
 | Код | Скрипт |
 |-----|--------|
-| `2.10` Обеспеченность жильём | `calc_housing_provision.py` |
-| `3.5` Средняя площадь квартир | `calc_avg_apt_area.py` |
-| `3.7` Девелоперская активность | `calc_developer_activity.py` |
-| `5.3` Активность спроса | `calc_demand_activity.py` |
-| `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` |
-| `5.10` Доступность (зарплата/цена) | `calc_affordability.py` |
-| `5.11` Доступность (ФЦП) | `calc_affordability_fcp.py` |
-| `5.12–5.15 (.33/.38)` Потребность в жилье | `calc_housing_need.py` |
-| `5.22`, `5.22.ma12` Темп продаж машиномест | `calc_sales_pace_mm.py` |
+| `1.2.y` Доходы годовые | `load_rosstat_annual.py` |
 
 Население (1.1): захардкожено в скриптах, fedstat/31557 недоступен.
 
@@ -226,6 +247,10 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
    - Шаг 4: `parsers/rosstat.py` (обёртка над fetch_fedstat.py) + `parsers/domrf.py` (оркестратор migrate_*.py)
 
 **Недавно завершено:**
+- ✅ **Аудит обновления индикаторов** (`migration/generate_update_map.py`, `indicator_update_map.xlsx`): полная карта 157 индикаторов с цветовой разметкой; исправлены найденные проблемы:
+  - Удалены 6.46–6.67.1 (ЦБ РФ ДДУ — 25 индикаторов без источника обновления) + `mm_count`/`mm_area` → `migration/006_delete_cbr_ddu_indicators.sql`
+  - `migrate_sales_matrix.py` — изменены коды `mm_count`→`5.20`, `mm_area`→`5.21` (исправлен разрыв в цепочке 5.20→5.22)
+  - Создан `calc_housing_per_capita.py` (2.6/2.7/2.8 = ввод/население); добавлен в scheduler после rosstat.py
 - ✅ **`parsers/domrf_web.py`** — новый готовый парсер: скачивает `01_01_stockvariablesexsales.xlsx` с наш.дом.рф, обновляет 3.1, 3.2, 3.3, 3.4, 3.17, 3.18, 3.19 (77 месяцев, 2020–2026); идемпотентен (повторный запуск → 0 новых строк); зарегистрирован в `scheduler.py` (day=20, hour=10, minute=30)
 - ✅ **Аудит системы парсинга**: все три парсера никогда не запускались; выявлены причины; составлен план переработки (`PARSERS_PLAN.md`); установлены зависимости (`requests`, `bs4`, `APScheduler` в venv)
 - ✅ **UX-правки `category.html`**: счётчик в подзаголовке теперь показывает `indicators.length` (кол-во видимых карточек после `COMBO_OVERRIDES`) вместо `rawIndicators.length` (всё из API); убрана надпись «Данные обновляются автоматически»
@@ -238,7 +263,13 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
 - ✅ Annual companion-индикаторы (1.2.y, 1.3.y, миграция 003 + load_rosstat_annual.py)
 - ✅ Новые комбо-страницы: housing-need-real-chart.html, housing-pace-real-chart.html
 
-**Известные ограничения:** данные 2.13.ext только до 2015; парсеры domclick.py и rosreestr.py не реализованы; GitHub Actions для парсеров не создаются (fedstat блокирует облачные IP).
+**Известные ограничения:**
+- данные 2.13.ext только до 2015
+- парсеры domclick.py и rosreestr.py не реализованы (6.28–6.34, 5.4)
+- GitHub Actions для парсеров не создаются (fedstat блокирует облачные IP)
+- domrf.py требует ручной загрузки файлов ДОМ.РФ через личный кабинет в `migration/domrf_data/`
+- 2.6/2.7/2.8 не обновятся за 2026 год пока 1.1 за 2026-01-01 не появится в БД
+- 6.35 — устаревший (14 точек до нояб 2022), нет парсера
 
 ## Agent skills
 

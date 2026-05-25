@@ -19,6 +19,7 @@
   let currentMode        = 'absolute'; // 'absolute' | 'yoy' | 'mom'
   let currentRange       = null;
   let currentPeriodicity = 'quarterly'; // 'quarterly' | 'annual' — только для квартальных
+  let currentMonthlyPeriodicity = 'monthly'; // 'monthly' | 'quarterly' | 'annual' — для месячных с агрегацией
 
   const elTitle     = document.getElementById('chart-title');
   const elUnit      = document.getElementById('chart-unit');
@@ -32,6 +33,14 @@
   const elChartWrap = document.getElementById('main-chart');
   const elRelated   = document.getElementById('related-grid');
   const elBreadCat  = document.getElementById('breadcrumb-cat');
+
+  // Коды месячных индикаторов, для которых доступна агрегация Месяц/Квартал/Год
+  const MONTHLY_AGG_CONFIG = {
+    '5.8':      'sum',   // Количество сделок — квартиры
+    'apt_area': 'avg',   // Средняя площадь сделок — квартиры
+    '5.20':     'sum',   // Количество сделок — машиноместа
+    '5.21':     'avg',   // Средняя площадь сделок — машиноместа
+  };
 
   // Процентный показатель → динамика в п.п.
   function isPp() {
@@ -134,6 +143,27 @@
         renderKPI();
       });
     }
+    // Инжектировать кнопки Месяц/Квартал/Год для месячных индикаторов с агрегацией
+    if (indicator.periodicity === 'monthly' && MONTHLY_AGG_CONFIG[indCode] && window.PeriodToggle) {
+      const toolbar = document.querySelector('.chart-toolbar');
+      PeriodToggle.injectButtons(toolbar, {
+        options: ['monthly', 'quarterly', 'annual'],
+        defaultValue: 'monthly',
+        labels: { monthly: 'Месяц', quarterly: 'Квартал', annual: 'Год' },
+      }, (periodicity) => {
+        currentMonthlyPeriodicity = periodicity;
+        const momBtn = document.querySelector('[data-mode="mom"]');
+        if (momBtn) momBtn.style.display = periodicity === 'monthly' ? '' : 'none';
+        if (periodicity !== 'monthly' && currentMode === 'mom') {
+          document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+          document.querySelector('[data-mode="absolute"]').classList.add('active');
+          currentMode = 'absolute';
+        }
+        buildChart();
+        renderTable();
+        renderKPI();
+      });
+    }
   }
 
   function renderKPI() {
@@ -148,13 +178,15 @@
     elKpiPeriod.textContent = last.label || fmtDateInline(last.date, indicator.periodicity);
 
     const pp = isPp();
-    const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
+    const isAggQoQ = indicator.periodicity === 'quarterly' || currentMonthlyPeriodicity === 'quarterly';
+    const momLabel = isAggQoQ ? 'кв./кв.' : 'м/м';
     const yoyHtml = last.yoy_change_pct != null
       ? `<span style="margin-right:12px">г/г: ${deltaHtml(last.yoy_change_pct, pp)}</span>` : '';
-    // Баг 1: скрывать кв./кв. дельту когда currentPeriodicity === 'annual'
+    // Скрывать кв./кв. дельту когда годовой вид; скрывать м/м когда агрегация в квартал/год
     const showMomDelta = last.mom_change_pct != null
       && indicator.periodicity !== 'annual'
-      && currentPeriodicity !== 'annual';
+      && currentPeriodicity !== 'annual'
+      && currentMonthlyPeriodicity !== 'annual';
     const momHtml = showMomDelta
       ? `<span>${momLabel}: ${deltaHtml(last.mom_change_pct, pp)}</span>` : '';
     elKpiDelta.innerHTML = yoyHtml + momHtml;
@@ -162,6 +194,19 @@
 
   function getFiltered() {
     let series = allSeries;
+
+    // Агрегация месячных → квартальные/годовые
+    if (indicator.periodicity === 'monthly' && MONTHLY_AGG_CONFIG[indCode] && currentMonthlyPeriodicity !== 'monthly') {
+      series = PeriodToggle.aggregate(allSeries, currentMonthlyPeriodicity, MONTHLY_AGG_CONFIG[indCode]);
+      // Применяем диапазон и возвращаем сразу (данные уже агрегированы)
+      if (!currentRange) return series;
+      const pts = series.filter(p => p.value != null);
+      if (!pts.length) return series;
+      const lastDate = new Date(pts[pts.length - 1].date);
+      const cutoff = new Date(lastDate);
+      cutoff.setFullYear(cutoff.getFullYear() - currentRange);
+      return series.filter(p => new Date(p.date) >= cutoff);
+    }
 
     // Агрегация квартальных → годовые
     if (indicator.periodicity === 'quarterly' && currentPeriodicity === 'annual') {
@@ -294,11 +339,13 @@
     // Интервал меток оси X — чтобы не слипались
     const total = xData.length;
     let xInterval = 'auto';
-    if (indicator.periodicity === 'monthly') {
+    // Эффективная периодичность: для месячных с агрегацией берём currentMonthlyPeriodicity
+    const effPeriodicity = MONTHLY_AGG_CONFIG[indCode] ? currentMonthlyPeriodicity : indicator.periodicity;
+    if (effPeriodicity === 'monthly') {
       if (total > 120) xInterval = 11;
       else if (total > 60) xInterval = 5;
       else if (total > 24) xInterval = 2;
-    } else if (indicator.periodicity === 'quarterly') {
+    } else if (effPeriodicity === 'quarterly') {
       if (total > 20) xInterval = 3;   // каждый год (каждые 4 квартала)
       else if (total > 8) xInterval = 1;
     }
@@ -400,11 +447,12 @@
 
   function renderTable() {
     const series   = [...getFiltered()].reverse();
-    // Баг 2: учитываем currentPeriodicity для квартальных в годовом режиме
-    const showMom  = indicator.periodicity !== 'annual' && currentPeriodicity !== 'annual';
+    // Учитываем currentPeriodicity (для квартальных) и currentMonthlyPeriodicity (для месячных с агрегацией)
+    const showMom  = indicator.periodicity !== 'annual' && currentPeriodicity !== 'annual' && currentMonthlyPeriodicity !== 'annual';
     const pp       = isPp();
     const isPercent = indicator.unit === '%';
-    const momLabel = indicator.periodicity === 'quarterly' ? 'кв./кв.' : 'м/м';
+    const isAggQoQ = indicator.periodicity === 'quarterly' || currentMonthlyPeriodicity === 'quarterly';
+    const momLabel = isAggQoQ ? 'кв./кв.' : 'м/м';
 
     // Единица для динамики: п.п. для процентных, % для остальных
     const dynUnit = pp ? 'п.п.' : '%';

@@ -11,10 +11,10 @@ migration/migrate_sales_matrix.py
     apt_area    — средняя площадь сделки по квартирам (кв. м)   [новый]
 
   Машиноместа:
-    mm_count    — количество сделок с машиноместами (шт./мес)
+    5.20        — количество сделок с машиноместами (шт./мес)  [публичный, бывший mm_count]
     mm_price    — средняя цена 1 кв. м машиноместа (руб.)
     mm_budget   — средний бюджет машиноместа (руб.)
-    mm_area     — средняя площадь машиноместа (кв. м)
+    5.21        — средняя площадь машиноместа (кв. м)         [публичный, бывший mm_area]
 
 Использование:
     python migration/migrate_sales_matrix.py [путь_к_файлу.xlsx]
@@ -54,10 +54,11 @@ INDICATORS = {
     'apt_budget':   ('Продано квартир, руб.', 'Продано квартир, шт.'),
     'apt_area':     ('Продано квартир, м2',  'Продано квартир, шт.'),
     'sales_apt_sqm':('Продано квартир, м2',  None),   # суммарная площадь продаж, кв. м
-    'mm_count':     ('Продано машиномест, шт.',  None),
+    # Машиноместа — используем публичные коды 5.20/5.21 вместо приватных mm_count/mm_area
+    '5.20':         ('Продано машиномест, шт.',  None),
     'mm_price':     ('Продано машиномест, руб.', 'Продано машиномест, м2'),
     'mm_budget':    ('Продано машиномест, руб.', 'Продано машиномест, шт.'),
-    'mm_area':      ('Продано машиномест, м2',   'Продано машиномест, шт.'),
+    '5.21':         ('Продано машиномест, м2',   'Продано машиномест, шт.'),
     # Публичные коды 4.8/4.9 — те же формулы, что mm_price/mm_budget
     '4.8':          ('Продано машиномест, руб.', 'Продано машиномест, м2'),
     '4.9':          ('Продано машиномест, руб.', 'Продано машиномест, шт.'),
@@ -97,8 +98,11 @@ def parse_period(month_str: str) -> object:
 
 def main():
     # Находим файл
-    if len(sys.argv) > 1:
-        filepath = Path(sys.argv[1])
+    full_history = '--full-history' in sys.argv
+    args = [a for a in sys.argv[1:] if a != '--full-history']
+
+    if args:
+        filepath = Path(args[0])
     else:
         files = list(DATA_DIR.glob('*.xlsx'))
         if not files:
@@ -137,10 +141,14 @@ def main():
     df['_period_date'] = df['Месяц'].map(parse_period)
     df = df.dropna(subset=['_period_date'])
 
-    # Определяем окно пересчёта: предыдущий год + текущий год
+    # Определяем окно пересчёта
     current_year = date.today().year
-    recalc_from = date(current_year - 1, 1, 1)
-    print(f"Окно пересчёта: с {recalc_from} (предыдущий + текущий год)")
+    if full_history:
+        recalc_from = date(2020, 1, 1)
+        print(f"Режим --full-history: загружаем все данные с {recalc_from}")
+    else:
+        recalc_from = date(current_year - 1, 1, 1)
+        print(f"Окно пересчёта: с {recalc_from} (предыдущий + текущий год)")
 
     # Агрегируем по периоду
     agg_dict = {col: 'sum' for col in num_cols}
@@ -239,10 +247,10 @@ BEGIN
       -- Квартиры (машиноместа и новые показатели)
       ('apt_budget', cat_demand, src_domrf, 'Средний бюджет сделки по квартирам', 'руб.', 'monthly', 'period', 'line', 25),
       ('apt_area',   cat_demand, src_domrf, 'Средняя площадь квартиры в сделке', 'кв. м', 'monthly', 'period', 'line', 26),
-      ('mm_count',   cat_demand, src_domrf, 'Количество сделок с машиноместами', 'шт.', 'monthly', 'period', 'bar', 30),
+      -- Примечание: 5.20 и 5.21 уже существуют в БД как публичные индикаторы
+      -- ('5.20', ...) и ('5.21', ...) — ON CONFLICT DO NOTHING не создаст дублей
       ('mm_price',   cat_prices, src_domrf, 'Средняя цена 1 кв. м машиноместа', 'руб./кв. м', 'monthly', 'period', 'line', 31),
-      ('mm_budget',  cat_prices, src_domrf, 'Средний бюджет машиноместа', 'руб.', 'monthly', 'period', 'line', 32),
-      ('mm_area',    cat_demand, src_domrf, 'Средняя площадь машиноместа в сделке', 'кв. м', 'monthly', 'period', 'line', 33)
+      ('mm_budget',  cat_prices, src_domrf, 'Средний бюджет машиноместа', 'руб.', 'monthly', 'period', 'line', 32)
     ON CONFLICT (code) DO NOTHING;
 END $$;
 """)
