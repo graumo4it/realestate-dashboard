@@ -165,7 +165,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 **Расписание** (`parsers/scheduler.py`, APScheduler):
 
 *Ежемесячно:*
-- 5-е,  08:00 UTC — `day5_cbr_primary`: CBR 6.1–6.27 (ипотека, 02_02/02_03); ЦБ публикует ~3–5-го
+- 1-е,  08:00 UTC — `day1_cbr_primary`: CBR 6.1–6.27 (ипотека, 02_02/02_03)
 - 5-е,  08:00 UTC — `day5_domrf_web`: DomRF Web (3.1–3.4, 3.17–3.19) + calc_avg_apt_area (3.5); retry +5д
 - 7-е,  08:00 UTC — `day7_cbr_ihc`: CBR ИЖС + субсидии 6.36–6.87 (02_41 + ДОМ.РФ API)
 - 20-е, 10:00 UTC — `day20_domrf`: DomRF оркестратор + calc_affordability (5.10/5.11); retry +5д

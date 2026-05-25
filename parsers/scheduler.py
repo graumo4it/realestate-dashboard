@@ -4,7 +4,7 @@
 Расписание (UTC):
 
   Ежемесячно:
-    5-е,  08:00 — day5_cbr_primary   : CBR ипотека 6.1–6.27 (02_02 + 02_03); ЦБ публикует ~3–5-го
+    1-е,  08:00 — day1_cbr_primary   : CBR ипотека 6.1–6.27 (02_02 + 02_03)
     5-е,  08:00 — day5_domrf_web     : DomRF Web (3.1–3.4, 3.17–3.19) + calc_avg_apt_area (3.5)
                                        retry каждые +5 дней пока нет новых данных 3.1
     7-е,  08:00 — day7_cbr_ihc      : CBR ИЖС + субсидии 6.36–6.87 (02_41 + субсидийный файл)
@@ -291,14 +291,16 @@ def _do_annual_housing_stats():
 #  Scheduled jobs
 # ─────────────────────────────────────────────────────────────────────────────
 
-@scheduler.scheduled_job("cron", day=5, hour=8, minute=0, id="day5_cbr_primary")
-def run_day5_cbr_primary():
+@scheduler.scheduled_job("cron", day=1, hour=8, minute=0, id="day1_cbr_primary")
+def run_day1_cbr_primary():
     """
-    5-е число, 08:00 UTC.
+    1-е число, 08:00 UTC.
     CBR ипотека — базовые показатели 6.1–6.27 (02_02 + 02_03 + производные).
-    ЦБ РФ публикует файлы 02_02/02_03 около 3–5-го числа следующего месяца — retry не нужен.
+    ЦБ РФ публикует данные в последний день отчётного месяца (лаг 1 мес.):
+    например, мартовские данные — 30 апреля, поэтому 1 мая они уже доступны.
+    Retry не нужен.
     """
-    log.info("=== day5_cbr_primary (5-е число) ===")
+    log.info("=== day1_cbr_primary (1-е число) ===")
     result = CBRParser(group="primary").run()
     log.info(f"CBR primary done: {result}")
 
