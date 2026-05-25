@@ -508,21 +508,53 @@ DATA_START  = 3  # первая строка данных
 
 
 def _fill(hex_color: str) -> PatternFill:
-    return PatternFill("solid", fgColor=hex_color)
+    """PatternFill с гарантированным непрозрачным alpha (8-символьный ARGB)."""
+    color = hex_color if len(hex_color) == 8 else "FF" + hex_color
+    return PatternFill("solid", fgColor=color)
 
 
 def _normalize_formatting(ws) -> None:
     """
-    Приводит форматирование листа в порядок после добавления новых столбцов:
-      1. Удаляет пустые «хвостовые» столбцы (нет заголовка и нет данных)
-      2. Фиксирует заливку заголовков (alpha FF для 6-значных HEX-цветов)
-      3. Обновляет диапазоны объединённых ячеек (заголовок row1, футер)
-      4. Устанавливает ширину всех столбцов по таблице COLUMN_WIDTHS
-      5. Выставляет замороженную область (строки 1-2)
+    Комплексная нормализация форматирования листа:
+      1.  Удаляет пустые хвостовые столбцы
+      2.  Обновляет диапазоны мерджей (заголовок row1, легенда)
+      3.  Устанавливает ширины столбцов
+      4.  Единый стиль строки заголовков (row 2)
+      5.  Единый стиль всех строк данных:
+            — бордюры thin вокруг каждой ячейки
+            — выравнивание center/center + wrap_text
+            — исправление alpha заливок (00XXXXXX → FFXXXXXX)
+            — базовая заливка для ячеек без цвета
+            — alternating rows (чётные/нечётные)
+      6.  Стиль строки-заголовка файла (row 1)
+      7.  Стиль строк легенды (footer)
+      8.  Нормализация высот строк
+      9.  Заморозка первых двух строк
     """
     from openpyxl.utils import get_column_letter
     from openpyxl.cell.cell import MergedCell
-    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, GradientFill
+
+    # ── Константы стиля ──────────────────────────────────────────────────────
+    CLR_TITLE_BG    = "FF2F5496"   # тёмно-синий — строка 1
+    CLR_HEADER_BG   = "FF4472C4"   # синий — строка заголовков
+    CLR_ROW_ODD     = "FFDCE6F1"   # светло-синий — нечётные строки данных
+    CLR_ROW_EVEN    = "FFEFF6FF"   # очень светло-синий — чётные строки данных
+    CLR_FOOTER_BG   = "FFF2F2F2"   # светло-серый — легенда
+    CLR_BORDER      = "FFB0C4DE"   # серо-синий бордюр
+
+    def mk_border(style="thin"):
+        s = Side(style=style, color=CLR_BORDER)
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    def fix_alpha(rgb: str) -> str:
+        """00RRGGBB → FFRRGGBB; уже 8-значные с FF оставляем."""
+        if len(rgb) == 8 and rgb.startswith("00") and rgb != "00000000":
+            return "FF" + rgb[2:]
+        return rgb
+
+    thin_border  = mk_border("thin")
+    medium_border = mk_border("medium")
 
     # ── 1. Удаляем пустые хвостовые столбцы ─────────────────────────────────
     while ws.max_column > 1:
@@ -531,68 +563,144 @@ def _normalize_formatting(ws) -> None:
         if isinstance(cell, MergedCell) or cell.value:
             break
         ws.delete_cols(last_col)
+    n_cols = ws.max_column
 
-    n_cols = ws.max_column  # актуальное число столбцов после очистки
+    # ── 2. Обновляем мерджи ──────────────────────────────────────────────────
+    merges_to_fix = {}
+    for rng in list(ws.merged_cells.ranges):
+        if rng.min_row == rng.max_row and rng.min_col == 1:
+            merges_to_fix[rng.min_row] = True
+            ws.unmerge_cells(str(rng))
+    for row in merges_to_fix:
+        ws.merge_cells(start_row=row, start_column=1,
+                       end_row=row, end_column=n_cols)
 
-    # ── 2. Фиксируем заливку заголовков (6-значный HEX → добавляем FF) ──────
+    # ── 3. Ширины столбцов ───────────────────────────────────────────────────
+    COLUMN_WIDTHS = {
+        "Код":                  10,
+        "Название":             50,
+        "Источник":             14,
+        "Периодичность":        14,
+        "Статус обновления":    26,
+        "Парсер / Скрипт":      28,
+        "Расписание":           30,
+        "Последняя точка":      15,
+        "Актуальный период":    17,
+        "Статус":               22,
+        "Дата парсера":         18,
+        "Дата расчёта":         18,
+        "Кол-во точек":         12,
+        "Примечания":           50,
+    }
+    header_to_col: dict[str, int] = {}
+    for col in range(1, n_cols + 1):
+        cell = ws.cell(HEADER_ROW, col)
+        val  = cell.value if not isinstance(cell, MergedCell) else None
+        if val:
+            header_to_col[val] = col
+            if val in COLUMN_WIDTHS:
+                ws.column_dimensions[get_column_letter(col)].width = COLUMN_WIDTHS[val]
+
+    # ── 4. Строка заголовков (row 2) ─────────────────────────────────────────
     for col in range(1, n_cols + 1):
         cell = ws.cell(HEADER_ROW, col)
         if isinstance(cell, MergedCell):
             continue
-        fill = cell.fill
-        if fill and fill.patternType == "solid":
-            rgb = fill.fgColor.rgb  # ARGB, 8 chars
-            if rgb.startswith("00") and rgb != "00000000":
-                # Непрозрачный цвет с нулевым alpha → заменяем на FF
-                correct_rgb = "FF" + rgb[2:]
-                cell.fill = PatternFill("solid", fgColor=correct_rgb)
-                cell.font = Font(bold=True, color="FFFFFF", size=10)
-                cell.alignment = Alignment(horizontal="center", wrap_text=True)
+        cell.fill      = PatternFill("solid", fgColor=CLR_HEADER_BG)
+        cell.font      = Font(bold=True, color="FFFFFFFF", size=10)
+        cell.alignment = Alignment(horizontal="center", vertical="center",
+                                   wrap_text=True)
+        cell.border    = thin_border
+    ws.row_dimensions[HEADER_ROW].height = 32
 
-    # ── 3. Обновляем объединённые ячейки ────────────────────────────────────
-    # Снимаем все мерджи, затем восстанавливаем с правильными диапазонами.
-    # Строка 1 (заголовок файла): охватывает все столбцы.
-    # Строки 151+ (легенда): каждая строка охватывает все столбцы.
-    merges_to_fix = {}  # {row: (start_col, old_end_col)}
-    for merge_range in list(ws.merged_cells.ranges):
-        min_row = merge_range.min_row
-        max_row = merge_range.max_row
-        min_col = merge_range.min_col
-        if min_row == max_row and min_col == 1:
-            merges_to_fix[min_row] = merge_range.max_col
-            ws.unmerge_cells(str(merge_range))
+    # ── 5. Строки данных ─────────────────────────────────────────────────────
+    # Определяем последнюю строку данных (до начала легенды)
+    last_data_row = DATA_START
+    for r in range(DATA_START, ws.max_row + 1):
+        v = ws.cell(r, 1).value
+        if v and str(v).startswith("ЛЕГЕНДА"):
+            break
+        last_data_row = r
 
-    for row, _old_end in merges_to_fix.items():
-        ws.merge_cells(
-            start_row=row, start_column=1,
-            end_row=row, end_column=n_cols
-        )
+    # Статусные столбцы — заливку оставляем как есть (compute_status)
+    status_cols = {
+        header_to_col.get("Актуальный период"),
+        header_to_col.get("Статус"),
+        header_to_col.get("Дата парсера"),
+        header_to_col.get("Дата расчёта"),
+    } - {None}
 
-    # ── 4. Ширина столбцов ───────────────────────────────────────────────────
-    # Ключ — заголовок столбца, значение — желаемая ширина.
-    COLUMN_WIDTHS = {
-        "Код":                  10,
-        "Название":             55,
-        "Источник":             15,
-        "Периодичность":        14,
-        "Статус обновления":    28,
-        "Парсер / Скрипт":      30,
-        "Расписание":           28,
-        "Последняя точка":      14,
-        "Актуальный период":    18,
-        "Статус":               22,
-        "Дата парсера":         19,
-        "Дата расчёта":         19,
-        "Кол-во точек":         13,
-        "Примечания":           55,
-    }
-    for col in range(1, n_cols + 1):
-        cell = ws.cell(HEADER_ROW, col)
-        header_val = cell.value if not isinstance(cell, MergedCell) else None
-        if header_val and header_val in COLUMN_WIDTHS:
-            ws.column_dimensions[get_column_letter(col)].width = COLUMN_WIDTHS[header_val]
+    data_row_idx = 0  # счётчик для alternating
+    for r in range(DATA_START, last_data_row + 1):
+        # Пропускаем служебные/пустые строки (нет кода в col1)
+        code_val = ws.cell(r, 1).value
+        if not code_val or isinstance(ws.cell(r, 1), MergedCell):
+            continue
 
-    # ── 5. Заморозка области (строки 1-2) ────────────────────────────────────
+        data_row_idx += 1
+        base_fill_clr = CLR_ROW_ODD if data_row_idx % 2 == 1 else CLR_ROW_EVEN
+
+        for col in range(1, n_cols + 1):
+            cell = ws.cell(r, col)
+            if isinstance(cell, MergedCell):
+                continue
+
+            # Бордюр — всегда
+            cell.border = thin_border
+
+            # Выравнивание — центр везде, перенос текста
+            cell.alignment = Alignment(horizontal="center", vertical="center",
+                                       wrap_text=True)
+
+            # Шрифт — унифицированный размер
+            bold = cell.font.bold if cell.font else False
+            cell.font = Font(size=10, bold=bold)
+
+            # Заливка
+            if col in status_cols:
+                # Статусные ячейки: исправляем alpha, не меняем цвет
+                if cell.fill and cell.fill.patternType == "solid":
+                    rgb = cell.fill.fgColor.rgb
+                    fixed = fix_alpha(rgb)
+                    if fixed != rgb:
+                        cell.fill = PatternFill("solid", fgColor=fixed)
+                # Если заливки нет вообще — базовый цвет строки
+                if not cell.fill or cell.fill.patternType != "solid" \
+                        or cell.fill.fgColor.rgb == "00000000":
+                    cell.fill = PatternFill("solid", fgColor=base_fill_clr)
+            else:
+                # Обычные ячейки: alternating row color
+                cell.fill = PatternFill("solid", fgColor=base_fill_clr)
+
+        # Высота строки — авто (убираем ручную высоту)
+        ws.row_dimensions[r].height = None
+
+    # ── 6. Строка заголовка файла (row 1) ────────────────────────────────────
+    title_cell = ws.cell(1, 1)
+    title_cell.fill      = PatternFill("solid", fgColor=CLR_TITLE_BG)
+    title_cell.font      = Font(bold=True, size=12, color="FFFFFFFF")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+
+    # ── 7. Легенда (footer после строк данных) ───────────────────────────────
+    for r in range(last_data_row + 1, ws.max_row + 1):
+        first_cell = ws.cell(r, 1)
+        if isinstance(first_cell, MergedCell) or not first_cell.value:
+            continue
+        for col in range(1, n_cols + 1):
+            cell = ws.cell(r, col)
+            if isinstance(cell, MergedCell):
+                continue
+            is_label = (col == 1)
+            cell.border    = thin_border
+            cell.alignment = Alignment(horizontal="left" if is_label else "center",
+                                       vertical="center", wrap_text=True)
+            cell.font      = Font(size=9, bold=(str(first_cell.value).startswith("ЛЕГЕНДА")))
+            if not cell.fill or cell.fill.patternType != "solid" \
+                    or cell.fill.fgColor.rgb == "00000000":
+                cell.fill = PatternFill("solid", fgColor=CLR_FOOTER_BG)
+
+    # ── 8. Заморозка ─────────────────────────────────────────────────────────
     ws.freeze_panes = "A3"
 
 
