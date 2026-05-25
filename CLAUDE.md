@@ -163,9 +163,24 @@ psql -U postgres -d realestate -f migration/001_init.sql
 ⚠️ fedstat.ru — **только локально** (облачные IP блокируются, скорость ≤ 1 req/sec). GitHub Actions для парсеров не создаются.
 
 **Расписание** (`parsers/scheduler.py`, APScheduler):
-- 5-е, 08:00 UTC — `subsidy_first` (субсидии ДОМ.РФ, первый прогон)
-- 10-е, 08:00 UTC — `day10`: CBR → Росреестр (5.1) → Rosstat/EMISS (1.3, 2.x, 4.x) → fetch_income_rosstat (1.2) → calc_annual_companion (1.3.y) → calc_housing_per_capita (2.6/2.7/2.8) → население 1.1 → calc_housing_provision (2.10) → calc_housing_need (5.12–5.15)
-- 20-е, 10:00 UTC — `day20`: DomRF → DomRF Web → calc_avg_apt_area (3.5) → calc_affordability (5.10/5.11)
+
+*Ежемесячно:*
+- 1-е,  08:00 UTC — `day1_cbr_primary`: CBR 6.1–6.27 (ипотека, 02_02/02_03)
+- 5-е,  08:00 UTC — `day5_domrf_web`: DomRF Web (3.1–3.4, 3.17–3.19) + calc_avg_apt_area (3.5); retry +5д
+- 7-е,  08:00 UTC — `day7_cbr_ihc`: CBR ИЖС + субсидии 6.36–6.87 (02_41 + ДОМ.РФ API)
+- 20-е, 10:00 UTC — `day20_domrf`: DomRF оркестратор + calc_affordability (5.10/5.11); retry +5д
+- 20-е, 11:00 UTC — `monthly_rosstat`: Rosstat 2.1/2.2/2.3 + calc_housing_per_capita (2.6–2.8); retry +5д
+- 25-е, 12:00 UTC — `monthly_status_update`: обновляет indicator_update_map.xlsx (Актуальный период + Статус)
+
+*Ежеквартально (1 фев / 1 май / 1 авг / 1 ноя):*
+- `quarterly_rosstat`: Rosstat 1.3/4.4/4.5 + fetch_rosreestr_ddu (5.1) + fetch_income_rosstat (1.2 + 1.2.y)
+
+*Ежегодно:*
+- 1 фев,  08:30 UTC — `annual_companion`: calc_annual_companion (1.3.y); retry 1-е кажд. мес.
+- 15 мар, 08:00 UTC — `annual_population_dev`: migrate_population (1.1) + calc_developer_activity (3.7) + calc_demand_activity (5.3); retry 15-е кажд. мес.
+- 5 июн,  08:00 UTC — `annual_housing_stats`: Rosstat 2.9/2.11/2.12/2.13 → calc_housing_provision (2.10) → calc_housing_need (5.12–5.15); retry +10д
+
+Все job'ы с retry проверяют `MAX(period_date)` в БД после каждого запуска и добавляют one-shot повтор если данных нет. `CBRParser(group=...)` принимает `'primary'` или `'ihc'`. `RosstatParser(codes=[...])` принимает список кодов для fetch_fedstat.py.
 
 DomRF требует ручной загрузки файлов в `migration/domrf_data/`.
 
@@ -179,13 +194,13 @@ Companion-индикаторы хранят **годовое** значение 
 
 | Код | Название | Способ обновления |
 |-----|---------|-------------------|
-| `1.2.y` | Среднедушевые доходы населения (годовые) | **Авто**: `fetch_income_rosstat.py` (строка «Год» из xlsx, 10-е) |
-| `1.3.y` | Среднемесячная зарплата (годовая) | **Авто**: `calc_annual_companion.py` (avg Q1–Q4 из 1.3, 10-е) |
+| `1.2.y` | Среднедушевые доходы населения (годовые) | **Авто**: `fetch_income_rosstat.py` (строка «Год» из xlsx, quarterly_rosstat 1 фев/май/авг/ноя) |
+| `1.3.y` | Среднемесячная зарплата (годовая) | **Авто**: `calc_annual_companion.py` (avg Q1–Q4 из 1.3, annual_companion 1 фев + retry) |
 
-Все companion-индикаторы обновляются автоматически в scheduler (day10):
+Companion-индикаторы обновляются автоматически в scheduler:
 
-- **1.2 + 1.2.y** — `fetch_income_rosstat.py`: скачивает `urov_10kv_Nkv-YYYY.xlsx` с rosstat.gov.ru/folder/13397; квартальные строки → `1.2`; строка «Год» → `1.2.y` (официальное годовое среднее Росстата).
-- **1.3.y** — `calc_annual_companion.py`: `(Q1+Q2+Q3+Q4) / 4` из квартальных данных `1.3`.
+- **1.2 + 1.2.y** — `fetch_income_rosstat.py`: скачивает `urov_10kv_Nkv-YYYY.xlsx` с rosstat.gov.ru/folder/13397; квартальные строки → `1.2`; строка «Год» → `1.2.y` (официальное годовое среднее Росстата). Запускается в `quarterly_rosstat` (4 раза в год).
+- **1.3.y** — `calc_annual_companion.py`: `(Q1+Q2+Q3+Q4) / 4` из квартальных данных `1.3`. Запускается в `annual_companion` (1 февраля + retry на 1-е число кажд. мес. если данных нет).
 
 ## Расчётные индикаторы (`migration/calc_*.py`)
 
@@ -193,19 +208,19 @@ Companion-индикаторы хранят **годовое** значение 
 
 **В составе scheduler (автоматически):**
 
-| Код | Скрипт | Триггер |
-|-----|--------|---------|
-| `1.3.y` Зарплата годовая | `calc_annual_companion.py` | После rosstat.py (10-е) |
-| `2.6`, `2.7`, `2.8` Ввод жилья на душу | `calc_housing_per_capita.py` | После rosstat.py (10-е) |
-| `2.10` Обеспеченность жильём | `calc_housing_provision.py` | После migrate_population (10-е) |
-| `3.5` Средняя площадь квартир | `calc_avg_apt_area.py` | После domrf_web.py (20-е) |
-| `3.7` Девелоперская активность | `calc_developer_activity.py` | В составе domrf.py (20-е) |
-| `5.3` Активность спроса | `calc_demand_activity.py` | В составе domrf.py (20-е) |
-| `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` | В составе domrf.py (20-е) |
-| `5.10` Доступность (зарплата/цена) | `calc_affordability.py` | После domrf_web.py (20-е) |
-| `5.11` Доступность (ФЦП) | `calc_affordability_fcp.py` | После domrf_web.py (20-е) |
-| `5.12–5.15 (.33/.38)` Потребность в жилье | `calc_housing_need.py` | После calc_housing_provision (10-е) |
-| `5.22`, `5.22.ma12` Темп продаж машиномест | `calc_sales_pace_mm.py` | В составе domrf.py (20-е) |
+| Код | Скрипт | Триггер (job) |
+|-----|--------|---------------|
+| `1.3.y` Зарплата годовая | `calc_annual_companion.py` | `annual_companion` (1 фев + retry) |
+| `2.6`, `2.7`, `2.8` Ввод жилья на душу | `calc_housing_per_capita.py` | `monthly_rosstat` (20-е + retry) |
+| `2.10` Обеспеченность жильём | `calc_housing_provision.py` | `annual_housing_stats` (5 июн + retry) |
+| `3.5` Средняя площадь квартир | `calc_avg_apt_area.py` | `day5_domrf_web` (5-е + retry) |
+| `3.7` Девелоперская активность | `calc_developer_activity.py` | `annual_population_dev` (15 мар + retry) |
+| `5.3` Активность спроса | `calc_demand_activity.py` | `annual_population_dev` (15 мар + retry) |
+| `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` | `day20_domrf` (через domrf.py, 20-е) |
+| `5.10` Доступность (зарплата/цена) | `calc_affordability.py` | `day20_domrf` (20-е + retry) |
+| `5.11` Доступность (ФЦП) | `calc_affordability_fcp.py` | `day20_domrf` (20-е + retry) |
+| `5.12–5.15 (.33/.38)` Потребность в жилье | `calc_housing_need.py` | `annual_housing_stats` (после calc_housing_provision) |
+| `5.22`, `5.22.ma12` Темп продаж машиномест | `calc_sales_pace_mm.py` | `day20_domrf` (через domrf.py, 20-е) |
 
 **Ручной запуск:** все показатели обновляются автоматически. `load_rosstat_annual.py` оставлен как инструмент отладки, в scheduler не используется.
 
@@ -237,6 +252,8 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
    - Шаг 4: `parsers/rosstat.py` (обёртка над fetch_fedstat.py) + `parsers/domrf.py` (оркестратор migrate_*.py)
 
 **Недавно завершено:**
+- ✅ **Новое расписание парсеров** (`parsers/scheduler.py`): 3 job'а → 10 job'ов; полная retry-логика (проверка БД после каждого запуска); `CBRParser(group='primary'/'ihc')`; `RosstatParser(codes=[...])`; удалён `SubsidyOnlyParser`; добавлен `monthly_status_update` (25-е)
+- ✅ **Мониторинг обновлений** (`migration/update_indicator_status.py`): скрипт читает `MAX(period_date)` из БД, вычисляет ожидаемый период по расписанию, проставляет «Актуальный период» и «Статус» (✅/⏳/⚠️/⛔) в `indicator_update_map.xlsx`; запускается автоматически 25-е числа
 - ✅ **Аудит обновления индикаторов** (`migration/generate_update_map.py`, `indicator_update_map.xlsx`): полная карта 157 индикаторов с цветовой разметкой; исправлены найденные проблемы:
   - Удалены 6.46–6.67.1 (ЦБ РФ ДДУ — 25 индикаторов без источника обновления) + `mm_count`/`mm_area` → `migration/006_delete_cbr_ddu_indicators.sql`
   - `migrate_sales_matrix.py` — изменены коды `mm_count`→`5.20`, `mm_area`→`5.21` (исправлен разрыв в цепочке 5.20→5.22)

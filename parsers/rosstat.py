@@ -22,6 +22,15 @@ FETCH_FEDSTAT = Path(__file__).parent.parent / "migration" / "fetch_fedstat.py"
 class RosstatParser(BaseParser):
     source_code = "rosstat"
 
+    def __init__(self, codes: list[str] | None = None):
+        """
+        codes — список кодов индикаторов для обработки (передаётся в fetch_fedstat.py).
+                None = все коды (поведение как раньше).
+        Пример: RosstatParser(codes=["2.1", "2.2", "2.3"])
+        """
+        super().__init__()
+        self.codes = codes
+
     def fetch_raw(self):
         return None
 
@@ -32,11 +41,17 @@ class RosstatParser(BaseParser):
         """Запускает migration/fetch_fedstat.py как subprocess.
 
         fetch_fedstat.py сам подключается к БД, делает upsert и обновляет view.
+        Поддерживает позиционные аргументы с кодами: python fetch_fedstat.py [код ...]
         Мы только захватываем итоговое кол-во загруженных строк из вывода скрипта.
         """
-        log.info(f"[rosstat] Запуск {FETCH_FEDSTAT}")
+        cmd = [sys.executable, str(FETCH_FEDSTAT)]
+        if self.codes:
+            cmd.extend(self.codes)
+            log.info(f"[rosstat] Запуск {FETCH_FEDSTAT} с кодами: {self.codes}")
+        else:
+            log.info(f"[rosstat] Запуск {FETCH_FEDSTAT} (все коды)")
         result = subprocess.run(
-            [sys.executable, str(FETCH_FEDSTAT)],
+            cmd,
             capture_output=True,
             text=True,
         )

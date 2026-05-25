@@ -120,6 +120,24 @@ SUBSIDY_CODES: frozenset[str] = frozenset({
     "6.44", "6.45",
 })
 
+# Группы индикаторов для раздельного запуска
+# group='primary' — ежемесячная ипотека (файлы 02_02 + 02_03 + производные)
+PRIMARY_CODES: frozenset[str] = frozenset({
+    "6.1",  "6.2",  "6.3",  "6.4",  "6.5",  "6.6",
+    "6.7",  "6.8",  "6.9",  "6.10", "6.11", "6.12",
+    "6.13", "6.14", "6.15", "6.16", "6.17", "6.18",
+    "6.19", "6.20", "6.21", "6.22", "6.23", "6.24",
+    "6.25", "6.26", "6.27",
+})
+
+# group='ihc' — ИЖС (02_41) + субсидии ДОМ.РФ (6.36–6.45)
+IHC_CODES: frozenset[str] = frozenset({
+    "6.36", "6.37", "6.38", "6.39", "6.40", "6.41", "6.42", "6.43", "6.44", "6.45",
+    "6.70", "6.71", "6.72", "6.73", "6.74", "6.75",
+    "6.76", "6.77", "6.78", "6.79", "6.80", "6.81",
+    "6.82", "6.83", "6.84", "6.85", "6.86", "6.87",
+})
+
 # Сколько последних периодов перезаписывать при каждом парсинге субсидий
 # (данные в первоисточнике регулярно уточняются за ~3 года назад)
 SUBSIDY_UPDATE_LOOKBACK = 36  # месяцев
@@ -598,6 +616,17 @@ def _subsidy_lookback_cutoff(records: list[dict]) -> date:
 class CBRParser(BaseParser):
     source_code = "cbr"
 
+    def __init__(self, group: str | None = None):
+        """
+        group='primary' — только 6.1–6.27 (ежемесячная ипотека, файлы 02_02/02_03).
+        group='ihc'     — только 6.36–6.87 (ИЖС 02_41 + субсидии ДОМ.РФ).
+        group=None      — всё (обратная совместимость, запускает сразу оба набора).
+        """
+        super().__init__()
+        if group not in (None, "primary", "ihc"):
+            raise ValueError(f"group must be 'primary', 'ihc', or None, got {group!r}")
+        self.group = group
+
     def run(self) -> dict:
         """
         Переопределяем run() для разделения логики:
@@ -655,16 +684,27 @@ class CBRParser(BaseParser):
 
     def fetch_raw(self) -> dict:
         """
-        Скачивает три основных файла + пытается найти «Статистические ряды».
-        Возвращает {"total": bytes, "primary": bytes, "igs": bytes, "subsidy": bytes | None}.
+        Скачивает файлы в зависимости от self.group.
+          group='primary' → только 02_02 + 02_03
+          group='ihc'     → только 02_41 + субсидийный файл
+          group=None      → все три файла + субсидии
+        Возвращает {"total": bytes|None, "primary": bytes|None, "igs": bytes|None, "subsidy": bytes|None}.
         """
         session = requests.Session()
         session.headers["User-Agent"] = (
             "Mozilla/5.0 (compatible; realestate-dashboard-bot/1.0)"
         )
-        raw: dict[str, bytes | None] = {"subsidy": None}
+        raw: dict[str, bytes | None] = {"total": None, "primary": None, "igs": None, "subsidy": None}
 
-        for key, path in FILES.items():
+        # Определяем, какие файлы скачивать
+        if self.group == "primary":
+            files_to_fetch = {"total": FILES["total"], "primary": FILES["primary"]}
+        elif self.group == "ihc":
+            files_to_fetch = {"igs": FILES["igs"]}
+        else:
+            files_to_fetch = FILES  # all
+
+        for key, path in files_to_fetch.items():
             url = f"{CBR_BASE_URL}{path}"
             log.info(f"Скачиваю {url}")
             try:
@@ -675,53 +715,73 @@ class CBRParser(BaseParser):
             except requests.RequestException as e:
                 raise RuntimeError(f"Не удалось скачать {url}: {e}") from e
 
-        # Субсидии (необязательный файл) — через ДОМ.РФ API
-        log.info("Запрашиваю субсидийный файл через API ДОМ.РФ…")
-        raw["subsidy"] = _fetch_domrf_subsidy(session)
+        # Субсидии — только для group='ihc' или group=None
+        if self.group in ("ihc", None):
+            log.info("Запрашиваю субсидийный файл через API ДОМ.РФ…")
+            raw["subsidy"] = _fetch_domrf_subsidy(session)
 
         return raw
 
     def parse(self, raw: dict) -> list[dict]:
         """
         Парсит скачанные файлы в список записей для upsert.
+        Обрабатывает только те файлы, которые присутствуют в raw (не None).
         Возвращает [{"indicator_code", "period_date", "period_label", "value"}, ...].
         """
-        # ── 1. Базовые файлы ─────────────────────────────────────────────────
-        log.info("Парсю 02_02_Mortgage.xlsx (всего)…")
-        total = _parse_mortgage_file(raw["total"], TOTAL_ROW_MAP)
-        log.info(f"  Найдено кодов: {sorted(total.keys())}, периодов: {len(next(iter(total.values()), {}))}")
-
-        log.info("Парсю 02_03_Scpa_mortgage.xlsx (первичный рынок)…")
-        primary = _parse_mortgage_file(raw["primary"], PRIMARY_ROW_MAP)
-        log.info(f"  Найдено кодов: {sorted(primary.keys())}, периодов: {len(next(iter(primary.values()), {}))}")
-
-        log.info("Парсю 02_41_Mortgage_ihc.xlsx (ИЖС)…")
-        igs = _parse_igs_file(raw["igs"])
-        log.info(f"  Найдено кодов: {sorted(igs.keys())}")
-
-        # ── 2. Записи из базовых файлов ──────────────────────────────────────
         records: list[dict] = []
+
+        # ── 1. Файл 02_02 (всего) ─────────────────────────────────────────────
+        if raw.get("total"):
+            log.info("Парсю 02_02_Mortgage.xlsx (всего)…")
+            total = _parse_mortgage_file(raw["total"], TOTAL_ROW_MAP)
+            log.info(f"  Найдено кодов: {sorted(total.keys())}, периодов: {len(next(iter(total.values()), {}))}")
+        else:
+            total = {}
+
+        # ── 2. Файл 02_03 (первичный рынок) ──────────────────────────────────
+        if raw.get("primary"):
+            log.info("Парсю 02_03_Scpa_mortgage.xlsx (первичный рынок)…")
+            primary = _parse_mortgage_file(raw["primary"], PRIMARY_ROW_MAP)
+            log.info(f"  Найдено кодов: {sorted(primary.keys())}, периодов: {len(next(iter(primary.values()), {}))}")
+        else:
+            primary = {}
+
+        # ── 3. Файл 02_41 (ИЖС) ──────────────────────────────────────────────
+        if raw.get("igs"):
+            log.info("Парсю 02_41_Mortgage_ihc.xlsx (ИЖС)…")
+            igs = _parse_igs_file(raw["igs"])
+            log.info(f"  Найдено кодов: {sorted(igs.keys())}")
+        else:
+            igs = {}
+
+        # ── 4. Записи из базовых файлов ──────────────────────────────────────
         records.extend(_series_to_records(total))
         records.extend(_series_to_records(primary))
         records.extend(_series_to_records(igs))
 
-        # ── 3. Производные ───────────────────────────────────────────────────
-        log.info("Рассчитываю производные показатели…")
-        derived = _calc_derived(total, primary, igs)
-        log.info(f"  Производных записей: {len(derived)}")
-        records.extend(derived)
+        # ── 5. Производные (только если есть базовые данные) ─────────────────
+        if total or primary or igs:
+            log.info("Рассчитываю производные показатели…")
+            derived = _calc_derived(total, primary, igs)
+            log.info(f"  Производных записей: {len(derived)}")
+            records.extend(derived)
 
-        # ── 4. Субсидии ──────────────────────────────────────────────────────
+        # ── 6. Субсидии ──────────────────────────────────────────────────────
         if raw.get("subsidy"):
             log.info("Парсю субсидийный файл…")
             sub = _parse_subsidy_file(raw["subsidy"])
             log.info(f"  Субсидийных записей: {len(sub)}")
             records.extend(sub)
-        else:
-            log.info("Субсидийный файл недоступен — раздел 6.36–6.65 пропущен.")
+        elif self.group in ("ihc", None):
+            log.info("Субсидийный файл недоступен — раздел 6.36–6.45 пропущен.")
 
-        # ── 5. Дедупликация в пределах одного запуска ────────────────────────
-        # (на случай если файлы пересекаются по периодам)
+        # ── 7. Фильтрация по группе (если задана) ────────────────────────────
+        if self.group == "primary":
+            records = [r for r in records if r["indicator_code"] in PRIMARY_CODES]
+        elif self.group == "ihc":
+            records = [r for r in records if r["indicator_code"] in IHC_CODES]
+
+        # ── 8. Дедупликация в пределах одного запуска ────────────────────────
         seen: set[tuple[str, date]] = set()
         unique: list[dict] = []
         for r in records:
@@ -731,79 +791,8 @@ class CBRParser(BaseParser):
                 unique.append(r)
 
         codes = sorted({r["indicator_code"] for r in unique})
-        log.info(f"CBR parse: итого {len(unique)} записей, коды: {codes}")
+        log.info(f"CBR parse (group={self.group!r}): итого {len(unique)} записей, коды: {codes}")
         return unique
-
-
-# --------------------------------------------------------------------------- #
-#  Парсер только субсидий (для самостоятельного запуска на 5-е число)
-# --------------------------------------------------------------------------- #
-
-class SubsidyOnlyParser(BaseParser):
-    """
-    Загружает и обновляет только субсидийные показатели (6.36–6.45).
-
-    Запускается дважды в месяц:
-      • 5-е число  — первый прогон через 5 дней после окончания отч. месяца
-      • 10-е число — второй прогон (уже в составе полного CBRParser.run())
-
-    Логика:
-      1. Скачать «Статистические ряды (РФ)» с ДОМ.РФ
-      2. Разобрать лист 01_02_01
-      3. Оставить только завершённые месяцы (не текущий)
-      4. Перезаписать данные за последние SUBSIDY_UPDATE_LOOKBACK периодов
-    """
-    source_code = "cbr"
-
-    def fetch_raw(self) -> bytes | None:
-        session = requests.Session()
-        session.headers["User-Agent"] = (
-            "Mozilla/5.0 (compatible; realestate-dashboard-bot/1.0)"
-        )
-        return _fetch_domrf_subsidy(session)
-
-    def parse(self, raw: bytes | None) -> list[dict]:
-        if not raw:
-            log.warning("[cbr/subsidy] Файл субсидий ДОМ.РФ недоступен")
-            return []
-        return _parse_subsidy_file(raw)
-
-    def run(self) -> dict:
-        self._connect()
-        self._get_source_id()
-        self._start_job()
-
-        try:
-            raw = self._fetch_with_retry()
-            records = self.parse(raw)
-
-            # Только завершённые месяцы
-            records = _filter_completed_months(records)
-
-            if not records:
-                log.info("[cbr/subsidy] Нет завершённых периодов для обновления")
-                self._finish_job("success", 0)
-                return {"status": "success", "rows": 0, "error": None}
-
-            cutoff = _subsidy_lookback_cutoff(records)
-            update_window = [r for r in records if r["period_date"] >= cutoff]
-            rows = self.upsert_update_to_db(update_window)
-
-            self._finish_job("success", rows)
-            self._refresh_view()
-            log.info(
-                f"[cbr/subsidy] Done. Записей обновлено: {rows}"
-                f" (окно {cutoff} – {max(r['period_date'] for r in update_window)})"
-            )
-            return {"status": "success", "rows": rows, "error": None}
-
-        except Exception as e:
-            log.error(f"[cbr/subsidy] Error: {e}", exc_info=True)
-            self._finish_job("error", 0, str(e))
-            return {"status": "error", "rows": 0, "error": str(e)}
-        finally:
-            if self.conn:
-                self.conn.close()
 
 
 # --------------------------------------------------------------------------- #
@@ -821,10 +810,17 @@ if __name__ == "__main__":
     )
 
     import sys as _sys
+    # Поддержка: python cbr.py [--group primary|ihc] [--dry-run]
+    group_arg = None
+    if "--group" in _sys.argv:
+        idx = _sys.argv.index("--group")
+        if idx + 1 < len(_sys.argv):
+            group_arg = _sys.argv[idx + 1]
+
     if "--dry-run" in _sys.argv or "-n" in _sys.argv:
         # Только fetch + parse, без записи в БД
-        log.info("=== DRY RUN (fetch + parse only) ===")
-        p = CBRParser()
+        log.info(f"=== DRY RUN (fetch + parse only, group={group_arg!r}) ===")
+        p = CBRParser(group=group_arg)
         raw = p.fetch_raw()
         recs = p.parse(raw)
         from collections import Counter
@@ -838,5 +834,5 @@ if __name__ == "__main__":
             for code in sorted(by_code.keys()):
                 print(f"  {code}: {by_code[code]} точек")
     else:
-        result = CBRParser().run()
+        result = CBRParser(group=group_arg).run()
         print(result)
