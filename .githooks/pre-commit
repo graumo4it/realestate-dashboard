@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+changed_agent_docs="$(git diff --cached --name-only -- AGENTS.md CLAUDE.md)"
+
+if [ -z "$changed_agent_docs" ]; then
+  exit 0
+fi
+
+python3 scripts/sync_agent_docs.py
+git add AGENTS.md CLAUDE.md

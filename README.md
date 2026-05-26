@@ -1,206 +1,229 @@
 # Статистика рынка жилой недвижимости России
 
 Публичный информационный сайт с интерактивными дашбордами по рынку жилой недвижимости России.
-Более 110 показателей: ипотека, цены, ввод жилья, спрос, застройщики.
-Данные из Банка России, Росстата, ДОМ.РФ, Домклик, Росреестра.
+Проект собирает данные ЦБ РФ, Росстата/ЕМИСС, ДОМ.РФ и Росреестра, хранит их в PostgreSQL и отдаёт через FastAPI в статический frontend на ECharts.
 
----
+## Текущий статус
+
+- Backend и frontend реализованы и используются локально.
+- Основная БД: PostgreSQL 16, база `realestate`.
+- Локальные порты: backend `8001`, frontend `3000`.
+- Frontend без Node.js и сборщика: обычные HTML/CSS/JS-файлы.
+- Обновление данных выполняется локальными Python-парсерами и миграционными скриптами.
+- GitHub Actions для парсеров не используются: часть источников блокирует облачные IP или требует локальных файлов.
+- Продакшн-контур описан через Docker Compose: `db`, `backend`, `nginx`.
+
+## Быстрый старт
+
+```bash
+# Активировать venv перед Python-скриптами
+source venv/bin/activate
+
+# Backend
+cd backend
+uvicorn app.main:app --reload --port 8001
+
+# Frontend
+cd frontend
+python3 -m http.server 3000
+```
+
+Открыть:
+
+- frontend: `http://localhost:3000`
+- API: `http://localhost:8001/api/categories`
+- Swagger: `http://localhost:8001/docs`
+
+## Архитектура
+
+```text
+Источники данных
+  ЦБ РФ, Росстат/ЕМИСС, ДОМ.РФ, Росреестр
+    ↓
+Python-парсеры и миграционные скрипты
+    ↓
+PostgreSQL 16
+  sources / categories / indicators / data_points / update_jobs
+  materialized view: data_points_with_dynamics
+    ↓
+FastAPI backend
+    ↓
+Vanilla HTML + CSS + JS + ECharts 5.4.3
+```
 
 ## Структура репозитория
 
-```
-realestate-dashboard/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml               ← линтинг при каждом push
-│       ├── deploy.yml           ← деплой при merge в main
-│       ├── parse-cbr.yml        ← парсер ЦБ РФ (по пн)
-│       ├── parse-domrf.yml      ← парсер ДОМ.РФ (ежедневно)
-│       └── parse-rosstat.yml    ← парсер Росстат (по пн)
-├── backend/
-│   └── app/
-│       ├── main.py
-│       ├── config.py
-│       ├── database.py
-│       ├── models.py
-│       ├── schemas.py
-│       ├── routers/
-│       │   ├── categories.py
-│       │   ├── indicators.py
-│       │   └── meta.py
-│       └── services/
-│           ├── data_service.py
-│           └── export_service.py
-├── parsers/
-│   ├── base.py
-│   ├── cbr.py
-│   ├── domrf.py
-│   └── rosstat.py
-├── migration/
-│   ├── 001_init.sql             ← схема БД
-│   ├── excel_to_db.py           ← импорт из Excel
-│   └── data/                   ← сюда кладём Excel (в .gitignore)
-├── frontend/
-│   ├── index.html
-│   ├── category.html
-│   ├── chart.html
-│   ├── css/
-│   │   ├── variables.css
-│   │   ├── main.css
-│   │   └── chart.css
-│   └── js/
-│       ├── api.js
-│       ├── utils.js
-│       ├── sparkline.js
-│       └── chart-page.js
-├── nginx/
-│   └── nginx.conf
-├── docker-compose.prod.yml
-├── .env.example
-├── .gitignore
-└── README.md
+```text
+backend/
+  app/
+    routers/       API-роуты
+    services/      SQL-запросы и Excel-экспорт
+    models.py      SQLAlchemy-модели
+    schemas.py     Pydantic-схемы
+
+frontend/
+  index.html       главная страница категорий
+  category.html    список показателей категории
+  chart.html       одиночный график
+  *.html           комбо-страницы и специальные графики
+  css/             общие стили
+  js/              API-клиент, форматирование, графики, периодичность
+
+migration/
+  001_init.sql     базовая схема БД
+  00*_*.sql        последующие миграции
+  calc_*.py        расчётные индикаторы
+  fetch_*.py       загрузчики внешних источников
+  migrate_*.py     загрузка локальных Excel/табличных файлов
+
+parsers/
+  base.py          общий шаблон парсера и инкрементальный upsert
+  cbr.py           ЦБ РФ: ипотека, ИЖС, субсидии
+  domrf.py         оркестратор локальных файлов ДОМ.РФ
+  domrf_web.py     прямой web-парсер ЕИСЖС
+  rosstat.py       обёртка над migration/fetch_fedstat.py
+  scheduler.py     локальное расписание обновлений
+
+nginx/
+docker-compose.prod.yml
+AGENTS.md
+CLAUDE.md
+PARSERS_PLAN.md
+PROGRESS.md
 ```
 
----
+## Backend
 
-## Быстрый старт (локально, без Docker)
+Стек: FastAPI, SQLAlchemy 2 sync, psycopg2, Pydantic v2.
 
-### 1. Установить зависимости
-
-- [Python 3.11](https://python.org)
-- [PostgreSQL 16](https://postgresql.org) — установить локально
-
-### 2. Склонировать и настроить
-
-```bash
-git clone https://github.com/<username>/realestate-dashboard.git
-cd realestate-dashboard
-
-cp .env.example .env
-# Отредактировать .env — вставить DB_USER и DB_PASSWORD
-```
-
-### 3. Создать схему БД
-
-```bash
-# Создать базу данных (один раз)
-psql -U postgres -c "CREATE DATABASE realestate;"
-
-# Применить схему
-psql -U postgres -d realestate -f migration/001_init.sql
-```
-
-### 4. Импортировать данные из Excel
-
-```bash
-cd migration
-pip install -r requirements.txt
-cp /path/to/your.xlsx data/
-python excel_to_db.py data/your.xlsx
-```
-
-### 5. Запустить backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# Документация API: http://localhost:8000/docs
-```
-
-### 6. Запустить frontend
-
-```bash
-# Вариант 1: просто открыть index.html в браузере
-# Вариант 2: HTTP-сервер (нужен для ES-модулей в Safari)
-cd frontend
-python -m http.server 8080
-# открыть http://localhost:8080
-```
-
----
-
-## Продакшн-деплой (Docker Compose)
-
-```bash
-# На VPS с Ubuntu 22.04 + Docker
-
-git clone https://github.com/<username>/realestate-dashboard.git
-cd realestate-dashboard
-
-# Создать .env.prod с продакшн-значениями
-cp .env.example .env.prod
-nano .env.prod  # заполнить DB_USER, DB_PASSWORD и т.д.
-
-# Запустить
-docker compose -f docker-compose.prod.yml up -d
-
-# Применить схему БД (один раз)
-docker compose -f docker-compose.prod.yml exec db \
-  psql -U $DB_USER -d $DB_NAME -f /migration/001_init.sql
-
-# Проверить
-curl http://localhost/api/categories
-```
-
----
-
-## Переменные окружения
-
-| Переменная | Описание | Пример |
-|---|---|---|
-| `DB_HOST` | Хост PostgreSQL | `localhost` / `db` (Docker) |
-| `DB_PORT` | Порт | `5432` |
-| `DB_NAME` | Имя базы | `realestate` |
-| `DB_USER` | Пользователь БД | `postgres` |
-| `DB_PASSWORD` | Пароль БД | *(секрет)* |
-| `CORS_ORIGINS` | Разрешённые origins для CORS | `["http://localhost:8080"]` |
-| `SITE_NAME` | Название сайта | `Статистика рынка недвижимости` |
-| `TELEGRAM_BOT_TOKEN` | Токен бота для уведомлений об ошибках | *(опционально)* |
-| `TELEGRAM_CHAT_ID` | ID чата Telegram | *(опционально)* |
-
----
-
-## API эндпоинты
+Основные маршруты:
 
 | Метод | URL | Описание |
 |---|---|---|
-| GET | `/api/categories` | Список тематических разделов |
-| GET | `/api/categories/{code}/indicators` | Показатели раздела |
+| GET | `/api/categories` | Список категорий |
+| GET | `/api/categories/{code}/indicators` | Показатели категории |
 | GET | `/api/indicators/{code}` | Метаданные показателя |
 | GET | `/api/indicators/{code}/data` | Временной ряд |
-| GET | `/api/indicators/{code}/data.xlsx` | Скачать данные в Excel |
-| GET | `/api/search?q=` | Поиск по показателям |
-| GET | `/api/meta/last-update` | Дата последнего обновления |
+| GET | `/api/indicators/{code}/data.xlsx` | Excel-экспорт одного показателя |
+| GET | `/api/multi/data` | Несколько рядов для комбо-страниц |
+| GET | `/api/multi/data.xlsx` | Excel-экспорт нескольких рядов |
+| GET | `/api/search?q=` | Поиск |
+| GET | `/api/meta/last-update` | Последнее обновление |
 
-Интерактивная документация: `http://localhost:8000/docs`
+## Frontend
 
----
+Три системные страницы:
 
-## Ветки и рабочий процесс
+- `index.html` — категории и поиск.
+- `category.html` — карточки показателей, `COMBO_OVERRIDES`, подразделы `SUBSECTIONS`.
+- `chart.html` — одиночный график, KPI, таблица, режимы “значения / г-г / м-м”, переключатель “Квартал / Год” для квартальных рядов.
 
+Остальные HTML-файлы в `frontend/` — комбо-страницы и специальные графики. Они используют `/api/multi/data`, горизонтальную панель фильтров серий и общий модуль `frontend/js/period-toggle.js`.
+
+В каждом HTML-файле API задаётся явно:
+
+```js
+window.API_BASE = 'http://localhost:8001/api'
 ```
-main          ← продакшн, защищённая (только через PR)
-  └── dev     ← основная ветка разработки
-        ├── feature/название-задачи
-        └── fix/название-исправления
+
+## Данные
+
+Основные таблицы:
+
+| Таблица | Назначение |
+|---|---|
+| `sources` | Источники данных |
+| `categories` | Тематические разделы |
+| `indicators` | Метаданные рядов |
+| `data_points` | Абсолютные значения по периодам |
+| `update_jobs` | Лог запусков парсеров |
+
+`data_points_with_dynamics` — materialized view с производными метриками YoY/MoM. После прямых ручных upsert-скриптов view нужно обновлять:
+
+```bash
+psql -U postgres -d realestate -c "REFRESH MATERIALIZED VIEW CONCURRENTLY data_points_with_dynamics"
 ```
 
-Commit-сообщения: `feat:`, `fix:`, `chore:`, `docs:` (Conventional Commits)
+Ключевые правила:
 
----
+- `data_points` хранит только абсолютные значения.
+- YoY/MoM считаются во view или во frontend-агрегации.
+- Нет данных = `NULL`, не `0`.
+- `period_date` — первый день периода.
+- Для `unit='%'` динамика считается в процентных пунктах.
+- `is_public=false` скрывает показатель из списков, но не из прямых API-запросов.
 
-## Источники данных
+## Обновление данных
 
-| Источник | Парсер | Расписание |
-|---|---|---|
-| Банк России | `parsers/cbr.py` | По понедельникам 06:00 UTC |
-| ДОМ.РФ | `parsers/domrf.py` | Ежедневно 04:00 UTC |
-| Росстат / ЕМИСС | `parsers/rosstat.py` | По понедельникам 06:30 UTC |
+Парсеры запускаются локально:
 
----
+```bash
+source venv/bin/activate
+cd parsers
+python cbr.py --group primary
+python cbr.py --group ihc
+python domrf_web.py
+python rosstat.py
+```
 
-## Лицензия
+Планировщик:
 
-Код: MIT. Данные: открытые источники (ЦБ РФ, Росстат, ДОМ.РФ, Росреестр).
+```bash
+source venv/bin/activate
+cd parsers
+caffeinate -s nohup python scheduler.py > /tmp/scheduler.log 2>&1 &
+tail -f /tmp/scheduler.log
+```
+
+Ключевые ограничения:
+
+- `fedstat.ru` запускать только локально, скорость не выше 1 запроса/сек.
+- `domrf.py` требует ручной загрузки файлов в `migration/domrf_data/`.
+- `domrf_web.py` доступен только с российских IP.
+- GitHub Actions для парсеров не создаются.
+
+## Расписание
+
+См. фактическое расписание в `parsers/scheduler.py`.
+
+Коротко:
+
+- 1-е число — ЦБ РФ, базовая ипотека.
+- 5-е число — ДОМ.РФ web + средняя площадь квартир.
+- 7-е число — ЦБ РФ ИЖС и субсидии.
+- 20-е число — ДОМ.РФ файловый оркестратор и ежемесячный Росстат.
+- 25-е число — обновление `indicator_update_map.xlsx`.
+- 1 февраля / мая / августа / ноября — квартальные Росстат/Росреестр/доходы.
+- 1 февраля, 15 марта, 5 июня — годовые companion- и расчётные показатели.
+
+## Продакшн
+
+Продакшн-конфигурация:
+
+- `docker-compose.prod.yml`
+- `nginx/nginx.conf`
+- `.env.prod`
+
+Контейнеры:
+
+- `db`: PostgreSQL 16
+- `backend`: FastAPI на порту `8000` внутри Docker-контура
+- `nginx`: статика frontend и проксирование API
+
+## Документация для разработки
+
+- `AGENTS.md` — основной контекст для Codex и других coding agents.
+- `CLAUDE.md` — такой же контекст для Claude Code.
+- `PROGRESS.md` — исторический трекер выполненных блоков.
+- `PARSERS_PLAN.md` — план восстановления парсеров; основные шаги уже реализованы, файл оставлен как справочник по решениям.
+- `migration/004_db_audit_report.md` — аудит и чистка БД.
+
+### Синхронизация agent-документов
+
+`AGENTS.md` — источник правды. `CLAUDE.md` генерируется из него скриптом:
+
+```bash
+python3 scripts/sync_agent_docs.py
+```
+
+В репозитории есть pre-commit hook `.githooks/pre-commit`: если в коммит попал `AGENTS.md` или `CLAUDE.md`, hook обновляет `CLAUDE.md` из `AGENTS.md` и добавляет оба файла в индекс.

@@ -1,10 +1,12 @@
 # PROGRESS.md — Трекер разработки
 ## Дашборд «Статистика рынка жилой недвижимости России»
 
-> Последнее обновление: 23 мая 2026
+> Последнее обновление: 26 мая 2026
 > Ветка разработки: `v1.2-improvements`
 > Backend: порт **8001** | Frontend: порт **3000**
 > Путь: `/Users/egor/Работа/data hub/realestate-dashboard/`
+
+> Примечание: это исторический трекер. Самая актуальная карта проекта и правила работы — в `AGENTS.md` / `CLAUDE.md`.
 
 ---
 
@@ -39,11 +41,11 @@ source venv/bin/activate
 | 5 | Проверка API | ✅ | — |
 | 6 | Frontend: index.html + chart.html | ✅ | `frontend/index.html`, `frontend/chart.html` |
 | 7 | Frontend: category.html | ✅ | `frontend/category.html` |
-| 8 | Парсер ЦБ РФ | ⚠️ Требует переработки | `parsers/cbr.py` |
-| 9 | Парсеры ДОМ.РФ, Росстат | ⚠️ Требует переработки | `parsers/domrf.py`, `parsers/rosstat.py` |
-| 10 | GitHub Actions (CI + расписание парсеров) | ❌ Не создан | — |
+| 8 | Парсер ЦБ РФ | ✅ Переработан | `parsers/cbr.py` |
+| 9 | Парсеры ДОМ.РФ, Росстат | ✅ Переработаны | `parsers/domrf.py`, `parsers/rosstat.py`, `parsers/domrf_web.py` |
+| 10 | Расписание парсеров | ✅ Локальный scheduler вместо GitHub Actions | `parsers/scheduler.py` |
 | 11 | Продакшн (VPS + Docker) | ⏳ | `docker-compose.prod.yml` |
-| 12 | Автодеплой при push в main | ✅ | `.github/workflows/deploy.yml` |
+| 12 | Автодеплой при push в main | ⏳ Не настроен в текущем рабочем дереве | — |
 | 13 | Переключатель «Месяц / Квартал / Год» на 17 комбо-страницах | ✅ | `frontend/js/period-toggle.js`, `migration/patch_combo_page.py` |
 
 ---
@@ -624,7 +626,7 @@ prices:
 
 ### Аудит системы парсинга ✅
 
-Проведена полная диагностика парсеров (`parsers/`). Все три парсера **никогда не запускались** (`update_jobs` пуст). Данные в БД загружены вручную через Excel-миграции.
+Проведена полная диагностика старых парсеров (`parsers/`). На момент аудита они фактически не использовались, а данные в БД были загружены вручную через Excel-миграции. По итогам аудита план из `PARSERS_PLAN.md` реализован в коде.
 
 **Выявленные проблемы:**
 
@@ -635,12 +637,22 @@ prices:
 | `rosstat.py` | EMISS IDs неверны (напр. 30965 вместо 57039 для 1.2). `fedstat.ru/api/data/{id}.json` возвращает HTML-ошибку. Рабочий клиент уже есть в `migration/fetch_fedstat.py` (POST-запросы) |
 | `parsers/requirements.txt` | `requests`, `bs4`, `APScheduler`, `python-dotenv` не были установлены в venv. Установлены вручную |
 
-**Рабочая инфраструктура (не требует изменений):**
-- `migration/fetch_fedstat.py` — рабочий FedstatClient для 6 индикаторов (1.2, 1.3, 2.9, 2.11, 2.12, 2.13.ext)
+**Рабочая инфраструктура:**
+- `migration/fetch_fedstat.py` — рабочий FedstatClient для 1.2, 1.3, 2.1, 2.2, 2.3, 2.9, 2.11, 2.12, 2.13, 2.13.ext, 4.4, 4.5, 5.1
 - `migration/migrate_apartments.py`, `migrate_matrix_projects.py`, `migrate_sales_matrix.py` — рабочая обработка DomRF Excel
 - `migration/migrate_subsidy_update.py` — рабочий парсер субсидий CBR из `Статистические_ряды.xlsx`
 
-**План переработки:** `PARSERS_PLAN.md` в корне проекта
+**План переработки:** `PARSERS_PLAN.md` в корне проекта. План оставлен как справочник по причинам и решениям.
+
+### Реализация плана парсеров ✅
+
+| Шаг | Статус | Файлы |
+|-----|--------|-------|
+| `base.py` — инкрементальное обновление | ✅ | `parsers/base.py` |
+| CBR-парсер под реальные файлы CBR | ✅ | `parsers/cbr.py` |
+| Rosstat/EMISS: новые индикаторы и инкрементальность | ✅ | `migration/fetch_fedstat.py`, `parsers/rosstat.py` |
+| DomRF как файловый оркестратор | ✅ | `parsers/domrf.py` |
+| Scheduler с новым расписанием и retry | ✅ | `parsers/scheduler.py` |
 
 ---
 
@@ -648,18 +660,14 @@ prices:
 
 1. Деплой на VPS
 2. `migration/004_cleanup.sql` секции 7–8 (sort_order для `demand` и `prices`) — раскомментировать после визуальной проверки страниц в браузере
-3. **Переработка системы парсинга** (по плану `PARSERS_PLAN.md`):
-   - Шаг 1: `base.py` — инкрементальное обновление (только новые периоды, `DO NOTHING`)
-   - Шаг 2: `cbr.py` — переписать под правильные CBR-файлы
-   - Шаг 3: `fetch_fedstat.py` — добавить 7 индикаторов (2.1, 2.2, 2.3, 4.4, 4.5, 2.13, 5.1)
-   - Шаг 4: `rosstat.py` + `domrf.py` — оркестраторы
+3. Проверить обновлённые парсеры dry-run / ручным запуском на локальной БД и зафиксировать результат в `indicator_update_map.xlsx`
 
 ## Известные ограничения
 
 - `1.1` Население: fedstat/31557 недоступен → данные захардкожены
 - `2.13.ext` Доля ветхого жилья: данные только до 2015
 - Парсеры domclick.py и rosreestr.py не реализованы
-- GitHub Actions для расписания парсеров не созданы (fedstat блокирует облачные IP — парсеры только локально)
+- GitHub Actions для расписания парсеров не создаются (fedstat блокирует облачные IP — парсеры только локально/VPS)
 - Блок «Обновление данных» на главной: отложен до теста парсинга на проде
 
 ---
@@ -687,7 +695,7 @@ prices:
 ### Обновление `parsers/scheduler.py` ✅
 
 - Добавлен импорт `from domrf_web import DomRFWebParser`
-- Новое задание `id="domrf_web"`: каждое 20-е число, 10:30 UTC (30 мин после `DomRFParser`)
+- Задание в текущем `scheduler.py`: `id="day5_domrf_web"`, 5-е число, 08:00 UTC, с retry +5 дней
 - Обновлены комментарий в шапке и сообщение при старте
 
 ---
