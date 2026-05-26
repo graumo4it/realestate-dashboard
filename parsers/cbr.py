@@ -120,6 +120,22 @@ SUBSIDY_CODES: frozenset[str] = frozenset({
     "6.44", "6.45",
 })
 
+SUBSIDY_PURPOSE_CODES: frozenset[str] = frozenset(
+    f"6.{program}.{purpose}.{metric}"
+    for program, purposes in {
+        52: range(1, 6),
+        53: range(1, 6),
+        54: range(1, 7),
+        55: range(1, 6),
+        56: range(1, 6),
+        57: range(1, 6),
+    }.items()
+    for purpose in purposes
+    for metric in (1, 2)
+)
+
+SUBSIDY_UPDATE_CODES: frozenset[str] = SUBSIDY_CODES | SUBSIDY_PURPOSE_CODES
+
 # Группы индикаторов для раздельного запуска
 # group='primary' — ежемесячная ипотека (файлы 02_02 + 02_03 + производные)
 PRIMARY_CODES: frozenset[str] = frozenset({
@@ -133,6 +149,7 @@ PRIMARY_CODES: frozenset[str] = frozenset({
 # group='ihc' — ИЖС (02_41) + субсидии ДОМ.РФ (6.36–6.45)
 IHC_CODES: frozenset[str] = frozenset({
     "6.36", "6.37", "6.38", "6.39", "6.40", "6.41", "6.42", "6.43", "6.44", "6.45",
+    *SUBSIDY_PURPOSE_CODES,
     "6.70", "6.71", "6.72", "6.73", "6.74", "6.75",
     "6.76", "6.77", "6.78", "6.79", "6.80", "6.81",
     "6.82", "6.83", "6.84", "6.85", "6.86", "6.87",
@@ -154,6 +171,25 @@ DOMRF_SUBSIDY_ROW_MAP: dict[tuple[str, str], str] = {
     ("Ипотека в отдельных регионах",   "шт."):      "6.44",
     ("Ипотека в отдельных регионах",   "млн руб."): "6.45",
 }
+
+DOMRF_PURPOSE_PROG_CODES: dict[str, str] = {
+    "Все программы": "6.52",
+    "Льготная ипотека": "6.53",
+    "Семейная ипотека": "6.54",
+    "Дальневосточная и арктическая ипотека": "6.55",
+    "IT ипотека": "6.56",
+    "Ипотека в отдельных регионах": "6.57",
+}
+
+DOMRF_PURPOSE_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("Покупка квартир по ДКП на вторичке в городах без стройки", "5"),
+    ("Покупка квартир по ДКП на вторичке, прочее", "6"),
+    ("Покупка квартир по ДКП на вторичке", "5"),
+    ("Покупка по ДДУ", "1"),
+    ("Покупка по ДКП у застройщика", "2"),
+    ("Индивидуальное жилищное строительство", "3"),
+    ("Готовый индивидуальный жилой дом", "4"),
+)
 
 MONTHS_RU = [
     "Январь", "Февраль", "Март", "Апрель",
@@ -509,60 +545,162 @@ def _fetch_domrf_subsidy(session: requests.Session) -> bytes | None:
 
 def _parse_subsidy_file(data: bytes) -> list[dict]:
     """
-    Парсит лист 01_02_01 файла «Статистические_ряды.xlsx».
+    Парсит файл «Статистические_ряды.xlsx»:
+      • 01_02_01 — базовые ряды по программам господдержки (6.36–6.45)
+      • 01_02_03 — цели кредитования в новой детальной сетке (6.52.x.x–6.57.x.x)
     Логика взята из migration/migrate_subsidy_update.py.
     """
     import datetime as dt_module
+
+    records: list[dict] = []
 
     try:
         df = pd.read_excel(io.BytesIO(data), sheet_name="01_02_01", header=None)
     except Exception as e:
         log.warning(f"Не удалось открыть лист 01_02_01: {e}")
+        df = None
+
+    if df is not None:
+        # Даты: строка 3, столбцы 12+
+        date_cols: dict[int, date] = {}
+        for col in range(12, min(200, df.shape[1])):
+            val = df.iloc[3, col]
+            if pd.notna(val) and isinstance(val, (dt_module.datetime, dt_module.date)):
+                d = val if isinstance(val, dt_module.datetime) else dt_module.datetime.combine(val, dt_module.time())
+                date_cols[col] = date(d.year, d.month, 1)
+
+        if not date_cols:
+            log.warning("_parse_subsidy_file: колонки дат 01_02_01 не найдены")
+        else:
+            # Сканируем строки 4–20 (данные начинаются с индекса 4 по структуре ДОМ.РФ)
+            for row_idx in range(4, min(25, len(df))):
+                prog_cell = str(df.iloc[row_idx, 0]).strip()
+                unit_cell = str(df.iloc[row_idx, 1]).strip()
+                if not prog_cell or prog_cell == "nan":
+                    continue
+
+                code = None
+                for (prog_sub, unit_sub), c in DOMRF_SUBSIDY_ROW_MAP.items():
+                    if prog_sub.lower() in prog_cell.lower() and unit_sub.lower() in unit_cell.lower():
+                        code = c
+                        break
+                if not code:
+                    log.debug(f"Субсидии: строка {row_idx} ('{prog_cell}' / '{unit_cell}') — не сопоставлена")
+                    continue
+
+                for col, period_date in date_cols.items():
+                    raw = df.iloc[row_idx, col]
+                    val = _safe_float(raw)
+                    # Льготная программа завершена с 2025 → нули → NULL
+                    if code in ("6.38", "6.39") and val == 0.0:
+                        val = None
+                    if val is not None:
+                        records.append({
+                            "indicator_code": code,
+                            "period_date":    period_date,
+                            "period_label":   _period_label(period_date),
+                            "value":          val,
+                        })
+
+    records.extend(_parse_subsidy_purpose_file(data, dt_module))
+
+    return records
+
+
+def _parse_subsidy_purpose_file(data: bytes, dt_module) -> list[dict]:
+    try:
+        df = pd.read_excel(io.BytesIO(data), sheet_name="01_02_03", header=None)
+    except Exception as e:
+        log.warning(f"Не удалось открыть лист 01_02_03: {e}")
         return []
 
-    # Даты: строка 3, столбцы 12+
     date_cols: dict[int, date] = {}
-    for col in range(12, min(200, df.shape[1])):
+    for col in range(0, df.shape[1]):
         val = df.iloc[3, col]
         if pd.notna(val) and isinstance(val, (dt_module.datetime, dt_module.date)):
             d = val if isinstance(val, dt_module.datetime) else dt_module.datetime.combine(val, dt_module.time())
             date_cols[col] = date(d.year, d.month, 1)
 
     if not date_cols:
-        log.warning("_parse_subsidy_file: колонки дат не найдены")
+        log.warning("_parse_subsidy_purpose_file: колонки дат 01_02_03 не найдены")
         return []
 
+    def metric_suffix(label: str) -> str | None:
+        if "шт." in label:
+            return "1"
+        if "млн руб" in label:
+            return "2"
+        return None
+
+    def purpose_suffix(label: str) -> str | None:
+        for pattern, suffix in DOMRF_PURPOSE_PATTERNS:
+            if pattern in label:
+                return suffix
+        return None
+
+    def no_data_ok(raw) -> bool:
+        val = _safe_float(raw)
+        return val is None or val == 0.0
+
+    current_base = None
+    no_data_checks: dict[date, list[bool]] = {period_date: [] for period_date in date_cols.values()}
+    pending_rows: list[tuple[str, int]] = []
+
+    for row_idx in range(0, len(df)):
+        label_raw = df.iloc[row_idx, 0]
+        if pd.isna(label_raw):
+            continue
+
+        raw_label = str(label_raw)
+        label = raw_label.strip()
+
+        if not raw_label.startswith("   "):
+            if label in DOMRF_PURPOSE_PROG_CODES:
+                current_base = DOMRF_PURPOSE_PROG_CODES[label]
+            continue
+
+        if current_base is None:
+            continue
+
+        metric = metric_suffix(label)
+        if metric is None:
+            continue
+
+        if "Нет данных" in label:
+            for col, period_date in date_cols.items():
+                no_data_checks[period_date].append(no_data_ok(df.iloc[row_idx, col]))
+            continue
+
+        purpose = purpose_suffix(label)
+        if purpose is None:
+            continue
+
+        pending_rows.append((f"{current_base}.{purpose}.{metric}", row_idx))
+
+    expected_checks = len(DOMRF_PURPOSE_PROG_CODES) * 2
+    valid_dates = {
+        period_date for period_date, checks in no_data_checks.items()
+        if len(checks) == expected_checks and all(checks)
+    }
+    if valid_dates:
+        log.info(
+            "  01_02_03: валидные периоды до %s (по строкам 'Нет данных')",
+            max(valid_dates),
+        )
+    else:
+        log.warning("  01_02_03: валидные периоды не найдены")
+
     records: list[dict] = []
-    # Сканируем строки 4–20 (данные начинаются с индекса 4 по структуре ДОМ.РФ)
-    for row_idx in range(4, min(25, len(df))):
-        prog_cell = str(df.iloc[row_idx, 0]).strip()
-        unit_cell = str(df.iloc[row_idx, 1]).strip()
-        if not prog_cell or prog_cell == "nan":
-            continue
-
-        # Ищем соответствие в DOMRF_SUBSIDY_ROW_MAP
-        code = None
-        for (prog_sub, unit_sub), c in DOMRF_SUBSIDY_ROW_MAP.items():
-            if prog_sub.lower() in prog_cell.lower() and unit_sub.lower() in unit_cell.lower():
-                code = c
-                break
-        if not code:
-            log.debug(f"Субсидии: строка {row_idx} ('{prog_cell}' / '{unit_cell}') — не сопоставлена")
-            continue
-
+    for code, row_idx in pending_rows:
         for col, period_date in date_cols.items():
-            raw = df.iloc[row_idx, col]
-            val = _safe_float(raw)
-            # Льготная программа завершена с 2025 → нули → NULL
-            if code in ("6.38", "6.39") and val == 0.0:
-                val = None
-            if val is not None:
-                records.append({
-                    "indicator_code": code,
-                    "period_date":    period_date,
-                    "period_label":   _period_label(period_date),
-                    "value":          val,
-                })
+            if period_date not in valid_dates:
+                continue
+            records.append({
+                "indicator_code": code,
+                "period_date":    period_date,
+                "period_label":   _period_label(period_date),
+                "value":          _safe_float(df.iloc[row_idx, col]),
+            })
 
     return records
 
@@ -630,7 +768,8 @@ class CBRParser(BaseParser):
     def run(self) -> dict:
         """
         Переопределяем run() для разделения логики:
-          • Субсидии (6.36–6.45): только завершённые месяцы, DO UPDATE за 36 периодов.
+          • Субсидии (6.36–6.45, 6.52.x.x–6.57.x.x): только завершённые месяцы,
+            DO UPDATE за 36 периодов.
           • Остальные CBR-показатели: стандартный DO NOTHING, только новые периоды.
         """
         self._connect()
@@ -642,7 +781,7 @@ class CBRParser(BaseParser):
             records = self.parse(raw)
 
             # ── 1. Субсидии: перезаписываем последние 36 завершённых периодов ─
-            sub_all = [r for r in records if r["indicator_code"] in SUBSIDY_CODES]
+            sub_all = [r for r in records if r["indicator_code"] in SUBSIDY_UPDATE_CODES]
             sub_completed = _filter_completed_months(sub_all)
 
             if sub_completed:
@@ -658,7 +797,7 @@ class CBRParser(BaseParser):
                 log.info("[cbr] Субсидии: нет завершённых периодов для обновления")
 
             # ── 2. Остальные: только новые периоды, DO NOTHING ─────────────────
-            other = [r for r in records if r["indicator_code"] not in SUBSIDY_CODES]
+            other = [r for r in records if r["indicator_code"] not in SUBSIDY_UPDATE_CODES]
             codes = list({r["indicator_code"] for r in other})
             last_dates = self.get_last_dates(codes)
             new_other = [

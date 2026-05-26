@@ -149,17 +149,12 @@ def extract_sheet_05(ws) -> dict[str, list[tuple]]:
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  ЛИСТ 01_02_03 — Цели кредитования
-#  6 программ × 3 метрики = 18 индикаторов, коды 6.52.x–6.57.x
+#  Новая сетка: 6 программ × цели из первоисточника × 2 метрики.
+#  Старые агрегированные коды 6.52.1–6.57.3 остаются legacy и здесь не грузятся.
 #
-#  Структура блока на программу (только строки с «шт.»):
-#    «Всего, шт.»           — пропускаем
-#    «Покупка по ДДУ, шт.» — → .1
-#    «... ДКП у застройщика, шт.» — пропускаем
-#    «Индивидуальное жилищное строительство, шт.» — → .2 (слагаемое A)
-#    «Готовый индивидуальный жилой дом, шт.»       — → .2 (слагаемое B)
-#    «... вторичке ..., шт.»  — → .3 (может быть несколько строк!)
-#    «Нет данных, шт.»      — пропускаем
-#    «Всего, млн руб.»      — сигнал конца шт.-блока (пропускаем до след.программы)
+#  Период считается валидным для всего листа, только если во всех 12 строках
+#  «Нет данных» (6 программ × шт./млн руб.) стоит 0 или пусто. Пустые ячейки
+#  внутри валидного периода загружаются как NULL.
 # ══════════════════════════════════════════════════════════════════════════════
 
 PROG_CODES_03 = {
@@ -171,18 +166,29 @@ PROG_CODES_03 = {
     "Ипотека в отдельных регионах":  "6.57",
 }
 
+PURPOSE_PATTERNS_03 = [
+    ("Покупка квартир по ДКП на вторичке в городах без стройки", "5"),
+    ("Покупка квартир по ДКП на вторичке, прочее", "6"),
+    ("Покупка квартир по ДКП на вторичке", "5"),
+    ("Покупка по ДДУ", "1"),
+    ("Покупка по ДКП у застройщика", "2"),
+    ("Индивидуальное жилищное строительство", "3"),
+    ("Готовый индивидуальный жилой дом", "4"),
+]
 
-def sum_series(
-    a: list[tuple[datetime.datetime, float]],
-    b: list[tuple[datetime.datetime, float]],
-) -> list[tuple[datetime.datetime, float]]:
-    """Суммирует два ряда по датам. Результат содержит только даты из 'a'."""
-    b_map = {dt: v for dt, v in b}
-    result = []
-    for dt, va in a:
-        vb = b_map.get(dt, 0.0)
-        result.append((dt, va + vb))
-    return result
+
+def _safe_float_or_none(raw):
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_no_data_ok(raw) -> bool:
+    val = _safe_float_or_none(raw)
+    return val is None or val == 0.0
 
 
 def extract_sheet_03(ws) -> dict[str, list[tuple]]:
@@ -191,27 +197,21 @@ def extract_sheet_03(ws) -> dict[str, list[tuple]]:
 
     result: dict[str, list[tuple]] = {}
     current_base = None
-    in_sht_block = True   # в блоке шт. (до «Всего, млн руб.»)
+    no_data_ok_by_date: dict[datetime.datetime, list[bool]] = {dt: [] for dt in date_cols.values()}
+    pending_rows: list[tuple[str, list]] = []
 
-    # Накопитель для .2 (сумма ИЖС + Готовый ИЖД)
-    acc_ijc: dict[datetime.datetime, float] = {}
+    def metric_suffix(label_str: str) -> str | None:
+        if "шт." in label_str:
+            return "1"
+        if "млн руб" in label_str:
+            return "2"
+        return None
 
-    def flush_ijc(base_code: str):
-        """Сохраняет накопленный ряд .2 в result."""
-        if acc_ijc:
-            result[base_code + ".2"] = list(acc_ijc.items())
-
-    def read_row_points(row: list) -> list[tuple[datetime.datetime, float]]:
-        pts = []
-        for col_idx, dt in date_cols.items():
-            raw = row[col_idx - 1]
-            if raw is None:
-                continue
-            try:
-                pts.append((dt, float(raw)))
-            except (TypeError, ValueError):
-                pass
-        return pts
+    def purpose_suffix(label_str: str) -> str | None:
+        for pattern, suffix in PURPOSE_PATTERNS_03:
+            if pattern in label_str:
+                return suffix
+        return None
 
     for row in rows:
         label = row[0]
@@ -221,57 +221,41 @@ def extract_sheet_03(ws) -> dict[str, list[tuple]]:
         label_str = raw_label.strip()   # очищенный — для сравнения с паттернами
 
         if not raw_label.startswith("   "):
-            # ── Нет отступа: либо заголовок блока программы, либо служебная строка ──
             if label_str in PROG_CODES_03:
-                # Завершаем предыдущий шт.-блок
-                if current_base is not None:
-                    flush_ijc(current_base)
-                acc_ijc = {}
-                in_sht_block = True
                 current_base = PROG_CODES_03[label_str]
-            # else: «Всего, шт.», «Всего, млн руб.», «Программы», заголовки — пропуск
             continue
 
-        # ── Есть отступ: строка данных ──
         if current_base is None:
             continue
 
-        # Переключатель шт. → млн руб. внутри блока
-        if "млн руб" in label_str:
-            if in_sht_block:
-                flush_ijc(current_base)
-                acc_ijc = {}
-                in_sht_block = False
-            continue  # млн руб. строки нас не интересуют
-
-        if not in_sht_block:
+        metric = metric_suffix(label_str)
+        if metric is None:
             continue
 
-        # ── .1: ДДУ ──
-        if "Покупка по ДДУ" in label_str and "шт." in label_str:
-            result[current_base + ".1"] = read_row_points(row)
+        if "Нет данных" in label_str:
+            for col_idx, dt in date_cols.items():
+                no_data_ok_by_date[dt].append(_is_no_data_ok(row[col_idx - 1]))
+            continue
 
-        # ── .2: ИЖС (накапливаем) ──
-        elif ("Индивидуальное жилищное строительство" in label_str
-              or "Готовый индивидуальный жилой дом" in label_str) and "шт." in label_str:
-            for dt, v in read_row_points(row):
-                acc_ijc[dt] = acc_ijc.get(dt, 0.0) + v
+        purpose = purpose_suffix(label_str)
+        if purpose is None:
+            continue
 
-        # ── .3: Вторичка (накапливаем все строки с «вторичке») ──
-        elif "вторичке" in label_str.lower() and "шт." in label_str:
-            code3 = current_base + ".3"
-            pts = read_row_points(row)
-            if code3 in result:
-                existing_map = {dt: v for dt, v in result[code3]}
-                for dt, v in pts:
-                    existing_map[dt] = existing_map.get(dt, 0.0) + v
-                result[code3] = list(existing_map.items())
-            else:
-                result[code3] = pts
+        code = f"{current_base}.{purpose}.{metric}"
+        pending_rows.append((code, row))
 
-    # Последний блок
-    if current_base is not None:
-        flush_ijc(current_base)
+    valid_dates = {
+        dt for dt, checks in no_data_ok_by_date.items()
+        if len(checks) == len(PROG_CODES_03) * 2 and all(checks)
+    }
+
+    for code, row in pending_rows:
+        points = []
+        for col_idx, dt in date_cols.items():
+            if dt not in valid_dates:
+                continue
+            points.append((dt, _safe_float_or_none(row[col_idx - 1])))
+        result[code] = points
 
     return result
 
@@ -325,8 +309,9 @@ def extract_sheet_04(ws) -> dict[str, list[tuple]]:
 
 def upsert_data(cur, ind_map: dict[str, int], data: dict[str, list[tuple]]) -> int:
     """
-    Вставляет данные через ON CONFLICT DO NOTHING.
-    Возвращает кол-во вставленных строк.
+    Вставляет данные через ON CONFLICT DO UPDATE.
+    Пустые ячейки валидных периодов загружаются как NULL.
+    Возвращает кол-во вставленных/обновлённых строк.
     """
     inserted = 0
     for code, points in sorted(data.items()):
@@ -338,14 +323,11 @@ def upsert_data(cur, ind_map: dict[str, int], data: dict[str, list[tuple]]) -> i
         rows_to_insert = [
             (ind_id, dt.date(), period_label(dt), val, False)
             for dt, val in points
-            # пропускаем None и нули (None уже отфильтрованы при чтении)
         ]
 
         if not rows_to_insert:
             print(f"  {code}: нет данных")
             continue
-
-        before = cur.rowcount if cur.rowcount >= 0 else 0
 
         execute_values(
             cur,
@@ -353,13 +335,15 @@ def upsert_data(cur, ind_map: dict[str, int], data: dict[str, list[tuple]]) -> i
             INSERT INTO data_points
               (indicator_id, period_date, period_label, value, is_preliminary)
             VALUES %s
-            ON CONFLICT (indicator_id, period_date) DO NOTHING
+            ON CONFLICT (indicator_id, period_date) DO UPDATE
+              SET period_label = EXCLUDED.period_label,
+                  value        = EXCLUDED.value
             """,
             rows_to_insert,
         )
         n = cur.rowcount
         inserted += n
-        print(f"  {code}: вставлено {n}/{len(rows_to_insert)} строк")
+        print(f"  {code}: загружено {n}/{len(rows_to_insert)} строк")
 
     return inserted
 
@@ -382,7 +366,7 @@ def main():
 
     print("\n─── Лист 01_02_03 (Цели кредитования) ───")
     data_03 = extract_sheet_03(wb["01_02_03"])
-    print(f"  Извлечено рядов: {len(data_03)}  (ожидается 18)")
+    print(f"  Извлечено рядов: {len(data_03)}  (ожидается 62)")
     for code in sorted(data_03):
         n = len(data_03[code])
         print(f"    {code}: {n} точек")

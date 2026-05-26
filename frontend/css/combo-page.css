@@ -101,6 +101,7 @@
   top: calc(100% + 6px);
   left: 0;
   width: 100%;
+  max-width: min(560px, calc(100vw - 32px));
   min-width: 320px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -118,7 +119,7 @@
   cursor: pointer;
   transition: background .1s;
   user-select: none;
-  white-space: nowrap;
+  white-space: normal;
 }
 .filter-dropdown-item:hover { background: var(--color-bg); }
 .filter-dropdown-item input[type=checkbox] {
@@ -128,7 +129,13 @@
   flex-shrink: 0;
   cursor: pointer;
 }
-.filter-dropdown-item span:last-child { color: var(--color-ink) !important; font-size: .83rem; }
+.filter-dropdown-item span:last-child {
+  color: var(--color-ink) !important;
+  font-size: .83rem;
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .filter-dropdown-group-header {
   padding: 8px 14px 4px;
   font-size: .72rem;

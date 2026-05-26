@@ -47,6 +47,7 @@ source venv/bin/activate
 | 11 | Продакшн (VPS + Docker) | ⏳ | `docker-compose.prod.yml` |
 | 12 | Автодеплой при push в main | ⏳ Не настроен в текущем рабочем дереве | — |
 | 13 | Переключатель «Месяц / Квартал / Год» на 17 комбо-страницах | ✅ | `frontend/js/period-toggle.js`, `migration/patch_combo_page.py` |
+| 14 | Детализация целей кредитования субсидий | ✅ | `frontend/subsidy-purpose-structure.html`, `frontend/js/subsidy-purpose-page.js`, `migration/009_subsidy_purpose_detail_v2.sql` |
 
 ---
 
@@ -653,6 +654,17 @@ prices:
 | Rosstat/EMISS: новые индикаторы и инкрементальность | ✅ | `migration/fetch_fedstat.py`, `parsers/rosstat.py` |
 | DomRF как файловый оркестратор | ✅ | `parsers/domrf.py` |
 | Scheduler с новым расписанием и retry | ✅ | `parsers/scheduler.py` |
+
+### Цели кредитования по льготным программам ✅
+
+| Что сделано | Файлы |
+|-------------|-------|
+| Новая скрытая сетка индикаторов `6.52.x.x–6.57.x.x` для листа `01_02_03` | `migration/009_subsidy_purpose_detail_v2.sql` |
+| Одна frontend-страница с переключением программ, целей кредита, `Количество/Объём`, KPI, графиком и таблицей | `frontend/subsidy-purpose-structure.html`, `frontend/js/subsidy-purpose-page.js` |
+| Автоматическое обновление сетки в `day7_cbr_ihc` через ДОМ.РФ API | `parsers/cbr.py` |
+| Ручная загрузка локального Excel по тем же правилам | `migration/migrate_subsidy_detail.py` |
+
+Правило периода: данные листа `01_02_03` загружаются только до последнего месяца, где во всех строках `Нет данных` по 6 программам и двум метрикам стоит `0` или пусто. Пустые ячейки внутри валидного периода остаются `NULL`, числовой `0` остаётся нулём.
 
 ---
 

@@ -111,6 +111,8 @@ psql -U postgres -d realestate -f migration/001_init.sql
 - Инициализацию через `ComboPage.init({ codes, labels, keys, ... })`; `PeriodToggle` подключается внутри `ComboPage`, если страница не `pointInTime`, `annualOnly` или `quarterlyOnly`
 - Горизонтальную панель фильтров серий
 
+**`subsidy-purpose-structure.html`** — специальная страница целей кредитования по льготным программам. Использует модуль `js/subsidy-purpose-page.js`, а не `ComboPage`: одна HTML-страница переключает 6 программ внутри страницы (`Все`, `Льготная`, `Семейная`, `ДВ и Арктика`, `IT`, `Отдельные регионы`), метрику `Количество/Объём`, периодичность и цели кредита. Источник — лист `01_02_03` файла ДОМ.РФ «Статистические ряды»; коды новой сетки `6.52.x.x–6.57.x.x`, созданные миграцией `009_subsidy_purpose_detail_v2.sql`. На Семейной ипотеке вторичка отображается двумя отдельными целями, как в первоисточнике.
+
 **Эталон разметки** горизонтальной панели фильтров: `subsidy-count.html`.
 
 Для страниц, где последний отображаемый период должен существовать сразу у нескольких обязательных серий, используйте `trimToCommonDateKeys` (или `trimToCommonDateCodes`) в `ComboPage.init()`. Настройка обрезает все ряды после последней общей ненулевой даты этих серий перед отрисовкой KPI, графика и таблицы. На subsidy-страницах характеристик кредита обязательные действующие программы: `semya`, `dv`, `it`, `regions`; завершённую `lgota` не включать в отсечку.
@@ -124,6 +126,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
 | `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`. |
+| `subsidy-purpose-page.js` | Специальная логика страницы `subsidy-purpose-structure.html`: переключение программ, целей кредита, метрики `Количество/Объём`, KPI, график, таблица и выгрузки для кодов `6.52.x.x–6.57.x.x`. |
 | `period-toggle.js` | **v4.0.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons` (алиас `injectSelector`), `detectPeriodicity`. Шим `window.AnnualToggle` **удалён** — все страницы мигрированы на `PeriodToggle`. |
 | `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` (файл сохранён для истории) |
 
@@ -153,7 +156,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 | Парсер | Показатели | Статус | Реальный источник |
 |--------|-----------|--------|-------------------|
-| `cbr.py` | 6.1–6.87 (ипотека, ИЖС, субсидии) | ✅ Переписан; `group='primary'/'ihc'` | CBR Excel + ДОМ.РФ API по субсидиям |
+| `cbr.py` | 6.1–6.87 (ипотека, ИЖС, субсидии, цели кредитования `6.52.x.x–6.57.x.x`) | ✅ Переписан; `group='primary'/'ihc'` | CBR Excel + ДОМ.РФ API по субсидиям |
 | `domrf.py` | 3.x, 4.1, 4.8–4.9, 5.x (DomRF) | ✅ Файловый оркестратор | Локальные Excel в `migration/domrf_data/`, обработка через `migrate_*.py` |
 | `domrf_web.py` | 3.1–3.4, 3.17–3.19 (ЕИСЖС) | ✅ Готов | Скачивает `01_01_stockvariablesexsales.xlsx` с наш.дом.рф напрямую |
 | `rosstat.py` | 1.x, 2.x, 4.4–4.5, 5.1 | ✅ Обёртка над `fetch_fedstat.py` | `migration/fetch_fedstat.py` (POST-запросы к fedstat.ru) |
@@ -161,7 +164,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 **Рабочие компоненты**:
 - `migration/fetch_fedstat.py` — FedstatClient с корректными EMISS IDs и payload для 1.2, 1.3, 2.1, 2.2, 2.3, 2.9, 2.11, 2.12, 2.13, 2.13.ext, 4.4, 4.5, 5.1. Запускать: `python migration/fetch_fedstat.py [код ...]`
 - `migration/migrate_apartments.py`, `migrate_matrix_projects.py`, `migrate_sales_matrix.py` — обработка файлов DomRF
-- `migration/migrate_subsidy_update.py` и `migration/migrate_subsidy_detail.py` — субсидии и детализация
+- `migration/migrate_subsidy_update.py` и `migration/migrate_subsidy_detail.py` — субсидии и детализация. `migrate_subsidy_detail.py` грузит новую сетку целей кредитования `6.52.x.x–6.57.x.x` из листа `01_02_03`; старые `6.52.1–6.57.3` остаются legacy-рядами.
 
 ⚠️ fedstat.ru — **только локально** (облачные IP блокируются, скорость ≤ 1 req/sec). GitHub Actions для парсеров не создаются.
 
@@ -170,7 +173,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 *Ежемесячно:*
 - 1-е,  08:00 UTC — `day1_cbr_primary`: CBR 6.1–6.27 (ипотека, 02_02/02_03)
 - 5-е,  08:00 UTC — `day5_domrf_web`: DomRF Web (3.1–3.4, 3.17–3.19) + calc_avg_apt_area (3.5); retry +5д
-- 7-е,  08:00 UTC — `day7_cbr_ihc`: CBR ИЖС + субсидии 6.36–6.87 (02_41 + ДОМ.РФ API)
+- 7-е,  08:00 UTC — `day7_cbr_ihc`: CBR ИЖС + субсидии 6.36–6.87, включая детальные цели кредитования `6.52.x.x–6.57.x.x` (02_41 + ДОМ.РФ API)
 - 20-е, 10:00 UTC — `day20_domrf`: DomRF оркестратор + calc_affordability (5.10/5.11); retry +5д
 - 20-е, 11:00 UTC — `monthly_rosstat`: Rosstat 2.1/2.2/2.3 + calc_housing_per_capita (2.6–2.8); retry +5д
 - 25-е, 12:00 UTC — `monthly_status_update`: обновляет indicator_update_map.xlsx (Актуальный период + Статус)
@@ -204,6 +207,27 @@ Companion-индикаторы обновляются автоматически
 
 - **1.2 + 1.2.y** — `fetch_income_rosstat.py`: скачивает `urov_10kv_Nkv-YYYY.xlsx` с rosstat.gov.ru/folder/13397; квартальные строки → `1.2`; строка «Год» → `1.2.y` (официальное годовое среднее Росстата). Запускается в `quarterly_rosstat` (4 раза в год).
 - **1.3.y** — `calc_annual_companion.py`: `(Q1+Q2+Q3+Q4) / 4` из квартальных данных `1.3`. Запускается в `annual_companion` (1 февраля + retry на 1-е число кажд. мес. если данных нет).
+
+## Детализация целей кредитования субсидий
+
+Миграция `migration/009_subsidy_purpose_detail_v2.sql` создаёт скрытые индикаторы для листа `01_02_03` файла ДОМ.РФ «Статистические ряды».
+
+Сетка кодов:
+
+| Уровень | Значение |
+|---------|----------|
+| `6.52` | Все программы |
+| `6.53` | Льготная ипотека |
+| `6.54` | Семейная ипотека |
+| `6.55` | Дальневосточная и арктическая ипотека |
+| `6.56` | IT ипотека |
+| `6.57` | Ипотека в отдельных регионах |
+| `.1–.6` | Цель кредита: ДДУ, ДКП у застройщика, ИЖС, готовый ИЖД, вторичка; у Семейной `.5` = вторичка в городах без стройки, `.6` = вторичка прочее |
+| `.1/.2` | Метрика: количество (`шт.`) / объём (`млн руб.`) |
+
+Пример: `6.54.5.2` = Семейная ипотека / вторичка в городах без стройки / объём.
+
+Период включается в загрузку только если по всем 6 программам и обеим метрикам строки `Нет данных` на листе `01_02_03` равны `0` или пустые. Внутри валидного периода пустая ячейка остаётся `NULL`, числовой `0` остаётся нулём. `parsers/cbr.py --group ihc` обновляет эти ряды автоматически через `day7_cbr_ihc` с перезаписью последних 36 завершённых месяцев; ручная загрузка — через `migration/migrate_subsidy_detail.py`.
 
 ## Расчётные индикаторы (`migration/calc_*.py`)
 
@@ -251,6 +275,7 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
 3. Проверить dry-run / ручной запуск обновлённых парсеров на локальной БД и зафиксировать результаты в `indicator_update_map.xlsx`
 
 **Недавно завершено:**
+- ✅ **Страница целей кредитования по льготным программам** (`frontend/subsidy-purpose-structure.html`, `frontend/js/subsidy-purpose-page.js`, `migration/009_subsidy_purpose_detail_v2.sql`): одна страница с переключением 6 программ, метрики `Количество/Объём`, KPI, графиком и таблицей; данные листа `01_02_03` заведены в новой скрытой сетке `6.52.x.x–6.57.x.x`; `cbr.py --group ihc` и `migrate_subsidy_detail.py` обновляют эту сетку по правилу строк `Нет данных`.
 - ✅ **Переработка системы парсинга** (`PARSERS_PLAN.md`): `base.py` переведён на инкрементальный upsert; `cbr.py` переписан под реальные файлы CBR и группы `primary`/`ihc`; `fetch_fedstat.py` расширен новыми EMISS-индикаторами; `rosstat.py` и `domrf.py` стали оркестраторами.
 - ✅ **Новое расписание парсеров** (`parsers/scheduler.py`): 3 job'а → 10 job'ов; полная retry-логика (проверка БД после каждого запуска); `CBRParser(group='primary'/'ihc')`; `RosstatParser(codes=[...])`; удалён `SubsidyOnlyParser`; добавлен `monthly_status_update` (25-е)
 - ✅ **Мониторинг обновлений** (`migration/update_indicator_status.py`): скрипт читает `MAX(period_date)` из БД, вычисляет ожидаемый период по расписанию, проставляет «Актуальный период» и «Статус» (✅/⏳/⚠️/⛔) в `indicator_update_map.xlsx`; запускается автоматически 25-е числа
