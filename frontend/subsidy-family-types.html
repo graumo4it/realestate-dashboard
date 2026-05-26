@@ -53,7 +53,7 @@
         <div class="filter-bar" id="filter-bar">
           <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-            Тип индикатора
+            Тип семьи
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
             <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
           </div>
@@ -72,6 +72,10 @@
               <button data-mode="yoy">Изм. г/г</button>
               <button data-mode="mom">Изм. м/м</button>
             </div>
+            <div class="btn-group" id="family-metric-toggle">
+              <button data-family-metric="count" class="active">Количество</button>
+              <button data-family-metric="volume">Объём</button>
+            </div>
           </div>
           <div class="toolbar-actions">
             <button class="btn-outline" id="btn-download-png"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PNG</button>
@@ -87,12 +91,9 @@
         <div class="data-table-wrap">
           <div class="data-table-header"><span>Исходные данные</span></div>
           <div class="table-tabs">
-            <button class="table-tab active" data-table="under7_cnt">До 7 лет (шт.)</button>
-            <button class="table-tab" data-table="age718_cnt">7–18 лет (шт.)</button>
-            <button class="table-tab" data-table="disabled_cnt">Инвалидность (шт.)</button>
-            <button class="table-tab" data-table="under7_vol">До 7 лет (млн р.)</button>
-            <button class="table-tab" data-table="age718_vol">7–18 лет (млн р.)</button>
-            <button class="table-tab" data-table="disabled_vol">Инвалидность (млн р.)</button>
+            <button class="table-tab active" data-table="under7">До 7 лет</button>
+            <button class="table-tab" data-table="age718">7–18 лет</button>
+            <button class="table-tab" data-table="disabled">Инвалидность</button>
           </div>
           <table class="data-table">
             <thead><tr>
@@ -114,34 +115,68 @@
 <script src="js/api.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/period-toggle.js?v=4"></script>
-<script src="js/combo-page.js"></script>
+<script src="js/combo-page.js?v=2"></script>
 <script>
 const CODES = {
-  under7_cnt:   '6.58.1',
-  age718_cnt:   '6.58.2',
-  disabled_cnt: '6.58.3',
-  under7_vol:   '6.58.4',
-  age718_vol:   '6.58.5',
-  disabled_vol: '6.58.6',
+  under7:   '6.58.1',
+  age718:   '6.58.2',
+  disabled: '6.58.3',
+  under7_volume:   '6.58.4',
+  age718_volume:   '6.58.5',
+  disabled_volume: '6.58.6',
 };
 const LABELS = {
-  under7_cnt:   'До 7 лет (шт.)',        age718_cnt:   '7–18 лет (шт.)',        disabled_cnt: 'Инвалидность (шт.)',
-  under7_vol:   'До 7 лет (млн р.)',     age718_vol:   '7–18 лет (млн р.)',     disabled_vol: 'Инвалидность (млн р.)',
+  under7: 'До 7 лет',
+  age718: '7–18 лет',
+  disabled: 'Инвалидность',
 };
-const KEYS = [
-  'under7_cnt', 'age718_cnt', 'disabled_cnt',
-  'under7_vol', 'age718_vol', 'disabled_vol',
-];
+const KEYS = ['under7', 'age718', 'disabled'];
+const METRICS = {
+  count: {
+    unit: 'шт.',
+    fileSuffix: 'count',
+    codes: { under7: '6.58.1', age718: '6.58.2', disabled: '6.58.3' },
+  },
+  volume: {
+    unit: 'млн руб.',
+    fileSuffix: 'volume',
+    codes: { under7: '6.58.4', age718: '6.58.5', disabled: '6.58.6' },
+  },
+};
+
+function applyMetric(page, metricKey) {
+  const metric = METRICS[metricKey];
+  if (!metric) return;
+
+  Object.entries(metric.codes).forEach(([key, code]) => {
+    page.cfg.valueCode[key] = code;
+  });
+  page.cfg.unit = metric.unit;
+  page.cfg.sfx = ` ${metric.unit}`;
+  page.cfg.fileName = `subsidy-family-types-${metric.fileSuffix}`;
+  page.rebuild();
+}
+
 ComboPage.init({
   codes: CODES, labels: LABELS, keys: KEYS,
   chartType: 'bar', stackBars: true, aggType: 'sum',
-  unit: '', decimals: 0,
-  labelGroups: [
-    { header: 'Количество кредитов, шт.',    keys: ['under7_cnt', 'age718_cnt', 'disabled_cnt'] },
-    { header: 'Объём кредитов, млн руб.',    keys: ['under7_vol', 'age718_vol', 'disabled_vol'] },
-  ],
-  initialActiveSeries: ['under7_cnt', 'age718_cnt', 'disabled_cnt'],
-  fileName: 'subsidy-family-types',
+  unit: METRICS.count.unit, decimals: 0,
+  initialActiveSeries: KEYS,
+  fileName: 'subsidy-family-types-count',
+}).then(page => {
+  const metricToggle = document.getElementById('family-metric-toggle');
+  const periodToggle = document.querySelector('[data-period-toggle="true"]');
+  if (metricToggle && periodToggle) periodToggle.insertAdjacentElement('afterend', metricToggle);
+
+  metricToggle?.addEventListener('click', event => {
+    const btn = event.target.closest('[data-family-metric]');
+    if (!btn) return;
+
+    document.querySelectorAll('[data-family-metric]').forEach(item => {
+      item.classList.toggle('active', item === btn);
+    });
+    applyMetric(page, btn.dataset.familyMetric);
+  });
 }).catch(console.error);
 </script>
 </body>

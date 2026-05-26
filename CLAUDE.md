@@ -108,10 +108,12 @@ psql -U postgres -d realestate -f migration/001_init.sql
 В `frontend/` кроме трёх системных страниц лежат комбо-страницы и специальные графики. Большинство используют `/api/multi/data?codes=...`. Каждая содержит:
 - Константы `CODES` (mapping имён в коды) и `LABELS` (подписи серий)
 - Опционально `KEYS` (массив ключей для фильтров серий) — **обязательно объявлять после `LABELS`**
-- Инициализацию через `ComboPage.init({ codes, labels, keys, ... })`; `PeriodToggle` подключается внутри `ComboPage`, если страница не `pointInTime`, `annualOnly` или `quarterlyOnly`
+- Инициализацию через `ComboPage.init({ codes, labels, keys, ... })`; `PeriodToggle` подключается внутри `ComboPage`, если страница не `pointInTime`, `annualOnly` или `quarterlyOnly`. `ComboPage.init()` возвращает `{ cfg, state, rebuild }` для страниц с собственными переключателями, которым надо менять `cfg.valueCode`, `unit` или `fileName` и затем вызывать `rebuild()`.
 - Горизонтальную панель фильтров серий
 
 **`subsidy-purpose-structure.html`** — специальная страница целей кредитования по льготным программам. Использует модуль `js/subsidy-purpose-page.js`, а не `ComboPage`: одна HTML-страница переключает 6 программ внутри страницы (`Все`, `Льготная`, `Семейная`, `ДВ и Арктика`, `IT`, `Отдельные регионы`), метрику `Количество/Объём`, периодичность и цели кредита. Источник — лист `01_02_03` файла ДОМ.РФ «Статистические ряды»; коды новой сетки `6.52.x.x–6.57.x.x`, созданные миграцией `009_subsidy_purpose_detail_v2.sql`. На Семейной ипотеке вторичка отображается двумя отдельными целями, как в первоисточнике.
+
+**`subsidy-family-types.html`** — комбо-страница типов семей в Семейной ипотеке. В фильтре серий остаются только 3 типа семьи (`До 7 лет`, `7–18 лет`, `Инвалидность`), а метрика `Количество/Объём` переключается отдельной группой кнопок в тулбаре. Эта группа должна идти после автоматически внедряемого `PeriodToggle` (`Месяц/Квартал/Год`), поэтому страница переставляет её после `ComboPage.init()`.
 
 **Эталон разметки** горизонтальной панели фильтров: `subsidy-count.html`.
 
@@ -125,7 +127,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 | `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `deltaHtml`, `rangeStart`, `cleanName` |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
-| `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`. |
+| `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`; `init()` возвращает управляющий объект `{ cfg, state, rebuild }` для страниц с дополнительными переключателями. |
 | `subsidy-purpose-page.js` | Специальная логика страницы `subsidy-purpose-structure.html`: переключение программ, целей кредита, метрики `Количество/Объём`, KPI, график, таблица и выгрузки для кодов `6.52.x.x–6.57.x.x`. |
 | `period-toggle.js` | **v4.0.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons` (алиас `injectSelector`), `detectPeriodicity`. Шим `window.AnnualToggle` **удалён** — все страницы мигрированы на `PeriodToggle`. |
 | `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` (файл сохранён для истории) |

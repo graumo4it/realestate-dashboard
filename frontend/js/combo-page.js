@@ -672,6 +672,7 @@ window.ComboPage = (function () {
         const momBtn = document.querySelector('[data-mode="mom"]');
         if (momBtn) momBtn.style.display = 'none';
       }
+      return { cfg, state, rebuild };
     } catch (err) {
       console.error('ComboPage init error:', err);
       const container = document.getElementById('main-chart');
