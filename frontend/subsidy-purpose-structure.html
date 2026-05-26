@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Структура выдач по цели кредита — Рынок недвижимости России</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/variables.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="css/chart.css"/>
+  <link rel="stylesheet" href="css/combo-page.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+</head>
+<body>
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_base">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
+    <div class="header-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Поиск показателей…"/>
+    </div>
+  </div>
+</header>
+<main class="page-main">
+  <div class="page-wrap">
+    <div class="chart-layout">
+      <div class="chart-main">
+
+        <div class="breadcrumb">
+          <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
+          <a href="category.html?code=mortgage_subsidy">Ипотека (льготные программы)</a><span class="breadcrumb-sep">›</span>
+          <span>Структура выдач по цели кредита</span>
+        </div>
+
+        <div class="chart-header">
+          <h1>Структура выдач по цели кредита</h1>
+          <div class="chart-meta">
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="chart-updated">—</span></span>
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Банк России</span>
+            <span class="chart-meta-item" style="color:var(--color-muted)">шт.</span>
+          </div>
+        </div>
+
+        <!-- Горизонтальная панель фильтров -->
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Тип индикатора
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+          </div>
+          <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="chart-toolbar">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div class="btn-group">
+              <button data-range="1">1 год</button><button data-range="3">3 года</button>
+              <button data-range="5">5 лет</button><button data-range="all" class="active">За все время</button>
+            </div>
+            <div class="btn-group">
+              <button data-mode="absolute" class="active">Значения</button>
+              <button data-mode="yoy">Изм. г/г</button>
+              <button data-mode="mom">Изм. м/м</button>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn-outline" id="btn-download-png"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PNG</button>
+            <button class="btn-outline" id="btn-download-xlsx"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</button>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div id="main-chart"></div>
+          <div class="chart-source">Источник: Банк России</div>
+        </div>
+
+        <div class="data-table-wrap">
+          <div class="data-table-header"><span>Исходные данные</span></div>
+          <div class="table-tabs">
+            <button class="table-tab active" data-table="all_ddu">ДДУ (все)</button>
+            <button class="table-tab" data-table="all_izhs">ИЖС (все)</button>
+            <button class="table-tab" data-table="all_vtorchka">Вторичка (все)</button>
+            <button class="table-tab" data-table="semya_ddu">ДДУ (Семейная)</button>
+            <button class="table-tab" data-table="semya_izhs">ИЖС (Семейная)</button>
+            <button class="table-tab" data-table="semya_vtorchka">Вторичка (Семейная)</button>
+            <button class="table-tab" data-table="dv_ddu">ДДУ (ДВ)</button>
+            <button class="table-tab" data-table="dv_izhs">ИЖС (ДВ)</button>
+            <button class="table-tab" data-table="dv_vtorchka">Вторичка (ДВ)</button>
+            <button class="table-tab" data-table="it_ddu">ДДУ (IT)</button>
+            <button class="table-tab" data-table="it_izhs">ИЖС (IT)</button>
+            <button class="table-tab" data-table="it_vtorchka">Вторичка (IT)</button>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:25%">Период</th>
+              <th style="width:25%;text-align:right">Значение, шт.</th>
+              <th style="width:25%;text-align:right">Изм. г/г</th>
+              <th style="width:25%;text-align:right">Изм. м/м</th>
+            </tr></thead>
+            <tbody id="data-table-body"><tr><td colspan="4" class="skeleton" style="height:160px"></td></tr></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+<footer class="site-footer"><div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div></footer>
+<script>window.API_BASE = 'http://localhost:8001/api';</script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
+<script src="js/combo-page.js"></script>
+<script>
+const CODES = {
+  all_ddu:        '6.52.1', all_izhs:        '6.52.2', all_vtorchka:        '6.52.3',
+  semya_ddu:      '6.54.1', semya_izhs:      '6.54.2', semya_vtorchka:      '6.54.3',
+  dv_ddu:         '6.55.1', dv_izhs:         '6.55.2', dv_vtorchka:         '6.55.3',
+  it_ddu:         '6.56.1', it_izhs:         '6.56.2', it_vtorchka:         '6.56.3',
+};
+const LABELS = {
+  all_ddu:        'ДДУ (все)',           all_izhs:        'ИЖС (все)',           all_vtorchka:        'Вторичка (все)',
+  semya_ddu:      'ДДУ (Семейная)',      semya_izhs:      'ИЖС (Семейная)',      semya_vtorchka:      'Вторичка (Семейная)',
+  dv_ddu:         'ДДУ (ДВ)',            dv_izhs:         'ИЖС (ДВ)',            dv_vtorchka:         'Вторичка (ДВ)',
+  it_ddu:         'ДДУ (IT)',            it_izhs:         'ИЖС (IT)',            it_vtorchka:         'Вторичка (IT)',
+};
+const KEYS = [
+  'all_ddu', 'all_izhs', 'all_vtorchka',
+  'semya_ddu', 'semya_izhs', 'semya_vtorchka',
+  'dv_ddu', 'dv_izhs', 'dv_vtorchka',
+  'it_ddu', 'it_izhs', 'it_vtorchka',
+];
+ComboPage.init({
+  codes: CODES, labels: LABELS, keys: KEYS,
+  chartType: 'bar', stackBars: true, aggType: 'sum',
+  unit: 'шт.', decimals: 0,
+  labelGroups: [
+    { header: 'Все программы',   keys: ['all_ddu', 'all_izhs', 'all_vtorchka'] },
+    { header: 'Семейная ипотека', keys: ['semya_ddu', 'semya_izhs', 'semya_vtorchka'] },
+    { header: 'Дальневосточная', keys: ['dv_ddu', 'dv_izhs', 'dv_vtorchka'] },
+    { header: 'IT-ипотека',      keys: ['it_ddu', 'it_izhs', 'it_vtorchka'] },
+  ],
+  initialActiveSeries: ['all_ddu', 'all_izhs', 'all_vtorchka'],
+  fileName: 'subsidy-purpose-structure',
+}).catch(console.error);
+</script>
+</body>
+</html>

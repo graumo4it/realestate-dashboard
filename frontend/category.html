@@ -217,7 +217,16 @@ const COMBO_OVERRIDES = {
   ],
   mortgage_subsidy: [
     { label: 'Количество кредитов по программам господдержки', url: 'subsidy-count.html', parentCode: '6.36', hideCodes: ['6.37','6.38','6.39','6.40','6.41','6.42','6.43','6.44','6.45'] },
-    { label: 'Объем кредитов по программам господдержки',      url: 'subsidy-volume.html', parentCode: null, hideCodes: [] },
+    { label: 'Объем кредитов по программам господдержки',      url: 'subsidy-volume.html',           parentCode: null, hideCodes: [] },
+    { label: 'Ставки по программам господдержки',              url: 'subsidy-rate.html',             parentCode: null, hideCodes: [] },
+    { label: 'Средний срок кредита',                           url: 'subsidy-term.html',             parentCode: null, hideCodes: [] },
+    { label: 'Средняя сумма кредита',                          url: 'subsidy-loan-amount.html',      parentCode: null, hideCodes: [] },
+    { label: 'Доля собственных средств (LTV)',                 url: 'subsidy-ltv.html',              parentCode: null, hideCodes: [] },
+    { label: 'Средняя стоимость жилья',                        url: 'subsidy-property-price.html',   parentCode: null, hideCodes: [] },
+    { label: 'Средняя площадь жилья',                          url: 'subsidy-area.html',             parentCode: null, hideCodes: [] },
+    { label: 'Средняя цена 1 м²',                             url: 'subsidy-price-per-sqm.html',    parentCode: null, hideCodes: [] },
+    { label: 'Структура выдач по цели кредита',                url: 'subsidy-purpose-structure.html',parentCode: null, hideCodes: [] },
+    { label: 'Семейная ипотека: типы семей',                   url: 'subsidy-family-types.html',     parentCode: null, hideCodes: [] },
   ],
   mortgage_igs: [
     { label: 'Количество ипотечных кредитов на ИЖС', url: 'igs-count.html',   parentCode: '6.70', hideCodes: ['6.76','6.82'] },
@@ -273,6 +282,22 @@ const SUBSECTIONS = {
   prices: [
     { label: 'Квартиры',    codes: ['4.4', '4.1', 'apt_budget'] },
     { label: 'Машиноместа', codes: ['4.8', '4.9'] },
+  ],
+  mortgage_subsidy: [
+    { label: 'Объёмы выдач',            codes: ['6.36', 'subsidy-volume.html'] },
+    { label: 'Характеристики кредитов', codes: [
+      'subsidy-rate.html',
+      'subsidy-term.html',
+      'subsidy-loan-amount.html',
+      'subsidy-ltv.html',
+      'subsidy-property-price.html',
+      'subsidy-area.html',
+      'subsidy-price-per-sqm.html',
+    ]},
+    { label: 'Структура выдач',         codes: [
+      'subsidy-purpose-structure.html',
+      'subsidy-family-types.html',
+    ]},
   ],
 };
 

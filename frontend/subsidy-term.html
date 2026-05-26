@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Средний срок кредита — Рынок недвижимости России</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/variables.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="stylesheet" href="css/chart.css"/>
+  <link rel="stylesheet" href="css/combo-page.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    .kpi-cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  </style>
+</head>
+<body>
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
+    <nav class="header-nav" id="main-nav">
+      <a href="category.html?code=mortgage_base">Ипотека</a>
+      <a href="category.html?code=prices">Цены</a>
+      <a href="category.html?code=demand">Спрос</a>
+      <a href="category.html?code=supply_volume">Ввод жилья</a>
+      <a href="category.html?code=under_construction">Стройка</a>
+      <a href="category.html?code=macro">Макро</a>
+    </nav>
+    <div class="header-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" placeholder="Поиск показателей…"/>
+    </div>
+  </div>
+</header>
+<main class="page-main">
+  <div class="page-wrap">
+    <div class="chart-layout">
+      <div class="chart-main">
+
+        <div class="breadcrumb">
+          <a href="index.html">Главная</a><span class="breadcrumb-sep">›</span>
+          <a href="category.html?code=mortgage_subsidy">Льготная ипотека</a><span class="breadcrumb-sep">›</span>
+          <span>Средний срок кредита</span>
+        </div>
+
+        <div class="chart-header">
+          <h1>Средний срок кредита</h1>
+          <div class="chart-meta">
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="chart-updated">—</span></span>
+            <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Банк России</span>
+            <span class="chart-meta-item" style="color:var(--color-muted)">мес.</span>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-cards-row">
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
+            <div class="kpi-value" id="kpi-semya-value">—</div>
+            <div class="kpi-period" id="kpi-semya-period">мес. · —</div>
+            <div class="kpi-deltas" id="kpi-semya-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
+            <div class="kpi-value" id="kpi-dv-value">—</div>
+            <div class="kpi-period" id="kpi-dv-period">мес. · —</div>
+            <div class="kpi-deltas" id="kpi-dv-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#2EC4B6"></span>IT-ипотека</div>
+            <div class="kpi-value" id="kpi-it-value">—</div>
+            <div class="kpi-period" id="kpi-it-period">мес. · —</div>
+            <div class="kpi-deltas" id="kpi-it-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Все программы</div>
+            <div class="kpi-value" id="kpi-all-value">—</div>
+            <div class="kpi-period" id="kpi-all-period">мес. · —</div>
+            <div class="kpi-deltas" id="kpi-all-deltas"></div>
+          </div>
+        </div>
+
+        <!-- Горизонтальная панель фильтров -->
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-bar-btn" id="btn-filter-series" style="position:relative">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Тип индикатора
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            <div class="filter-dropdown" id="series-dropdown" style="display:none"></div>
+          </div>
+          <button class="filter-bar-reset" id="btn-reset-filters">Сбросить</button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="chart-toolbar">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div class="btn-group">
+              <button data-range="1">1 год</button><button data-range="3">3 года</button>
+              <button data-range="5">5 лет</button><button data-range="all" class="active">За все время</button>
+            </div>
+            <div class="btn-group">
+              <button data-mode="absolute" class="active">Значения</button>
+              <button data-mode="yoy">Изм. г/г</button>
+              <button data-mode="mom">Изм. м/м</button>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn-outline" id="btn-download-png"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>PNG</button>
+            <button class="btn-outline" id="btn-download-xlsx"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</button>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <div id="main-chart"></div>
+          <div class="chart-source">Источник: Банк России</div>
+        </div>
+
+        <div class="data-table-wrap">
+          <div class="data-table-header"><span>Исходные данные</span></div>
+          <div class="table-tabs">
+            <button class="table-tab active" data-table="all">Все программы</button>
+            <button class="table-tab" data-table="semya">Семейная</button>
+            <button class="table-tab" data-table="dv">Дальневосточная</button>
+            <button class="table-tab" data-table="it">IT-ипотека</button>
+            <button class="table-tab" data-table="regions">Отд. регионы</button>
+            <button class="table-tab" data-table="lgota">Льготная</button>
+          </div>
+          <table class="data-table">
+            <thead><tr>
+              <th style="width:25%">Период</th>
+              <th style="width:25%;text-align:right">Значение, мес.</th>
+              <th style="width:25%;text-align:right">Изм. г/г</th>
+              <th style="width:25%;text-align:right">Изм. м/м</th>
+            </tr></thead>
+            <tbody id="data-table-body"><tr><td colspan="4" class="skeleton" style="height:160px"></td></tr></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+<footer class="site-footer"><div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div></footer>
+<script>window.API_BASE = 'http://localhost:8001/api';</script>
+<script src="js/api.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/period-toggle.js?v=4"></script>
+<script src="js/combo-page.js"></script>
+<script>
+window.CODES = {
+  all:     '6.46.4',
+  lgota:   '6.47.4',
+  semya:   '6.48.4',
+  dv:      '6.49.4',
+  it:      '6.50.4',
+  regions: '6.51.4',
+};
+const LABELS = { all:'Все программы', lgota:'Льготная', semya:'Семейная', dv:'Дальневосточная', it:'IT-ипотека', regions:'Отд. регионы' };
+const KEYS = ['all','semya','dv','it','regions','lgota'];
+ComboPage.init({
+  codes: {
+    all:     '6.46.4',                              // нет отдельного веса — равный вес
+    lgota:   { value: '6.47.4', weight: '6.38' },  // вес: кол-во кредитов Льготная
+    semya:   { value: '6.48.4', weight: '6.36' },  // вес: кол-во кредитов Семейная
+    dv:      { value: '6.49.4', weight: '6.40' },  // вес: кол-во кредитов ДВ и Арктика
+    it:      { value: '6.50.4', weight: '6.42' },  // вес: кол-во кредитов IT
+    regions: { value: '6.51.4', weight: '6.44' },  // вес: кол-во кредитов Регионы
+  },
+  labels:    LABELS,
+  colors:    { all:'#1A2B4A', lgota:'#4B6A9E', semya:'#E8341C', dv:'#F4A336', it:'#2EC4B6', regions:'#8B5CF6' },
+  keys:      KEYS,
+  chartType: 'line',
+  aggType:   'wavg',
+  isPp:      false,
+  unit:      ' мес.',
+  decimals:  0,
+  fileName:  'subsidy-term',
+  onData(allData) {
+    ['semya','dv','it','all'].forEach(key => {
+      const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);
+      const last = s[s.length-1]; if (!last) return;
+      const elV = document.getElementById(`kpi-${key}-value`);
+      const elP = document.getElementById(`kpi-${key}-period`);
+      const elD = document.getElementById(`kpi-${key}-deltas`);
+      if (elV) elV.textContent = fmtNum(Number(last.value), 0);
+      if (elP) elP.textContent = `мес. · ${last.label||'—'}`;
+      if (elD) elD.innerHTML =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+    });
+  },
+}).catch(console.error);
+</script>
+</body>
+</html>
