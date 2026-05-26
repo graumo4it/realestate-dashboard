@@ -108,10 +108,12 @@ psql -U postgres -d realestate -f migration/001_init.sql
 В `frontend/` кроме трёх системных страниц лежат комбо-страницы и специальные графики. Большинство используют `/api/multi/data?codes=...`. Каждая содержит:
 - Константы `CODES` (mapping имён в коды) и `LABELS` (подписи серий)
 - Опционально `KEYS` (массив ключей для фильтров серий) — **обязательно объявлять после `LABELS`**
-- Инициализацию `PeriodToggle.injectButtons(toolbar, ...)` (шим AnnualToggle **удалён**)
+- Инициализацию через `ComboPage.init({ codes, labels, keys, ... })`; `PeriodToggle` подключается внутри `ComboPage`, если страница не `pointInTime`, `annualOnly` или `quarterlyOnly`
 - Горизонтальную панель фильтров серий
 
 **Эталон разметки** горизонтальной панели фильтров: `subsidy-count.html`.
+
+Для страниц, где последний отображаемый период должен существовать сразу у нескольких обязательных серий, используйте `trimToCommonDateKeys` (или `trimToCommonDateCodes`) в `ComboPage.init()`. Настройка обрезает все ряды после последней общей ненулевой даты этих серий перед отрисовкой KPI, графика и таблицы. На subsidy-страницах характеристик кредита обязательные действующие программы: `semya`, `dv`, `it`, `regions`; завершённую `lgota` не включать в отсечку.
 
 ### JS-модули (`frontend/js/`)
 
@@ -121,6 +123,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 | `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `deltaHtml`, `rangeStart`, `cleanName` |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
+| `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`. |
 | `period-toggle.js` | **v4.0.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons` (алиас `injectSelector`), `detectPeriodicity`. Шим `window.AnnualToggle` **удалён** — все страницы мигрированы на `PeriodToggle`. |
 | `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` (файл сохранён для истории) |
 
