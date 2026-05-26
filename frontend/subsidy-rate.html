@@ -12,7 +12,9 @@
   <link rel="stylesheet" href="css/combo-page.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
-    .kpi-cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-cards-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 28px; }
+    @media (max-width: 1100px) { .kpi-cards-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 720px) { .kpi-cards-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -56,6 +58,12 @@
         <!-- KPI -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Все программы</div>
+            <div class="kpi-value" id="kpi-all-value">—</div>
+            <div class="kpi-period" id="kpi-all-period">% · —</div>
+            <div class="kpi-deltas" id="kpi-all-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
             <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
             <div class="kpi-value" id="kpi-semya-value">—</div>
             <div class="kpi-period" id="kpi-semya-period">% · —</div>
@@ -74,10 +82,10 @@
             <div class="kpi-deltas" id="kpi-it-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Все программы</div>
-            <div class="kpi-value" id="kpi-all-value">—</div>
-            <div class="kpi-period" id="kpi-all-period">% · —</div>
-            <div class="kpi-deltas" id="kpi-all-deltas"></div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#8B5CF6"></span>Отдельные регионы</div>
+            <div class="kpi-value" id="kpi-regions-value">—</div>
+            <div class="kpi-period" id="kpi-regions-period">% · —</div>
+            <div class="kpi-deltas" id="kpi-regions-deltas"></div>
           </div>
         </div>
 
@@ -158,6 +166,31 @@ window.CODES = {
 };
 const LABELS = { all:'Все программы', lgota:'Льготная', semya:'Семейная', dv:'Дальневосточная', it:'IT-ипотека', regions:'Отд. регионы' };
 const KEYS = ['all','semya','dv','it','regions','lgota'];
+const ACTIVE_PROGRAM_RATE_CODES = ['6.48.2', '6.49.2', '6.50.2', '6.51.2'];
+
+function lastCommonDate(allData, codes) {
+  const dateSets = codes.map(code => {
+    const dates = (allData[code]?.series || [])
+      .filter(p => p.value != null && p.date)
+      .map(p => p.date);
+    return new Set(dates);
+  });
+  if (dateSets.some(s => s.size === 0)) return null;
+
+  return [...dateSets[0]]
+    .filter(date => dateSets.every(s => s.has(date)))
+    .sort()
+    .pop() || null;
+}
+
+function trimSeriesAfter(allData, cutoffDate) {
+  if (!cutoffDate) return;
+  Object.values(allData).forEach(entry => {
+    if (!entry?.series) return;
+    entry.series = entry.series.filter(p => !p.date || p.date <= cutoffDate);
+  });
+}
+
 ComboPage.init({
   codes: {
     all:     '6.46.2',                              // нет отдельного веса — равный вес
@@ -175,8 +208,11 @@ ComboPage.init({
   unit:      '%',
   decimals:  2,
   fileName:  'subsidy-rate',
+  preProcess(allData) {
+    trimSeriesAfter(allData, lastCommonDate(allData, ACTIVE_PROGRAM_RATE_CODES));
+  },
   onData(allData) {
-    ['semya','dv','it','all'].forEach(key => {
+    ['all','semya','dv','it','regions'].forEach(key => {
       const s = (allData[window.CODES[key]]?.series||[]).filter(p=>p.value!=null);
       const last = s[s.length-1]; if (!last) return;
       const elV = document.getElementById(`kpi-${key}-value`);
@@ -185,8 +221,8 @@ ComboPage.init({
       if (elV) elV.textContent = fmtNum(Number(last.value), 2);
       if (elP) elP.textContent = `% · ${last.label||'—'}`;
       if (elD) elD.innerHTML =
-        `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
-        `<span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct, true)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct, true)}</span>`;
     });
   },
 }).catch(console.error);
