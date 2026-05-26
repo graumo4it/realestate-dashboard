@@ -25,6 +25,8 @@
  *   stack100     {boolean}  render bars as 100%-stacked; data must already be in % (0–100)
  *   labelGroups  {Array}    [{ header, keys[] }] — group separators in the series dropdown
  *   showOnlyInDelta {Array}  keys shown only in delta modes (г/г, м/м); hidden in Значения
+ *   trimToCommonDateKeys {Array} keys whose last shared non-null date limits all series
+ *   trimToCommonDateCodes {Array} indicator codes whose last shared non-null date limits all series
  *
  * Null codes: config.codes[key] = null marks a virtual series — skipped during API fetch,
  * populated by preProcess(). All keys with null codes require a preProcess hook.
@@ -95,6 +97,13 @@ window.ComboPage = (function () {
     const hideSeriesForPeriodicity = config.hideSeriesForPeriodicity || null;
     // initialActiveSeries: keys initially checked in chart filter (default: all keys)
     const initialActiveSeries = config.initialActiveSeries || null;
+    const trimToCommonDateKeys  = Array.isArray(config.trimToCommonDateKeys) ? config.trimToCommonDateKeys : [];
+    const trimToCommonDateCodes = Array.isArray(config.trimToCommonDateCodes) ? config.trimToCommonDateCodes : [];
+
+    const trimKeyCodes = trimToCommonDateKeys.map(k => {
+      if (valueCode[k] === undefined) throw new Error(`ComboPage: trimToCommonDateKeys contains unknown key "${k}"`);
+      return valueCode[k];
+    }).filter(Boolean);
 
     return {
       keys, labels: config.labels, colors,
@@ -109,6 +118,10 @@ window.ComboPage = (function () {
       stack100:        Boolean(config.stack100),
       labelGroups:     config.labelGroups   || null,
       showOnlyInDelta: Array.isArray(config.showOnlyInDelta) ? config.showOnlyInDelta : null,
+      trimToCommonDateCodes: [...new Set([
+        ...trimToCommonDateCodes,
+        ...trimKeyCodes,
+      ])],
     };
   }
 
@@ -135,6 +148,38 @@ window.ComboPage = (function () {
       const el = document.getElementById('chart-updated');
       if (el) el.textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
     }
+  }
+
+  // ── 3b. _trimToLastCommonDate ─────────────────────────────────────────
+  function _lastCommonDate(allData, codes) {
+    const dateSets = codes.map(code => {
+      const dates = (allData[code]?.series || [])
+        .filter(p => p.value != null && p.date)
+        .map(p => p.date);
+      return new Set(dates);
+    });
+    if (dateSets.some(s => s.size === 0)) return null;
+
+    return [...dateSets[0]]
+      .filter(date => dateSets.every(s => s.has(date)))
+      .sort()
+      .pop() || null;
+  }
+
+  function _trimToLastCommonDate(allData, codes) {
+    if (!codes?.length) return;
+    const cutoffDate = _lastCommonDate(allData, codes);
+    if (!cutoffDate) return;
+
+    Object.values(allData).forEach(entry => {
+      if (!entry?.series) return;
+      entry.series = entry.series.filter(p => !p.date || p.date <= cutoffDate);
+    });
+  }
+
+  function _applyDataTransforms(cfg, state) {
+    if (cfg.preProcess) cfg.preProcess(state.allData);
+    _trimToLastCommonDate(state.allData, cfg.trimToCommonDateCodes);
   }
 
   // ── 4. _getFiltered ───────────────────────────────────────────────────
@@ -607,7 +652,7 @@ window.ComboPage = (function () {
 
     // Rebuild: called on range change + period toggle
     function rebuild() {
-      if (cfg.preProcess) cfg.preProcess(state.allData);  // inject virtual series before render
+      _applyDataTransforms(cfg, state);  // inject virtual series / trim incomplete tail before render
       _buildChart(cfg, state);
       _renderTable(cfg, state);
       if (cfg.onData) cfg.onData(state.allData);
@@ -615,7 +660,7 @@ window.ComboPage = (function () {
 
     try {
       await _fetch(cfg, state);
-      if (cfg.preProcess) cfg.preProcess(state.allData);  // inject virtual series after first fetch
+      _applyDataTransforms(cfg, state);  // inject virtual series / trim incomplete tail after first fetch
       _buildDropdown(cfg, state, rebuild);
       if (cfg.onData) cfg.onData(state.allData);
       _buildChart(cfg, state);
