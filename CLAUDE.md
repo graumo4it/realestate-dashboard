@@ -113,21 +113,23 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 **`subsidy-purpose-structure.html`** — специальная страница целей кредитования по льготным программам. Использует модуль `js/subsidy-purpose-page.js`, а не `ComboPage`: одна HTML-страница переключает 6 программ внутри страницы (`Все`, `Льготная`, `Семейная`, `ДВ и Арктика`, `IT`, `Отдельные регионы`), метрику `Количество/Объём`, периодичность и цели кредита. Источник — лист `01_02_03` файла ДОМ.РФ «Статистические ряды»; коды новой сетки `6.52.x.x–6.57.x.x`, созданные миграцией `009_subsidy_purpose_detail_v2.sql`. На Семейной ипотеке вторичка отображается двумя отдельными целями, как в первоисточнике.
 
-**`subsidy-family-types.html`** — комбо-страница типов семей в Семейной ипотеке. В фильтре серий остаются только 3 типа семьи (`До 7 лет`, `7–18 лет`, `Инвалидность`), а метрика `Количество/Объём` переключается отдельной группой кнопок в тулбаре. Эта группа должна идти после автоматически внедряемого `PeriodToggle` (`Месяц/Квартал/Год`), поэтому страница переставляет её после `ComboPage.init()`.
+**`subsidy-family-types.html`** — комбо-страница типов семей в Семейной ипотеке. В фильтре серий остаются только 3 типа семьи (`До 7 лет`, `7–18 лет`, `Инвалидность`), а метрика `Количество/Объём` переключается отдельной группой кнопок в тулбаре. Эта группа должна идти после автоматически внедряемого `PeriodToggle` (`Месяц/Квартал/Год`), поэтому страница переставляет её после `ComboPage.init()`. Хвост нулевых месяцев обрезается через `trimToNonZeroDateCodes: Object.values(CODES)`, чтобы ось и таблица заканчивались последним месяцем с реальными значениями.
 
 **Эталон разметки** горизонтальной панели фильтров: `subsidy-count.html`.
 
-Для страниц, где последний отображаемый период должен существовать сразу у нескольких обязательных серий, используйте `trimToCommonDateKeys` (или `trimToCommonDateCodes`) в `ComboPage.init()`. Настройка обрезает все ряды после последней общей ненулевой даты этих серий перед отрисовкой KPI, графика и таблицы. На subsidy-страницах характеристик кредита обязательные действующие программы: `semya`, `dv`, `it`, `regions`; завершённую `lgota` не включать в отсечку.
+Для страниц, где последний отображаемый период должен существовать сразу у нескольких обязательных серий, используйте `trimToCommonDateKeys` (или `trimToCommonDateCodes`) в `ComboPage.init()`. Настройка обрезает все ряды после последней общей непустой даты этих серий перед отрисовкой KPI, графика и таблицы. Если API содержит технические нули в хвосте и их нельзя показывать как актуальный период графика, используйте `trimToNonZeroDateKeys`/`trimToNonZeroDateCodes`: они ищут последнюю общую дату, где обязательные ряды не равны `0`. На subsidy-страницах характеристик кредита обязательные действующие программы: `semya`, `dv`, `it`, `regions`; завершённую `lgota` не включать в отсечку.
+
+Подписи горизонтальной оси всех `chart.html`, `ComboPage`-страниц и `subsidy-purpose-page.js` строятся через общие helpers из `utils.js`: `formatXAxisLabel`, `xAxisLabelInterval`, `cleanAxisLabel`. Крайний левый и правый периоды должны иметь подписи; плотность контролируется helper-ом, а не `hideOverlap` ECharts.
 
 ### JS-модули (`frontend/js/`)
 
 | Файл | Назначение |
 |------|-----------|
 | `api.js` | `api.{categories,categoryIndicators,indicator,indicatorData,multiIndicatorData,...}` |
-| `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `deltaHtml`, `rangeStart`, `cleanName` |
+| `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `formatXAxisLabel`, `xAxisLabelInterval`, `cleanAxisLabel`, `deltaHtml`, `rangeStart`, `cleanName` |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
-| `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`; `init()` возвращает управляющий объект `{ cfg, state, rebuild }` для страниц с дополнительными переключателями. |
+| `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`, `trimToNonZeroDateKeys`/`trimToNonZeroDateCodes`; `init()` возвращает управляющий объект `{ cfg, state, rebuild }` для страниц с дополнительными переключателями. |
 | `subsidy-purpose-page.js` | Специальная логика страницы `subsidy-purpose-structure.html`: переключение программ, целей кредита, метрики `Количество/Объём`, KPI, график, таблица и выгрузки для кодов `6.52.x.x–6.57.x.x`. |
 | `period-toggle.js` | **v4.0.** `PeriodToggle.aggregate`, `aggregateWavg`, `injectButtons` (алиас `injectSelector`), `detectPeriodicity`. Шим `window.AnnualToggle` **удалён** — все страницы мигрированы на `PeriodToggle`. |
 | `annual-toggle.js` | Устаревший модуль; заменён `period-toggle.js` (файл сохранён для истории) |
