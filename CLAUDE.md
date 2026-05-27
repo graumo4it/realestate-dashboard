@@ -99,8 +99,8 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 ### Три «системных» страницы
 
-- **`index.html`** — сетка категорий + поиск (через `/api/categories` и `/api/search`)
-- **`category.html`** — список показателей раздела. Содержит JS-константу `COMBO_OVERRIDES` — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется). Константа `SUBSECTIONS` задаёт подразделы (section-headers) внутри страниц отдельных категорий; коды в ней — это «эффективные» коды карточек после применения `COMBO_OVERRIDES`. Категории с подразделами: `demand` (5 групп) и `prices` (2 группы).
+- **`index.html`** — сетка категорий + поиск (через `/api/categories` и `/api/search`). Счётчики карточек разделов считаются по тем же видимым карточкам, что и страницы разделов: главная загружает `/api/categories/{code}/indicators` и применяет `applyComboOverrides()`. Блок «Обновление данных» на главной не показывается.
+- **`category.html`** — список показателей раздела. Использует `js/category-overrides.js` (`COMBO_OVERRIDES` + `applyComboOverrides`) — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется). Константа `SUBSECTIONS` задаёт подразделы (section-headers) внутри страниц отдельных категорий; коды в ней — это «эффективные» коды карточек после применения `COMBO_OVERRIDES`. Категории с подразделами: `demand` (5 групп), `prices` (2 группы), `mortgage_subsidy` (3 группы).
 - **`chart.html`** — график одного показателя (`?code=6.1`). Поддерживает переключатели периода (1г/3г/5л/Всё), режима (Значения/г-г/м-м), переключатель Квартал/Год для квартальных индикаторов, таблицу, KPI-блок, блок «Связанные показатели». Для квартальных показателей в режиме «Год» загружает official companion-индикатор `<code>.y` (если существует) вместо агрегации кварталов.
 
 ### Комбо-страницы и специальные графики
@@ -127,6 +127,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 |------|-----------|
 | `api.js` | `api.{categories,categoryIndicators,indicator,indicatorData,multiIndicatorData,...}` |
 | `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `formatXAxisLabel`, `xAxisLabelInterval`, `cleanAxisLabel`, `deltaHtml`, `rangeStart`, `cleanName` |
+| `category-overrides.js` | Общие правила `COMBO_OVERRIDES` и `applyComboOverrides()` для видимых карточек категорий. Подключается на `index.html` и `category.html`, чтобы счётчики главной совпадали со страницами разделов. |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
 | `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`, `trimToNonZeroDateKeys`/`trimToNonZeroDateCodes`; `init()` возвращает управляющий объект `{ cfg, state, rebuild }` для страниц с дополнительными переключателями. |
@@ -289,6 +290,7 @@ Docker Compose (`docker-compose.prod.yml`): три контейнера — `db`
   - Создан `calc_housing_per_capita.py` (2.6/2.7/2.8 = ввод/население); добавлен в scheduler после rosstat.py
 - ✅ **`parsers/domrf_web.py`** — готовый парсер: скачивает `01_01_stockvariablesexsales.xlsx` с наш.дом.рф, обновляет 3.1, 3.2, 3.3, 3.4, 3.17, 3.18, 3.19 (77 месяцев, 2020–2026); идемпотентен (повторный запуск → 0 новых строк); зарегистрирован в `scheduler.py` как `day5_domrf_web`
 - ✅ **Аудит системы парсинга**: выявлены причины, почему старые парсеры не работали; составлен и затем реализован план переработки (`PARSERS_PLAN.md`); установлены зависимости (`requests`, `bs4`, `APScheduler` в venv)
+- ✅ **Главная страница и счётчики разделов** (`frontend/index.html`, `frontend/js/category-overrides.js`): блок «Обновление данных» убран; правила `COMBO_OVERRIDES` вынесены из `category.html` в общий модуль, и главная считает количество показателей через те же видимые карточки, что страницы разделов
 - ✅ **UX-правки `category.html`**: счётчик в подзаголовке теперь показывает `indicators.length` (кол-во видимых карточек после `COMBO_OVERRIDES`) вместо `rawIndicators.length` (всё из API); убрана надпись «Данные обновляются автоматически»
 - ✅ **Аудит и очистка БД** (`migration/004_cleanup.sql`, `migration/004_db_audit_report.md`): убраны легаси-префиксы «X.X» из 92 названий индикаторов; исправлены единицы 5.10 (`кв.м/зарплату`); добавлены CHECK-ограничения (`chk_periodicity`, `chk_period_type`, `chk_chart_type`); устранены конфликты sort_order в `categories`; устранены дубли названий (3.7/uc_dev_activity, uc_new_active/total, 5.14.xx, apartments 1k-4k, 18 ипотека ИЖС 6.70–6.87); удалены устаревшие 3.13/3.15. Итог: 180 индикаторов, 10 394 точки, 18 категорий, 0 дублей
 - ✅ **Новая категория «Сбалансированность рынка»** (`migration/005_market_balance.sql`): sort_order=11 (после «Спроса»); 9 индикаторов перенесены из `under_construction_domrf`; `under_construction_domrf` теперь содержит 3 видимые карточки
