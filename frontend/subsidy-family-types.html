@@ -10,6 +10,18 @@
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/chart.css"/>
   <link rel="stylesheet" href="css/combo-page.css"/>
+  <style>
+    .kpi-cards-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 720px) {
+      .kpi-cards-row { grid-template-columns: 1fr; }
+    }
+  </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 </head>
 <body>
@@ -46,6 +58,27 @@
           <div class="chart-meta">
             <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span id="chart-updated">—</span></span>
             <span class="chart-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Банк России</span>
+          </div>
+        </div>
+
+        <div class="kpi-cards-row">
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>До 7 лет</div>
+            <div class="kpi-value" id="kpi-under7-value">—</div>
+            <div class="kpi-period" id="kpi-under7-period">шт. · —</div>
+            <div class="kpi-deltas" id="kpi-under7-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>7–18 лет</div>
+            <div class="kpi-value" id="kpi-age718-value">—</div>
+            <div class="kpi-period" id="kpi-age718-period">шт. · —</div>
+            <div class="kpi-deltas" id="kpi-age718-deltas"></div>
+          </div>
+          <div class="kpi-card-sm">
+            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Инвалидность</div>
+            <div class="kpi-value" id="kpi-disabled-value">—</div>
+            <div class="kpi-period" id="kpi-disabled-period">шт. · —</div>
+            <div class="kpi-deltas" id="kpi-disabled-deltas"></div>
           </div>
         </div>
 
@@ -113,7 +146,7 @@
 <footer class="site-footer"><div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div></footer>
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
-<script src="js/utils.js?v=9"></script>
+<script src="js/utils.js?v=10"></script>
 <script src="js/period-toggle.js?v=4"></script>
 <script src="js/combo-page.js?v=6"></script>
 <script>
@@ -134,20 +167,52 @@ const KEYS = ['under7', 'age718', 'disabled'];
 const METRICS = {
   count: {
     unit: 'шт.',
+    decimals: 0,
     fileSuffix: 'count',
     codes: { under7: '6.58.1', age718: '6.58.2', disabled: '6.58.3' },
   },
   volume: {
     unit: 'млн руб.',
+    decimals: 0,
     fileSuffix: 'volume',
     codes: { under7: '6.58.4', age718: '6.58.5', disabled: '6.58.6' },
   },
 };
+let currentMetric = 'count';
+
+function renderKpis(allData) {
+  const metric = METRICS[currentMetric];
+  if (!metric) return;
+
+  KEYS.forEach(key => {
+    const series = (allData[metric.codes[key]]?.series || []).filter(point => point.value != null);
+    const last = series[series.length - 1];
+    const valueEl = document.getElementById(`kpi-${key}-value`);
+    const periodEl = document.getElementById(`kpi-${key}-period`);
+    const deltasEl = document.getElementById(`kpi-${key}-deltas`);
+
+    if (!last) {
+      if (valueEl) valueEl.textContent = '—';
+      if (periodEl) periodEl.textContent = `${metric.unit} · —`;
+      if (deltasEl) deltasEl.innerHTML = '';
+      return;
+    }
+
+    if (valueEl) valueEl.textContent = fmtNum(Number(last.value), metric.decimals);
+    if (periodEl) periodEl.textContent = `${metric.unit} · ${last.label || '—'}`;
+    if (deltasEl) {
+      deltasEl.innerHTML =
+        `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
+        `<span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
+    }
+  });
+}
 
 function applyMetric(page, metricKey) {
   const metric = METRICS[metricKey];
   if (!metric) return;
 
+  currentMetric = metricKey;
   Object.entries(metric.codes).forEach(([key, code]) => {
     page.cfg.valueCode[key] = code;
   });
@@ -164,6 +229,7 @@ ComboPage.init({
   initialActiveSeries: KEYS,
   trimToNonZeroDateCodes: Object.values(CODES),
   fileName: 'subsidy-family-types-count',
+  onData: renderKpis,
 }).then(page => {
   const metricToggle = document.getElementById('family-metric-toggle');
   const periodToggle = document.querySelector('[data-period-toggle="true"]');

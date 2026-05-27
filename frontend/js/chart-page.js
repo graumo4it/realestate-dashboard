@@ -2,7 +2,7 @@
  * Логика страницы chart.html
  * Правки v1.2:
  *   - кнопки тулбара «1 год / 3 года / 5 лет»
- *   - ось X: горизонтальные двухстрочные метки (янв.\n2024), без наклона
+ *   - ось X: горизонтальные двухстрочные метки (янв\n2024), без наклона
  *   - ось Y: знак «-» для отрицательных, «%» если ед. изм. %, разделитель разрядов
  *   - tooltip: единица только в значении, не в названии серии
  *   - таблица: заголовки «Значение, ед.» / «ИЗМ. Г/Г» / «ИЗМ. М/М», значения динамики с ед.
@@ -40,6 +40,12 @@
     'apt_area': 'avg',   // Средняя площадь сделок — квартиры
     '5.20':     'sum',   // Количество сделок — машиноместа
     '5.21':     'avg',   // Средняя площадь сделок — машиноместа
+  };
+
+  // Для бюджетов ось Y читается в млн руб., без изменения исходных значений.
+  const Y_AXIS_LABEL_SCALE_CONFIG = {
+    'apt_budget': { divisor: 1_000_000, decimals: 1 },
+    '4.9':        { divisor: 1_000_000, decimals: 1 },
   };
 
   // Процентный показатель → динамика в п.п.
@@ -262,6 +268,7 @@
     const isDelta = currentMode === 'yoy' || currentMode === 'mom';
     const pp      = isPp();
     const isPercent = indicator.unit === '%';
+    const yAxisLabelScale = !isDelta ? Y_AXIS_LABEL_SCALE_CONFIG[indCode] : null;
 
     // Эффективная периодичность: для месячных с агрегацией берём currentMonthlyPeriodicity
     const effPeriodicity = MONTHLY_AGG_CONFIG[indCode] ? currentMonthlyPeriodicity : indicator.periodicity;
@@ -285,6 +292,8 @@
 
     const dec = isDelta
       ? (pp ? 2 : 1)
+      : yAxisLabelScale
+        ? yAxisLabelScale.decimals
       : axisDecimals(yData);
 
     // Форматтер оси Y
@@ -301,7 +310,8 @@
       }
       // Абсолютные: разделитель разрядов, без единиц
       const sign = v < 0 ? '−' : '';
-      return `${sign}${fmtNum(Math.abs(v), dec)}`;
+      const axisValue = yAxisLabelScale ? Math.abs(v) / yAxisLabelScale.divisor : Math.abs(v);
+      return `${sign}${fmtNum(axisValue, dec)}`;
     };
 
     // Форматтер tooltip — единица только в значении
@@ -396,6 +406,7 @@
           fontFamily: 'IBM Plex Mono',
           fontSize: 11,
           color: '#7A8B9A',
+          showMinLabel: false,
           formatter: yAxisFormatter,
         },
         splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },

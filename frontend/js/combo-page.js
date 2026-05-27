@@ -476,6 +476,7 @@ window.ComboPage = (function () {
         ...(cfg.stack100 && !isDelta ? { max: 100 } : {}),
         axisLabel: {
           fontFamily: 'IBM Plex Mono', fontSize: 11, color: '#7A8B9A',
+          showMinLabel: false,
           formatter: v => isDelta
             ? fmtDelta(v)
             : (cfg.stack100 ? fmtNum(v, 0) + '%' : fmtNum(v, cfg.decimals)),

@@ -6,6 +6,7 @@ const MONTHS_RU = ['янв','фев','мар','апр','май','июн','июл
 const MONTHS_RU_CAP = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
 const MONTHS_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь',
                      'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MONTH_ABBR_DOT_RE = /(^|[\s\n])(янв|фев|мар|апр|май|июн|июл|авг|сен|окт|ноя|дек)\.(?=\s|\n|$)/gi;
 
 function fmtNum(v, decimals = 0) {
   if (v == null || isNaN(v)) return '—';
@@ -41,8 +42,8 @@ function fmtDate(dateStr, periodicity = 'monthly') {
     const q = Math.floor(d.getMonth() / 3) + 1;
     return `Q${q} ${d.getFullYear()}`;
   }
-  // monthly — двухстрочная метка: «янв.\n2024»
-  return `${MONTHS_RU[d.getMonth()]}.\n${d.getFullYear()}`;
+  // monthly — двухстрочная метка: «янв\n2024»
+  return `${MONTHS_RU[d.getMonth()]}\n${d.getFullYear()}`;
 }
 
 // Однострочный вариант для мест где перенос не нужен (KPI, таблица)
@@ -63,18 +64,22 @@ function fmtDateFull(dateStr) {
   return `${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+function stripMonthAbbrDots(label) {
+  return String(label ?? '').replace(MONTH_ABBR_DOT_RE, (_, prefix, month) => `${prefix}${month}`);
+}
+
 function formatXAxisLabel(label, dateStr, periodicity = 'monthly') {
   const rawLabel = label != null ? String(label).trim() : '';
   const rawDate = dateStr != null ? String(dateStr) : '';
 
   if (periodicity === 'monthly') {
-    if (rawLabel.includes('\n')) return rawLabel;
+    if (rawLabel.includes('\n')) return stripMonthAbbrDots(rawLabel);
     if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return fmtDate(rawDate, 'monthly');
 
     const parts = rawLabel.split(/\s+/);
     const year = parts.find(part => /^\d{4}$/.test(part));
     const mon = parts[0]?.replace('.', '').slice(0, 3).toLowerCase();
-    if (year && mon && !rawLabel.startsWith('Q')) return `${mon}.\n${year}`;
+    if (year && mon && !rawLabel.startsWith('Q')) return `${mon}\n${year}`;
   }
 
   if (rawLabel) return rawLabel;

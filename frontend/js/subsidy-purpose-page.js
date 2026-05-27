@@ -474,6 +474,7 @@
           fontFamily: 'IBM Plex Mono',
           fontSize: 11,
           color: '#7A8B9A',
+          showMinLabel: false,
           formatter: value => isDelta ? fmtDelta(value) : fmtNum(value, metric.decimals),
         },
         splitLine: { lineStyle: { color: '#DDE2E8', type: 'dashed' } },
