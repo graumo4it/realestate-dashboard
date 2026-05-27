@@ -461,7 +461,7 @@
           rotate: 0,
           interval: xInterval,
           lineHeight: 16,
-          showMinLabel: true,
+          showMinLabel: false,
           showMaxLabel: true,
           hideOverlap: false,
         },

@@ -393,7 +393,7 @@
           rotate: 0,           // всегда горизонтально
           interval: xInterval,
           lineHeight: 16,      // для двустрочных меток
-          showMinLabel: true,
+          showMinLabel: false,
           showMaxLabel: true,
           hideOverlap: false,
         },

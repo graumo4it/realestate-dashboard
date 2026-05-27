@@ -107,39 +107,38 @@ function xAxisLabelInterval(total, periodicity = 'monthly') {
   const lastIndex = Math.max(0, total - 1);
   if (!lastIndex) return 0;
 
-  const divisors = [];
-  for (let step = 1; step <= lastIndex; step += 1) {
-    if (lastIndex % step === 0) divisors.push(step);
+  const minStep = Math.ceil(targetStep * 0.75);
+  const maxStep = Math.floor(targetStep * 1.5);
+
+  // Ищем шаг в диапазоне [minStep, maxStep] с минимальным смещением первой метки
+  // (offset = lastIndex % step). Гарантирует идеально равные промежутки между
+  // всеми подписями: первая метка смещена на offset позиций от края (0–3),
+  // последняя всегда на lastIndex.
+  // При равном offset предпочитаем шаг, ближайший к targetStep;
+  // при равном diff — больший шаг (меньше меток на оси).
+  let bestStep = minStep;
+  let bestOffset = lastIndex % minStep;
+  let bestDiff   = Math.abs(minStep - targetStep);
+
+  for (let s = minStep + 1; s <= maxStep; s++) {
+    const offset = lastIndex % s;
+    const diff   = Math.abs(s - targetStep);
+    if (offset < bestOffset ||
+        (offset === bestOffset && diff < bestDiff) ||
+        (offset === bestOffset && diff === bestDiff && s > bestStep)) {
+      bestStep   = s;
+      bestOffset = offset;
+      bestDiff   = diff;
+    }
   }
 
+  // Метки от bestOffset до lastIndex с шагом bestStep.
+  // lastIndex ≡ bestOffset (mod bestStep) → последняя метка всегда на lastIndex,
+  // все промежутки строго равны bestStep.
   const labels = new Set();
-  const minStep = targetStep * 0.75;
-  const maxStep = targetStep * 1.5;
-  const candidates = divisors.filter(step => step >= minStep && step <= maxStep);
+  for (let i = bestOffset; i <= lastIndex; i += bestStep) labels.add(i);
 
-  if (candidates.length) {
-    const step = candidates.reduce((best, candidate) => {
-      const bestScore = Math.abs(best - targetStep);
-      const candidateScore = Math.abs(candidate - targetStep);
-      if (candidateScore === bestScore) return candidate > best ? candidate : best;
-      return candidateScore < bestScore ? candidate : best;
-    }, candidates[0]);
-
-    for (let index = 0; index <= lastIndex; index += step) {
-      labels.add(index);
-    }
-  } else {
-    const labelCount = Math.max(2, Math.round(lastIndex / targetStep) + 1);
-    for (let i = 0; i < labelCount; i += 1) {
-      labels.add(Math.round((lastIndex * i) / (labelCount - 1)));
-    }
-  }
-  labels.add(0);
-  labels.add(lastIndex);
-
-  return index => {
-    return labels.has(index);
-  };
+  return index => labels.has(index);
 }
 
 function cleanAxisLabel(label) {
