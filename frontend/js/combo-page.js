@@ -27,6 +27,8 @@
  *   showOnlyInDelta {Array}  keys shown only in delta modes (г/г, м/м); hidden in Значения
  *   trimToCommonDateKeys {Array} keys whose last shared non-null date limits all series
  *   trimToCommonDateCodes {Array} indicator codes whose last shared non-null date limits all series
+ *   trimToNonZeroDateKeys {Array} keys whose last shared non-zero date limits all series
+ *   trimToNonZeroDateCodes {Array} indicator codes whose last shared non-zero date limits all series
  *
  * Null codes: config.codes[key] = null marks a virtual series — skipped during API fetch,
  * populated by preProcess(). All keys with null codes require a preProcess hook.
@@ -97,11 +99,17 @@ window.ComboPage = (function () {
     const hideSeriesForPeriodicity = config.hideSeriesForPeriodicity || null;
     // initialActiveSeries: keys initially checked in chart filter (default: all keys)
     const initialActiveSeries = config.initialActiveSeries || null;
-    const trimToCommonDateKeys  = Array.isArray(config.trimToCommonDateKeys) ? config.trimToCommonDateKeys : [];
-    const trimToCommonDateCodes = Array.isArray(config.trimToCommonDateCodes) ? config.trimToCommonDateCodes : [];
+    const trimToCommonDateKeys   = Array.isArray(config.trimToCommonDateKeys) ? config.trimToCommonDateKeys : [];
+    const trimToCommonDateCodes  = Array.isArray(config.trimToCommonDateCodes) ? config.trimToCommonDateCodes : [];
+    const trimToNonZeroDateKeys  = Array.isArray(config.trimToNonZeroDateKeys) ? config.trimToNonZeroDateKeys : [];
+    const trimToNonZeroDateCodes = Array.isArray(config.trimToNonZeroDateCodes) ? config.trimToNonZeroDateCodes : [];
 
     const trimKeyCodes = trimToCommonDateKeys.map(k => {
       if (valueCode[k] === undefined) throw new Error(`ComboPage: trimToCommonDateKeys contains unknown key "${k}"`);
+      return valueCode[k];
+    }).filter(Boolean);
+    const trimNonZeroKeyCodes = trimToNonZeroDateKeys.map(k => {
+      if (valueCode[k] === undefined) throw new Error(`ComboPage: trimToNonZeroDateKeys contains unknown key "${k}"`);
       return valueCode[k];
     }).filter(Boolean);
 
@@ -121,6 +129,10 @@ window.ComboPage = (function () {
       trimToCommonDateCodes: [...new Set([
         ...trimToCommonDateCodes,
         ...trimKeyCodes,
+      ])],
+      trimToNonZeroDateCodes: [...new Set([
+        ...trimToNonZeroDateCodes,
+        ...trimNonZeroKeyCodes,
       ])],
     };
   }
@@ -151,10 +163,10 @@ window.ComboPage = (function () {
   }
 
   // ── 3b. _trimToLastCommonDate ─────────────────────────────────────────
-  function _lastCommonDate(allData, codes) {
+  function _lastCommonDate(allData, codes, requireNonZero = false) {
     const dateSets = codes.map(code => {
       const dates = (allData[code]?.series || [])
-        .filter(p => p.value != null && p.date)
+        .filter(p => p.value != null && p.date && (!requireNonZero || Number(p.value) !== 0))
         .map(p => p.date);
       return new Set(dates);
     });
@@ -166,9 +178,9 @@ window.ComboPage = (function () {
       .pop() || null;
   }
 
-  function _trimToLastCommonDate(allData, codes) {
+  function _trimToLastCommonDate(allData, codes, requireNonZero = false) {
     if (!codes?.length) return;
-    const cutoffDate = _lastCommonDate(allData, codes);
+    const cutoffDate = _lastCommonDate(allData, codes, requireNonZero);
     if (!cutoffDate) return;
 
     Object.values(allData).forEach(entry => {
@@ -180,6 +192,7 @@ window.ComboPage = (function () {
   function _applyDataTransforms(cfg, state) {
     if (cfg.preProcess) cfg.preProcess(state.allData);
     _trimToLastCommonDate(state.allData, cfg.trimToCommonDateCodes);
+    _trimToLastCommonDate(state.allData, cfg.trimToNonZeroDateCodes, true);
   }
 
   // ── 4. _getFiltered ───────────────────────────────────────────────────
@@ -348,21 +361,20 @@ window.ComboPage = (function () {
       maps[k] = m;
     });
 
+    const axisPeriodicity = cfg.annualOnly
+      ? 'annual'
+      : (cfg.quarterlyOnly ? 'quarterly' : state.currentPeriodicity);
+
     // x-axis labels (use first available label for each date)
     const xData = allDates.map(d => {
       for (const k of activeSeries) {
         const p = maps[k][d];
-        if (p?.label) return p.label;
+        if (p?.label) return formatXAxisLabel(p.label, p.date || d, axisPeriodicity);
       }
-      return d;
+      return formatXAxisLabel('', d, axisPeriodicity);
     });
 
-    // x interval so labels don't overlap
-    const total = xData.length;
-    let xInterval = 'auto';
-    if (total > 120)     xInterval = 11;
-    else if (total > 60) xInterval = 5;
-    else if (total > 24) xInterval = 2;
+    const xInterval = xAxisLabelInterval(xData.length, axisPeriodicity);
 
     // Series
     const seriesArr = [...activeSeries].map(key => {
@@ -427,7 +439,7 @@ window.ComboPage = (function () {
         backgroundColor: '#0D1B2A', borderColor: '#0D1B2A',
         textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
         formatter: params => {
-          let html  = `<b>${params[0]?.axisValue}</b><br/>`;
+          let html  = `<b>${cleanAxisLabel(params[0]?.axisValue)}</b><br/>`;
           let stack = 0;
           params.forEach(p => {
             if (p.value == null) return;
@@ -446,7 +458,17 @@ window.ComboPage = (function () {
       },
       xAxis: {
         type: 'category', data: xData,
-        axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', interval: xInterval },
+        axisLabel: {
+          fontFamily: 'IBM Plex Sans',
+          fontSize: 11,
+          color: '#7A8B9A',
+          rotate: 0,
+          interval: xInterval,
+          lineHeight: 16,
+          showMinLabel: true,
+          showMaxLabel: true,
+          hideOverlap: false,
+        },
         axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },
       },
       yAxis: {

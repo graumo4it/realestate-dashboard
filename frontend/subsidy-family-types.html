@@ -113,9 +113,9 @@
 <footer class="site-footer"><div>Данные: Банк России &nbsp;·&nbsp; Не является инвестиционной рекомендацией</div></footer>
 <script>window.API_BASE = 'http://localhost:8001/api';</script>
 <script src="js/api.js"></script>
-<script src="js/utils.js"></script>
+<script src="js/utils.js?v=9"></script>
 <script src="js/period-toggle.js?v=4"></script>
-<script src="js/combo-page.js?v=2"></script>
+<script src="js/combo-page.js?v=6"></script>
 <script>
 const CODES = {
   under7:   '6.58.1',
@@ -162,6 +162,7 @@ ComboPage.init({
   chartType: 'bar', stackBars: true, aggType: 'sum',
   unit: METRICS.count.unit, decimals: 0,
   initialActiveSeries: KEYS,
+  trimToNonZeroDateCodes: Object.values(CODES),
   fileName: 'subsidy-family-types-count',
 }).then(page => {
   const metricToggle = document.getElementById('family-metric-toggle');

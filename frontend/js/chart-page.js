@@ -263,20 +263,9 @@
     const pp      = isPp();
     const isPercent = indicator.unit === '%';
 
-    // Метки оси X — двухстрочные для месячных, без наклона
-    const xData = series.map(p => {
-      if (p.label) {
-        // Если label содержит пробел (напр. «Янв 2024») — делаем двустрочным
-        if (indicator.periodicity === 'monthly' && p.label.includes(' ') && !p.label.startsWith('Q')) {
-          const parts = p.label.split(' ');
-          // «Январь 2024» → «янв.\n2024»
-          const mon = parts[0].slice(0, 3).toLowerCase() + '.';
-          return `${mon}\n${parts[parts.length - 1]}`;
-        }
-        return p.label;
-      }
-      return fmtDate(p.date, indicator.periodicity);
-    });
+    // Эффективная периодичность: для месячных с агрегацией берём currentMonthlyPeriodicity
+    const effPeriodicity = MONTHLY_AGG_CONFIG[indCode] ? currentMonthlyPeriodicity : indicator.periodicity;
+    const xData = series.map(p => formatXAxisLabel(p.label, p.date, effPeriodicity));
 
     let yData, seriesName, useBar;
 
@@ -332,23 +321,11 @@
         valStr = fmtValue(v, indicator.unit);
       }
       // Однострочный период для tooltip (без \n)
-      const axisLabel = pt.axisValue.replace('\n', ' ');
+      const axisLabel = cleanAxisLabel(pt.axisValue);
       return `<b>${axisLabel}</b><br/>Значение: <b>${valStr}</b>`;
     };
 
-    // Интервал меток оси X — чтобы не слипались
-    const total = xData.length;
-    let xInterval = 'auto';
-    // Эффективная периодичность: для месячных с агрегацией берём currentMonthlyPeriodicity
-    const effPeriodicity = MONTHLY_AGG_CONFIG[indCode] ? currentMonthlyPeriodicity : indicator.periodicity;
-    if (effPeriodicity === 'monthly') {
-      if (total > 120) xInterval = 11;
-      else if (total > 60) xInterval = 5;
-      else if (total > 24) xInterval = 2;
-    } else if (effPeriodicity === 'quarterly') {
-      if (total > 20) xInterval = 3;   // каждый год (каждые 4 квартала)
-      else if (total > 8) xInterval = 1;
-    }
+    const xInterval = xAxisLabelInterval(xData.length, effPeriodicity);
 
     chartInstance.setOption({
       animation: true,
@@ -406,6 +383,9 @@
           rotate: 0,           // всегда горизонтально
           interval: xInterval,
           lineHeight: 16,      // для двустрочных меток
+          showMinLabel: true,
+          showMaxLabel: true,
+          hideOverlap: false,
         },
         axisLine: { lineStyle: { color: '#DDE2E8' } },
         axisTick: { show: false },

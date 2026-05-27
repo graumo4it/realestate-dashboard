@@ -359,15 +359,12 @@
     const xData = allDates.map(dateKey => {
       for (const goalKey of active) {
         const point = maps[goalKey][dateKey];
-        if (point?.label) return point.label;
+        if (point?.label) return formatXAxisLabel(point.label, point.date || dateKey, state.currentPeriodicity);
       }
-      return dateKey;
+      return formatXAxisLabel('', dateKey, state.currentPeriodicity);
     });
 
-    let xInterval = 'auto';
-    if (xData.length > 120) xInterval = 11;
-    else if (xData.length > 60) xInterval = 5;
-    else if (xData.length > 24) xInterval = 2;
+    const xInterval = xAxisLabelInterval(xData.length, state.currentPeriodicity);
 
     const series = active.map(goalKey => {
       const goal = GOALS[goalKey];
@@ -438,7 +435,7 @@
         borderColor: '#0D1B2A',
         textStyle: { color: '#fff', fontFamily: 'IBM Plex Sans', fontSize: 13 },
         formatter: params => {
-          let html = `<b>${params[0]?.axisValue}</b><br/>`;
+          let html = `<b>${cleanAxisLabel(params[0]?.axisValue)}</b><br/>`;
           let total = 0;
           params.forEach(param => {
             if (param.value == null) return;
@@ -457,7 +454,17 @@
       xAxis: {
         type: 'category',
         data: xData,
-        axisLabel: { fontFamily: 'IBM Plex Sans', fontSize: 11, color: '#7A8B9A', interval: xInterval },
+        axisLabel: {
+          fontFamily: 'IBM Plex Sans',
+          fontSize: 11,
+          color: '#7A8B9A',
+          rotate: 0,
+          interval: xInterval,
+          lineHeight: 16,
+          showMinLabel: true,
+          showMaxLabel: true,
+          hideOverlap: false,
+        },
         axisLine: { lineStyle: { color: '#DDE2E8' } },
         axisTick: { show: false },
       },

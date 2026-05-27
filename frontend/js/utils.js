@@ -63,6 +63,84 @@ function fmtDateFull(dateStr) {
   return `${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+function formatXAxisLabel(label, dateStr, periodicity = 'monthly') {
+  const rawLabel = label != null ? String(label).trim() : '';
+  const rawDate = dateStr != null ? String(dateStr) : '';
+
+  if (periodicity === 'monthly') {
+    if (rawLabel.includes('\n')) return rawLabel;
+    if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return fmtDate(rawDate, 'monthly');
+
+    const parts = rawLabel.split(/\s+/);
+    const year = parts.find(part => /^\d{4}$/.test(part));
+    const mon = parts[0]?.replace('.', '').slice(0, 3).toLowerCase();
+    if (year && mon && !rawLabel.startsWith('Q')) return `${mon}.\n${year}`;
+  }
+
+  if (rawLabel) return rawLabel;
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return fmtDate(rawDate, periodicity);
+  return rawDate;
+}
+
+function xAxisLabelInterval(total, periodicity = 'monthly') {
+  let targetStep = 1;
+  if (periodicity === 'monthly') {
+    if (total >= 84) targetStep = 12;
+    else if (total >= 60) targetStep = 6;
+    else if (total > 24) targetStep = 3;
+  } else if (periodicity === 'quarterly') {
+    if (total > 20) targetStep = 4;
+    else if (total > 8) targetStep = 2;
+  } else if (periodicity === 'annual') {
+    if (total > 40) targetStep = 5;
+    else if (total > 24) targetStep = 3;
+    else if (total > 12) targetStep = 2;
+  }
+
+  if (targetStep <= 1) return 0;
+
+  const lastIndex = Math.max(0, total - 1);
+  if (!lastIndex) return 0;
+
+  const divisors = [];
+  for (let step = 1; step <= lastIndex; step += 1) {
+    if (lastIndex % step === 0) divisors.push(step);
+  }
+
+  const labels = new Set();
+  const minStep = targetStep * 0.75;
+  const maxStep = targetStep * 1.5;
+  const candidates = divisors.filter(step => step >= minStep && step <= maxStep);
+
+  if (candidates.length) {
+    const step = candidates.reduce((best, candidate) => {
+      const bestScore = Math.abs(best - targetStep);
+      const candidateScore = Math.abs(candidate - targetStep);
+      if (candidateScore === bestScore) return candidate > best ? candidate : best;
+      return candidateScore < bestScore ? candidate : best;
+    }, candidates[0]);
+
+    for (let index = 0; index <= lastIndex; index += step) {
+      labels.add(index);
+    }
+  } else {
+    const labelCount = Math.max(2, Math.round(lastIndex / targetStep) + 1);
+    for (let i = 0; i < labelCount; i += 1) {
+      labels.add(Math.round((lastIndex * i) / (labelCount - 1)));
+    }
+  }
+  labels.add(0);
+  labels.add(lastIndex);
+
+  return index => {
+    return labels.has(index);
+  };
+}
+
+function cleanAxisLabel(label) {
+  return String(label ?? '').replace(/\n/g, ' ');
+}
+
 /**
  * Форматирует динамику показателя.
  * @param {number} val - значение динамики
