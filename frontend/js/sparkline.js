@@ -5,7 +5,7 @@ function drawSparkline(container, values, opts = {}) {
   const {
     width  = 100,
     height = 40,
-    color  = '#E8341C',
+    color  = '#C8181A',
     fill   = true,
   } = opts;
 

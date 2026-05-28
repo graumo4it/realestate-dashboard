@@ -39,7 +39,7 @@
 window.ComboPage = (function () {
 
   const BRAND_PALETTE = [
-    '#E8341C', '#1A2B4A', '#F4A336', '#2EC4B6',
+    '#C8181A', '#BEDBE4', '#4C707A', '#2EC4B6',
     '#8B5CF6', '#16a34a', '#0ea5e9', '#f59e0b'
   ];
 
@@ -427,7 +427,7 @@ window.ComboPage = (function () {
           type: 'slider', bottom: 8, height: 24,
           borderColor: '#DDE2E8', backgroundColor: '#F2F4F7',
           fillerColor: 'rgba(26,43,74,0.10)',
-          handleStyle: { color: '#1A2B4A', borderColor: '#1A2B4A', borderWidth: 2 },
+          handleStyle: { color: '#BEDBE4', borderColor: '#BEDBE4', borderWidth: 2 },
           textStyle: { fontFamily: 'IBM Plex Sans', fontSize: 10, color: '#7A8B9A' },
           brushSelect: false, throttle: 16,
         },

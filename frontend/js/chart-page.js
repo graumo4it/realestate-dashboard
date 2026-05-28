@@ -350,14 +350,14 @@
           borderColor: '#DDE2E8',
           backgroundColor: '#F2F4F7',
           fillerColor: 'rgba(232,52,28,0.10)',
-          handleStyle: { color: '#E8341C', borderColor: '#E8341C', borderWidth: 2 },
-          moveHandleStyle: { color: '#E8341C', opacity: 0.8 },
+          handleStyle: { color: '#C8181A', borderColor: '#C8181A', borderWidth: 2 },
+          moveHandleStyle: { color: '#C8181A', opacity: 0.8 },
           emphasis: {
-            handleStyle: { color: '#C4240E', borderColor: '#C4240E' },
-            moveHandleStyle: { color: '#C4240E' },
+            handleStyle: { color: '#A81416', borderColor: '#A81416' },
+            moveHandleStyle: { color: '#A81416' },
           },
           selectedDataBackground: {
-            lineStyle: { color: '#E8341C', width: 1 },
+            lineStyle: { color: '#C8181A', width: 1 },
             areaStyle: { color: 'rgba(232,52,28,0.08)' },
           },
           dataBackground: {
@@ -420,8 +420,8 @@
         smooth: !useBar,
         symbol: yData.length < 60 ? 'circle' : 'none',
         symbolSize: 4,
-        lineStyle: { width: 2, color: '#E8341C' },
-        itemStyle: { color: p => isDelta ? (p.value >= 0 ? '#0E7C56' : '#C0392B') : '#E8341C' },
+        lineStyle: { width: 2, color: '#C8181A' },
+        itemStyle: { color: p => isDelta ? (p.value >= 0 ? '#0E7C56' : '#C0392B') : '#C8181A' },
         areaStyle: (!useBar && !isDelta) ? {
           color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [{ offset: 0, color: 'rgba(232,52,28,.18)' }, { offset: 1, color: 'rgba(232,52,28,.02)' }] }

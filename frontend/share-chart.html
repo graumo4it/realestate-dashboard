@@ -39,15 +39,7 @@
 
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -86,13 +78,13 @@
         <!-- KPI: МЖС %, ИЖС % -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>МЖС (многоквартирные дома)</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>МЖС (многоквартирные дома)</div>
             <div class="kpi-value" id="kpi-mzhs-value">—</div>
             <div class="kpi-period">% от общего ввода · <span id="kpi-period">—</span></div>
             <div class="kpi-deltas" id="kpi-mzhs-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>ИЖС (индивидуальные дома)</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>ИЖС (индивидуальные дома)</div>
             <div class="kpi-value" id="kpi-izhs-value">—</div>
             <div class="kpi-period">% от общего ввода · <span id="kpi-period-izhs">—</span></div>
             <div class="kpi-deltas" id="kpi-izhs-deltas"></div>
@@ -183,7 +175,7 @@ ComboPage.init({
   codes:   { mzhs: null, izhs: null, raw_mzhs: '2.3', raw_izhs: '2.2' },
   labels:  { mzhs: 'МЖС (многоквартирные дома)', izhs: 'ИЖС (индивидуальные дома)' },
   keys:    ['mzhs', 'izhs'],
-  colors:  { mzhs: '#1A2B4A', izhs: '#F4A336' },
+  colors:  { mzhs: '#BEDBE4', izhs: '#4C707A' },
   chartType:  'bar',
   stack100:   true,
   isPp:       true,

@@ -44,15 +44,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -81,13 +73,13 @@
         <!-- KPI -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Для целевой обеспеченности 33 кв. м</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>Для целевой обеспеченности 33 кв. м</div>
             <div class="kpi-value" id="kpi-ytd-value">—</div>
             <div class="kpi-period" id="kpi-ytd-period">тыс. кв. м · —</div>
             <div class="kpi-deltas" id="kpi-ytd-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Для целевой обеспеченности 38 кв. м</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>Для целевой обеспеченности 38 кв. м</div>
             <div class="kpi-value" id="kpi-ma12-value">—</div>
             <div class="kpi-period" id="kpi-ma12-period">тыс. кв. м · —</div>
             <div class="kpi-deltas" id="kpi-ma12-deltas"></div>
@@ -163,7 +155,7 @@ const CODES = { ytd: '5.14.33', ma12: '5.14.38' };
 ComboPage.init({
   codes:     CODES,
   labels:    { ytd: 'Для целевой обеспеченности 33 кв. м', ma12: 'Для целевой обеспеченности 38 кв. м' },
-  colors:    { ytd: '#E8341C', ma12: '#1A2B4A' },
+  colors:    { ytd: '#C8181A', ma12: '#BEDBE4' },
   keys:      ['ytd', 'ma12'],
   chartType: 'line',
   aggType:   'avg',

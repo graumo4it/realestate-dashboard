@@ -2,9 +2,10 @@
   /* Цвета */
   --color-ink:          #0D1B2A;
   --color-ink-light:    #3D4F60;
+  --color-chrome:       #3F4C50;
   --color-muted:        #7A8B9A;
-  --color-accent:       #E8341C;
-  --color-accent-hover: #C4240E;
+  --color-accent:       #C8181A;
+  --color-accent-hover: #A81416;
   --color-bg:           #F2F4F7;
   --color-surface:      #FFFFFF;
   --color-border:       #DDE2E8;

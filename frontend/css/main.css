@@ -18,7 +18,7 @@ img { max-width: 100%; display: block; }
 
 /* ── Header ── */
 .site-header {
-  background: var(--color-ink);
+  background: var(--color-chrome);
   color: #fff;
   position: sticky;
   top: 0;
@@ -42,7 +42,7 @@ img { max-width: 100%; display: block; }
   color: #fff;
   white-space: nowrap;
 }
-.site-logo span { color: var(--color-accent); }
+.site-logo span { color: #fff; }
 .header-nav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
 .header-nav a {
   font-size: .8rem;
@@ -60,6 +60,7 @@ img { max-width: 100%; display: block; }
 .header-search {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: 8px;
   background: rgba(255,255,255,.1);
   border-radius: var(--radius);
@@ -80,7 +81,7 @@ img { max-width: 100%; display: block; }
 /* ── Footer ── */
 .site-footer {
   margin-top: auto;
-  background: var(--color-ink);
+  background: var(--color-chrome);
   color: rgba(255,255,255,.5);
   font-size: .8rem;
   padding: 24px;
@@ -95,7 +96,7 @@ img { max-width: 100%; display: block; }
 
 /* ── Hero ── */
 .hero {
-  background: var(--color-ink);
+  background: var(--color-chrome);
   color: #fff;
   padding: 56px 24px;
   margin-bottom: 40px;

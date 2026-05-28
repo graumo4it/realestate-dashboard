@@ -20,15 +20,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -58,19 +50,19 @@
         <!-- KPI -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Все программы</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>Все программы</div>
             <div class="kpi-value" id="kpi-all-value">—</div>
             <div class="kpi-period" id="kpi-all-period">мес. · —</div>
             <div class="kpi-deltas" id="kpi-all-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>Семейная</div>
             <div class="kpi-value" id="kpi-semya-value">—</div>
             <div class="kpi-period" id="kpi-semya-period">мес. · —</div>
             <div class="kpi-deltas" id="kpi-semya-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>Дальневосточная</div>
             <div class="kpi-value" id="kpi-dv-value">—</div>
             <div class="kpi-period" id="kpi-dv-period">мес. · —</div>
             <div class="kpi-deltas" id="kpi-dv-deltas"></div>
@@ -176,7 +168,7 @@ ComboPage.init({
     regions: { value: '6.51.4', weight: '6.44' },  // вес: кол-во кредитов Регионы
   },
   labels:    LABELS,
-  colors:    { all:'#1A2B4A', lgota:'#4B6A9E', semya:'#E8341C', dv:'#F4A336', it:'#2EC4B6', regions:'#8B5CF6' },
+  colors:    { all:'#BEDBE4', lgota:'#4B6A9E', semya:'#C8181A', dv: '#4C707A', it:'#2EC4B6', regions:'#8B5CF6' },
   keys:      KEYS,
   chartType: 'line',
   aggType:   'wavg',

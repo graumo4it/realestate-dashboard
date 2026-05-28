@@ -37,15 +37,7 @@
 
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -83,19 +75,19 @@
         <!-- KPI: 4 типа — доли на последнюю дату -->
         <div class="kpi-cards-row">
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>1-комнатные</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>1-комнатные</div>
             <div class="kpi-value" id="kpi-1k-value">—</div>
             <div class="kpi-period" id="kpi-1k-period">—</div>
             <div class="kpi-deltas" id="kpi-1k-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>2-комнатные</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>2-комнатные</div>
             <div class="kpi-value" id="kpi-2k-value">—</div>
             <div class="kpi-period" id="kpi-2k-period">—</div>
             <div class="kpi-deltas" id="kpi-2k-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>3-комнатные</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>3-комнатные</div>
             <div class="kpi-value" id="kpi-3k-value">—</div>
             <div class="kpi-period" id="kpi-3k-period">—</div>
             <div class="kpi-deltas" id="kpi-3k-deltas"></div>
@@ -192,7 +184,7 @@ ComboPage.init({
               '3k': 'apartments_share_3k', '4k': 'apartments_share_4k' },
   labels:   { '1k': '1-комнатные', '2k': '2-комнатные', '3k': '3-комнатные', '4k': '4+ комнатные' },
   keys:     ['1k', '2k', '3k', '4k'],
-  colors:   { '1k': '#1A2B4A', '2k': '#E8341C', '3k': '#F4A336', '4k': '#0E7C56' },
+  colors:   { '1k': '#BEDBE4', '2k': '#C8181A', '3k': '#4C707A', '4k': '#0E7C56' },
   chartType:  'bar',
   stack100:   true,
   isPp:       true,

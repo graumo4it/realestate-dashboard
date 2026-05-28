@@ -100,15 +100,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -134,19 +126,19 @@
         </div>
         <div class="kpi-cards-row">
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Всего</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>Всего</div>
     <div class="kpi-value" id="kpi-total-value">—</div>
     <div class="kpi-period">руб. · <span id="kpi-total-period">—</span></div>
     <div class="kpi-deltas" id="kpi-total-deltas"></div>
   </div>
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Первичный</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>Первичный</div>
     <div class="kpi-value" id="kpi-primary-value">—</div>
     <div class="kpi-period">руб. · <span id="kpi-primary-period">—</span></div>
     <div class="kpi-deltas" id="kpi-primary-deltas"></div>
   </div>
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Вторичный</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>Вторичный</div>
     <div class="kpi-value" id="kpi-secondary-value">—</div>
     <div class="kpi-period">руб. · <span id="kpi-secondary-period">—</span></div>
     <div class="kpi-deltas" id="kpi-secondary-deltas"></div>
@@ -214,7 +206,7 @@ const CODES = { total: '6.6', primary: '6.12', secondary: '6.18' };
 ComboPage.init({
   codes:     CODES,
   labels:    { total: 'Всего', primary: 'Первичный', secondary: 'Вторичный' },
-  colors:    { total: '#E8341C', primary: '#1A2B4A', secondary: '#F4A336' },
+  colors:    { total: '#C8181A', primary: '#BEDBE4', secondary: '#4C707A' },
   keys:      ['total', 'primary', 'secondary'],
   chartType: 'line',
   aggType:   'avg',

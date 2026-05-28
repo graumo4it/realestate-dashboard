@@ -202,7 +202,7 @@
   transition: background .15s, color .15s;
 }
 .btn-group button:hover { background: var(--color-border); color: var(--color-ink); }
-.btn-group button.active { background: var(--color-ink); color: #fff; }
+.btn-group button.active { background: var(--color-chrome); color: #fff; }
 
 .toolbar-actions { display: flex; gap: 8px; }
 .btn-outline {

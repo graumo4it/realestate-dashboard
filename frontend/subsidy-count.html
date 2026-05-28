@@ -18,15 +18,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -62,13 +54,13 @@
             <div class="kpi-deltas" id="kpi-all-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>Семейная</div>
             <div class="kpi-value" id="kpi-semya-value">—</div>
             <div class="kpi-period" id="kpi-semya-period">ед. · —</div>
             <div class="kpi-deltas" id="kpi-semya-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Дальневосточная</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>Дальневосточная</div>
             <div class="kpi-value" id="kpi-dalvos-value">—</div>
             <div class="kpi-period" id="kpi-dalvos-period">ед. · —</div>
             <div class="kpi-deltas" id="kpi-dalvos-deltas"></div>
@@ -157,7 +149,7 @@ window.CODES = {'semya':'6.36','lgota':'6.38','dalvos':'6.40','it':'6.42','regio
 ComboPage.init({
   codes:     window.CODES,
   labels:    {'semya':'Семейная','lgota':'Льготная','dalvos':'Дальневосточная','it':'IT-ипотека','regions':'Отдельные регионы'},
-  colors:    {'semya':'#E8341C','lgota':'#1A2B4A','dalvos':'#F4A336','it':'#2EC4B6','regions':'#8B5CF6'},
+  colors:    {'semya':'#C8181A','lgota':'#BEDBE4','dalvos':'#4C707A','it':'#2EC4B6','regions':'#8B5CF6'},
   keys:      ['semya','dalvos','it','regions','lgota'],
   chartType: 'bar',
   aggType:   'sum',

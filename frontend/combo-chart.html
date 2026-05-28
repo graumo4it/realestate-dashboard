@@ -26,15 +26,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -66,13 +58,13 @@
             <div class="kpi-deltas" id="kpi-total-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>МЖС</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>МЖС</div>
             <div class="kpi-value" id="kpi-mzhs-value">—</div>
             <div class="kpi-period" id="kpi-mzhs-period">тыс. кв. м · —</div>
             <div class="kpi-deltas" id="kpi-mzhs-deltas"></div>
           </div>
           <div class="kpi-card-sm">
-            <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>ИЖС</div>
+            <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>ИЖС</div>
             <div class="kpi-value" id="kpi-izhs-value">—</div>
             <div class="kpi-period" id="kpi-izhs-period">тыс. кв. м · —</div>
             <div class="kpi-deltas" id="kpi-izhs-deltas"></div>
@@ -144,7 +136,7 @@ ComboPage.init({
   codes:       { mzhs: '2.3', izhs: '2.2', total: null },
   labels:      { mzhs: 'МЖС', izhs: 'ИЖС', total: 'Всего' },
   keys:        ['mzhs', 'izhs', 'total'],
-  colors:      { mzhs: '#1A2B4A', izhs: '#F4A336', total: '#E8341C' },
+  colors:      { mzhs: '#BEDBE4', izhs: '#4C707A', total: '#C8181A' },
   chartType:   'bar',
   stackBars:   true,
   seriesTypes:    { total: 'line' },   // Всего — линия в delta-режимах

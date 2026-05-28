@@ -18,15 +18,7 @@
 <body>
 <header class="site-header">
   <div class="header-inner">
-    <a href="index.html" class="site-logo">Рынок<span>.</span>Данные</a>
-    <nav class="header-nav" id="main-nav">
-      <a href="category.html?code=mortgage_base">Ипотека</a>
-      <a href="category.html?code=prices">Цены</a>
-      <a href="category.html?code=demand">Спрос</a>
-      <a href="category.html?code=supply_volume">Ввод жилья</a>
-      <a href="category.html?code=under_construction">Стройка</a>
-      <a href="category.html?code=macro">Макро</a>
-    </nav>
+    <a href="index.html" class="site-logo"><span>MACON</span> DATA</a>
     <div class="header-search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="text" placeholder="Поиск показателей…"/>
@@ -52,19 +44,19 @@
         </div>
         <div class="kpi-cards-row">
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Всего (ИЖС)</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#C8181A"></span>Всего (ИЖС)</div>
     <div class="kpi-value" id="kpi-total-value">—</div>
     <div class="kpi-period">ед. · <span id="kpi-total-period">—</span></div>
     <div class="kpi-deltas" id="kpi-total-deltas"></div>
   </div>
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#1A2B4A"></span>Строительство</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#BEDBE4"></span>Строительство</div>
     <div class="kpi-value" id="kpi-build-value">—</div>
     <div class="kpi-period">ед. · <span id="kpi-build-period">—</span></div>
     <div class="kpi-deltas" id="kpi-build-deltas"></div>
   </div>
   <div class="kpi-card-sm">
-    <div class="kpi-label"><span class="kpi-dot" style="background:#F4A336"></span>Покупка</div>
+    <div class="kpi-label"><span class="kpi-dot" style="background:#4C707A"></span>Покупка</div>
     <div class="kpi-value" id="kpi-buy-value">—</div>
     <div class="kpi-period">ед. · <span id="kpi-buy-period">—</span></div>
     <div class="kpi-deltas" id="kpi-buy-deltas"></div>
@@ -131,7 +123,7 @@ window.CODES = {'total':'6.70','build':'6.76','buy':'6.82'};
 ComboPage.init({
   codes:     window.CODES,
   labels:    {'total':'Всего (ИЖС)','build':'Строительство','buy':'Покупка'},
-  colors:    {'total':'#E8341C','build':'#1A2B4A','buy':'#F4A336'},
+  colors:    {'total':'#C8181A','build':'#BEDBE4','buy':'#4C707A'},
   keys:      ['build','buy'],
   chartType: 'bar',
   aggType:   'sum',
