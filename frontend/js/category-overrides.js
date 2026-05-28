@@ -22,8 +22,8 @@ const COMBO_OVERRIDES = {
       series: [{ code: '2.6', label: 'Всего' }, { code: '2.7', label: 'МЖС' }, { code: '2.8', label: 'ИЖС' }] },
   ],
   concentration: [
-    { label: 'Уровень концентрации рынка (HHI)', url: 'ihh-chart.html', parentCode: '3.17', hideCodes: ['3.18'],
-      series: [{ code: '3.17', label: 'Групп' }, { code: '3.18', label: 'HHI' }] },
+    { label: 'Уровень концентрации рынка (HHI)', url: 'ihh-chart.html', parentCode: '3.18', hideCodes: ['3.17', '3.19'],
+      series: [{ code: '3.18', label: 'Средний' }, { code: '3.19', label: 'Медианный' }] },
   ],
   apartments: [
     { label: 'Количество квартир по комнатности', url: 'apartments-count.html',
@@ -90,25 +90,25 @@ const COMBO_OVERRIDES = {
   mortgage_subsidy: [
     // parentCode: 6.36 — Семейная (count); остальные программы: 6.38 Льготная, 6.40 ДВ, 6.42 IT, 6.44 Регионы
     { label: 'Количество кредитов по программам господдержки', url: 'subsidy-count.html', parentCode: '6.36', hideCodes: ['6.37', '6.38', '6.39', '6.40', '6.41', '6.42', '6.43', '6.44', '6.45'],
-      series: [{ code: '6.36', label: 'Семейная' }, { code: '6.38', label: 'Льготная' }, { code: '6.40', label: 'ДВ' }, { code: '6.42', label: 'IT' }, { code: '6.44', label: 'Регионы' }] },
+      decimals: 0, series: [{ code: '6.36', label: 'Семейная' }, { code: '6.40', label: 'ДВ' }, { code: '6.42', label: 'IT' }, { code: '6.44', label: 'Регионы' }] },
     // объём: 6.37 Семейная, 6.39 Льготная, 6.41 ДВ, 6.43 IT, 6.45 Регионы
     { label: 'Объем кредитов по программам господдержки', url: 'subsidy-volume.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.37', label: 'Семейная' }, { code: '6.39', label: 'Льготная' }, { code: '6.41', label: 'ДВ' }, { code: '6.43', label: 'IT' }, { code: '6.45', label: 'Регионы' }] },
+      series: [{ code: '6.37', label: 'Семейная' }, { code: '6.41', label: 'ДВ' }, { code: '6.43', label: 'IT' }, { code: '6.45', label: 'Регионы' }] },
     // характеристики кредитов: 6.46.x Все, 6.47.x Льготная, 6.48.x Семейная, 6.49.x ДВ, 6.50.x IT, 6.51.x Регионы
     { label: 'Ставки по программам господдержки', url: 'subsidy-rate.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.2', label: 'Все' }, { code: '6.48.2', label: 'Семейная' }, { code: '6.47.2', label: 'Льготная' }, { code: '6.49.2', label: 'ДВ' }, { code: '6.50.2', label: 'IT' }, { code: '6.51.2', label: 'Регионы' }] },
+      series: [{ code: '6.48.2', label: 'Семейная' }, { code: '6.49.2', label: 'ДВ' }, { code: '6.50.2', label: 'IT' }, { code: '6.51.2', label: 'Регионы' }, { code: '6.46.2', label: 'Все' }] },
     { label: 'Средний срок кредита', url: 'subsidy-term.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.4', label: 'Все' }, { code: '6.48.4', label: 'Семейная' }, { code: '6.47.4', label: 'Льготная' }, { code: '6.49.4', label: 'ДВ' }, { code: '6.50.4', label: 'IT' }, { code: '6.51.4', label: 'Регионы' }] },
+      decimals: 1, series: [{ code: '6.48.4', label: 'Семейная' }, { code: '6.49.4', label: 'ДВ' }, { code: '6.50.4', label: 'IT' }, { code: '6.51.4', label: 'Регионы' }, { code: '6.46.4', label: 'Все' }] },
     { label: 'Средняя сумма кредита', url: 'subsidy-loan-amount.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.1', label: 'Все' }, { code: '6.48.1', label: 'Семейная' }, { code: '6.47.1', label: 'Льготная' }, { code: '6.49.1', label: 'ДВ' }, { code: '6.50.1', label: 'IT' }, { code: '6.51.1', label: 'Регионы' }] },
+      decimals: 2, series: [{ code: '6.48.1', label: 'Семейная' }, { code: '6.49.1', label: 'ДВ' }, { code: '6.50.1', label: 'IT' }, { code: '6.51.1', label: 'Регионы' }, { code: '6.46.1', label: 'Все' }] },
     { label: 'Доля собственных средств (LTV)', url: 'subsidy-ltv.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.3', label: 'Все' }, { code: '6.48.3', label: 'Семейная' }, { code: '6.47.3', label: 'Льготная' }, { code: '6.49.3', label: 'ДВ' }, { code: '6.50.3', label: 'IT' }, { code: '6.51.3', label: 'Регионы' }] },
+      decimals: 1, series: [{ code: '6.48.3', label: 'Семейная' }, { code: '6.49.3', label: 'ДВ' }, { code: '6.50.3', label: 'IT' }, { code: '6.51.3', label: 'Регионы' }, { code: '6.46.3', label: 'Все' }] },
     { label: 'Средняя стоимость жилья', url: 'subsidy-property-price.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.5', label: 'Все' }, { code: '6.48.5', label: 'Семейная' }, { code: '6.47.5', label: 'Льготная' }, { code: '6.49.5', label: 'ДВ' }, { code: '6.50.5', label: 'IT' }, { code: '6.51.5', label: 'Регионы' }] },
+      decimals: 2, series: [{ code: '6.48.5', label: 'Семейная' }, { code: '6.49.5', label: 'ДВ' }, { code: '6.50.5', label: 'IT' }, { code: '6.51.5', label: 'Регионы' }, { code: '6.46.5', label: 'Все' }] },
     { label: 'Средняя площадь жилья', url: 'subsidy-area.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.6', label: 'Все' }, { code: '6.48.6', label: 'Семейная' }, { code: '6.47.6', label: 'Льготная' }, { code: '6.49.6', label: 'ДВ' }, { code: '6.50.6', label: 'IT' }, { code: '6.51.6', label: 'Регионы' }] },
+      decimals: 1, series: [{ code: '6.48.6', label: 'Семейная' }, { code: '6.49.6', label: 'ДВ' }, { code: '6.50.6', label: 'IT' }, { code: '6.51.6', label: 'Регионы' }, { code: '6.46.6', label: 'Все' }] },
     { label: 'Средняя цена 1 м²', url: 'subsidy-price-per-sqm.html', parentCode: null, hideCodes: [],
-      series: [{ code: '6.46.7', label: 'Все' }, { code: '6.48.7', label: 'Семейная' }, { code: '6.47.7', label: 'Льготная' }, { code: '6.49.7', label: 'ДВ' }, { code: '6.50.7', label: 'IT' }, { code: '6.51.7', label: 'Регионы' }] },
+      decimals: 1, series: [{ code: '6.48.7', label: 'Семейная' }, { code: '6.49.7', label: 'ДВ' }, { code: '6.50.7', label: 'IT' }, { code: '6.51.7', label: 'Регионы' }, { code: '6.46.7', label: 'Все' }] },
     { label: 'Цели кредитования по программам', url: 'subsidy-purpose-structure.html', parentCode: null, hideCodes: [],
       series: [
         { code: '6.52.1.1', label: 'ДДУ' },
@@ -216,6 +216,7 @@ function applyComboOverrides(catCode, indicators) {
         _sparkCode: sparkCode,
         _sparkPeriodicity: rule.sparkPeriodicity || ind.periodicity || 'annual',
         _series: series,
+        _decimals: rule.decimals ?? null,
       });
     } else {
       result.push(ind);
@@ -232,6 +233,7 @@ function applyComboOverrides(catCode, indicators) {
       _sparkCode: sparkCode,
       _sparkPeriodicity: rule.sparkPeriodicity || 'annual',
       _series: series,
+      _decimals: rule.decimals ?? null,
     });
   }
 

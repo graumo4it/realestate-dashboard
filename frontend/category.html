@@ -184,7 +184,7 @@
           <div style="text-align:right">Последнее значение</div>
           <div style="text-align:center">Изм. г/г</div>
           <div style="text-align:center">Динамика</div>
-          <div style="text-align:left">Источник</div>
+          <div style="text-align:center">Источник</div>
         </div>
         <div class="indicator-list indicator-row-wrap" id="indicator-list">
           <div class="skeleton" style="height:52px;margin:8px 16px;border-radius:6px"></div>
@@ -266,15 +266,17 @@ const catCode = params.get('code') || 'mortgage_total';
 // ── Форматирование: число отдельно, единица (с масштабом) отдельно ──────────
 // Возвращает { num, effectiveUnit } — num идёт крупным шрифтом,
 // effectiveUnit (с учётом млн/млрд) — рядом с периодом мелким.
-function fmtValueSplit(v, unit) {
+function fmtValueSplit(v, unit, decimals) {
   if (v == null) return { num: '—', effectiveUnit: unit || '' };
   const n = Number(v);
   if (isNaN(n)) return { num: '—', effectiveUnit: unit || '' };
   const u = unit || '';
-  if (Math.abs(n) >= 1e9) return { num: fmtNum(n / 1e9, 2), effectiveUnit: ('млрд ' + u).trim() };
-  if (Math.abs(n) >= 1e6) return { num: fmtNum(n / 1e6, 2), effectiveUnit: ('млн ' + u).trim() };
-  if (Math.abs(n) >= 1e3) return { num: fmtNum(n, 0),       effectiveUnit: u };
-  return                         { num: fmtNum(n, 2),        effectiveUnit: u };
+  const d = decimals ?? null;
+  if (Math.abs(n) >= 1e9) return { num: fmtNum(n / 1e9, d ?? 2), effectiveUnit: ('млрд ' + u).trim() };
+  if (Math.abs(n) >= 1e6) return { num: fmtNum(n / 1e6, d ?? 2), effectiveUnit: ('млн ' + u).trim() };
+  if (Math.abs(n) >= 1e3) return { num: fmtNum(n, d ?? 0),       effectiveUnit: u };
+  if (u.startsWith('млн'))return { num: fmtNum(n, d ?? 0),        effectiveUnit: u };
+  return                         { num: fmtNum(n, d ?? 2),        effectiveUnit: u };
 }
 
 // ── Переключение серий ────────────────────────────────────────────────────
@@ -288,7 +290,8 @@ function cycleSeriesOnRow(row, series, cache) {
   if (!data) return;
 
   const pp = data.unit === '%';
-  const { num, effectiveUnit } = fmtValueSplit(data.value, data.unit);
+  const decimalsOverride = row.dataset.seriesDecimals !== undefined ? Number(row.dataset.seriesDecimals) : null;
+  const { num, effectiveUnit } = fmtValueSplit(data.value, data.unit, decimalsOverride);
 
   // Плавное обновление: fade-out → обновить → fade-in
   const targets = [
@@ -416,6 +419,7 @@ async function loadPage() {
           period:  last?.label                         || '',
           source:  entry.indicator?.source?.name       || '',
           history: points.map(p => p.value != null ? parseFloat(p.value) : null),
+          periods: points.map(p => p.label || ''),
         });
       }
     } catch (e) {
@@ -437,23 +441,37 @@ async function loadPage() {
       history.push(n != null && d != null && d !== 0 ? n / d * 100 : null);
     }
 
-    const lastShare = numE.value != null && denE.value != null && denE.value !== 0
-      ? numE.value / denE.value * 100
-      : null;
+    // Ищем последнюю позицию, где числитель ненулевой и знаменатель ненулевой
+    let lastShare = null;
+    let lastPeriod = numE.period;
+    for (let i = Math.min(numE.history.length, denE.history.length) - 1; i >= 0; i--) {
+      const n = numE.history[i], d = denE.history[i];
+      if (n != null && n !== 0 && d != null && d !== 0) {
+        lastShare = n / d * 100;
+        lastPeriod = (numE.periods && numE.periods[i]) || lastPeriod;
+        break;
+      }
+    }
 
     // YoY в п.п.: текущая доля − доля год назад (12 позиций назад для месячных)
+    // Считаем от позиции lastShare, а не от конца массива
     let yoy = null;
     if (history.length >= 13) {
-      const curr = history[history.length - 1];
-      const prev = history[history.length - 13];
-      if (curr != null && prev != null) yoy = curr - prev;
+      // Найдём индекс lastShare в history
+      let lastIdx = history.length - 1;
+      while (lastIdx >= 0 && (history[lastIdx] == null || history[lastIdx] === 0)) lastIdx--;
+      if (lastIdx >= 12) {
+        const curr = history[lastIdx];
+        const prev = history[lastIdx - 12];
+        if (curr != null && prev != null) yoy = curr - prev;
+      }
     }
 
     seriesCache.set(vcode, {
       value:   lastShare,
       yoy,
       unit:    '%',
-      period:  numE.period,
+      period:  lastPeriod,
       source:  numE.source,
       history,
     });
@@ -478,7 +496,7 @@ async function loadPage() {
       const cache0 = seriesCache.get(s0.code) || {};
       const pp0    = cache0.unit === '%';
 
-      const { num: num0, effectiveUnit: eu0 } = fmtValueSplit(cache0.value, cache0.unit);
+      const { num: num0, effectiveUnit: eu0 } = fmtValueSplit(cache0.value, cache0.unit, ind._decimals);
       const periodText0 = (cache0.period || '') + (eu0 ? ' · ' + eu0 : '');
       const dots = ind._series.map((_, i) =>
         `<span class="dot${i === 0 ? ' active' : ''}"></span>`
@@ -486,6 +504,7 @@ async function loadPage() {
 
       row.setAttribute('data-has-series', 'true');
       row.dataset.seriesIndex = '0';
+      if (ind._decimals != null) row.dataset.seriesDecimals = ind._decimals;
 
       row.innerHTML = `
         <div class="indicator-name">
@@ -501,7 +520,7 @@ async function loadPage() {
         </div>
         <div style="text-align:center"><span data-field="yoy">${deltaHtml(cache0.yoy, pp0)}</span></div>
         <div class="indicator-sparkline" data-field="spark"></div>
-        <div style="font-size:.75rem;color:var(--color-muted);text-align:right">${cache0.source || '—'}</div>
+        <div style="font-size:.75rem;color:var(--color-muted);text-align:center">${cache0.source || '—'}</div>
       `;
 
       // Начальный спарклайн для series[0]
@@ -538,7 +557,7 @@ async function loadPage() {
           </span>
         </div>
         <div class="indicator-sparkline"></div>
-        <div style="font-size:.75rem;color:var(--color-muted);text-align:right">—</div>
+        <div style="font-size:.75rem;color:var(--color-muted);text-align:center">—</div>
       `;
 
       // Спарклайн из кэша (для _sparkCode)
@@ -569,7 +588,7 @@ async function loadPage() {
         </div>
         <div style="text-align:center">${deltaHtml(ind.yoy_change_pct, pp)}</div>
         <div class="indicator-sparkline"></div>
-        <div style="font-size:.75rem;color:var(--color-muted);text-align:right">${source}</div>
+        <div style="font-size:.75rem;color:var(--color-muted);text-align:center">${source}</div>
       `;
 
       // Спарклайн из кэша
