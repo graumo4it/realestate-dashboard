@@ -177,6 +177,16 @@ function rangeStart(years) {
   return d.toISOString().slice(0, 10);
 }
 
+function periodTypeLabel(periodType) {
+  switch (periodType) {
+    case 'period_start': return 'на начало отчётного периода';
+    case 'period_end':   return 'на конец отчётного периода';
+    case 'on_date':      return 'на дату';
+    case 'period':       return 'за период';
+    default:             return '';
+  }
+}
+
 // Убирает порядковый код и единицы из названия индикатора
 function cleanName(name) {
   if (!name) return name;

@@ -21,10 +21,9 @@
   let currentPeriodicity = 'quarterly'; // 'quarterly' | 'annual' — только для квартальных
   let currentMonthlyPeriodicity = 'monthly'; // 'monthly' | 'quarterly' | 'annual' — для месячных с агрегацией
 
-  const elTitle     = document.getElementById('chart-title');
-  const elUnit      = document.getElementById('chart-unit');
-  const elSource    = document.getElementById('chart-source-name');
-  const elUpdated   = document.getElementById('chart-updated');
+  const elTitle      = document.getElementById('chart-title');
+  const elSource     = document.getElementById('chart-source-name');
+  const elPeriodType = document.getElementById('chart-period-type');
   const elKpiValue  = document.getElementById('kpi-last-value');
   const elKpiUnit   = document.getElementById('kpi-last-unit');
   const elKpiPeriod = document.getElementById('kpi-last-period');
@@ -106,10 +105,8 @@
     const displayName = cleanName(indicator.name);
     document.title = `${displayName} — Рынок недвижимости`;
     elTitle.textContent   = displayName;
-    elUnit.textContent    = indicator.unit || '';
-    elSource.textContent  = indicator.source?.name || '—';
-    elUpdated.textContent = indicator.last_updated
-      ? new Date(indicator.last_updated).toLocaleDateString('ru-RU') : '—';
+    elSource.textContent     = indicator.source?.name || '—';
+    elPeriodType.textContent = periodTypeLabel(indicator.period_type || '');
     if (elBreadCat && indicator.category) {
       elBreadCat.textContent = indicator.category.name;
       elBreadCat.href = `category.html?code=${indicator.category.code}`;

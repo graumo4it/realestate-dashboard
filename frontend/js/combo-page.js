@@ -155,10 +155,10 @@ window.ComboPage = (function () {
     const data  = await api.multiIndicatorData(codes.join(','));
     state.allData = data;
 
-    const dates = Object.values(data).map(d => d.indicator?.last_updated).filter(Boolean);
-    if (dates.length) {
-      const el = document.getElementById('chart-updated');
-      if (el) el.textContent = new Date(dates[0]).toLocaleDateString('ru-RU');
+    const firstInd = Object.values(data)[0]?.indicator;
+    if (firstInd) {
+      const el = document.getElementById('chart-period-type');
+      if (el) el.textContent = periodTypeLabel(firstInd.period_type || '');
     }
   }
 

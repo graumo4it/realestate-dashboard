@@ -271,7 +271,6 @@
 
   function updateMetricLabels() {
     const metric = metricConfig();
-    setText('chart-unit', metric.unit);
     const thCells = document.querySelectorAll('.data-table thead th');
     if (thCells.length >= 2) thCells[1].textContent = `Значение, ${metric.unit}`;
   }
@@ -650,10 +649,8 @@
     }))];
     state.allData = await api.multiIndicatorData(codes.join(','));
 
-    const dates = Object.values(state.allData).map(entry => entry.indicator?.last_updated).filter(Boolean);
-    if (dates.length) {
-      setText('chart-updated', new Date(dates[0]).toLocaleDateString('ru-RU'));
-    }
+    const firstInd = Object.values(state.allData)[0]?.indicator;
+    if (firstInd) setText('chart-period-type', periodTypeLabel(firstInd.period_type || ''));
 
     rebuild();
   }
