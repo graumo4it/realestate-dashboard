@@ -4,12 +4,20 @@
 // series[] — массив серий для цикличного переключения значений в таблице категорий.
 // Первый элемент — агрегат или главный ряд (он же _sparkCode по умолчанию).
 // series: [] означает «нет осмысленного набора серий» (структурные/долевые графики).
+// derivedSeries — виртуальные серии, вычисляемые на фронте как
+// value = seriesCache[numerator].value / seriesCache[denominator].value * 100.
+// Коды начинаются с '__' — они не запрашиваются в API, а вычисляются после batch-запроса.
+// applyComboOverrides преобразует derivedSeries в _series с полями _numerator/_denominator.
 const COMBO_OVERRIDES = {
   supply_volume: [
     { label: 'Объем ввода жилья', url: 'combo-chart.html', parentCode: '2.1', hideCodes: ['2.2', '2.3'], sparkCode: '2.1',
       series: [{ code: '2.1', label: 'Всего' }, { code: '2.2', label: 'МЖС' }, { code: '2.3', label: 'ИЖС' }] },
-    { label: 'Структура ввода жилья', url: 'share-chart.html', parentCode: null, hideCodes: [], sparkCode: '2.2',
-      series: [] },
+    { label: 'Структура ввода жилья', url: 'share-chart.html', parentCode: null, hideCodes: [], sparkCode: null,
+      series: [],
+      derivedSeries: [
+        { code: '__pct:2.2:2.1', label: 'МЖС', numerator: '2.2', denominator: '2.1' },
+        { code: '__pct:2.3:2.1', label: 'ИЖС', numerator: '2.3', denominator: '2.1' },
+      ] },
     { label: 'Ввод жилья на душу населения', url: 'per-capita-chart.html', parentCode: '2.6', hideCodes: ['2.7', '2.8'], sparkCode: '2.6',
       series: [{ code: '2.6', label: 'Всего' }, { code: '2.7', label: 'МЖС' }, { code: '2.8', label: 'ИЖС' }] },
   ],
@@ -28,7 +36,11 @@ const COMBO_OVERRIDES = {
       series: [{ code: 'apartments_area_total', label: 'Всего' }, { code: 'apartments_area_1k', label: '1-комн.' }, { code: 'apartments_area_2k', label: '2-комн.' }, { code: 'apartments_area_3k', label: '3-комн.' }] },
     { label: 'Структура по комнатности', url: 'apartments-share.html',
       parentCode: null, hideCodes: ['apartments_share_1k', 'apartments_share_2k', 'apartments_share_3k', 'apartments_share_4k'],
-      series: [] },
+      series: [
+        { code: 'apartments_share_1k', label: '1-комн.' },
+        { code: 'apartments_share_2k', label: '2-комн.' },
+        { code: 'apartments_share_3k', label: '3-комн.' },
+      ] },
   ],
   prices: [
     { label: 'Цены на жилье по типам квартир (Росстат)', url: 'prices-chart.html', parentCode: '4.4', hideCodes: ['4.5', '4.4.1', '4.4.2', '4.4.3', '4.5.1', '4.5.2', '4.5.3', '4.5.4'],
@@ -40,13 +52,25 @@ const COMBO_OVERRIDES = {
     { label: 'Темп продаж машиномест на первичном рынке', url: 'sales-pace-mm-chart.html', parentCode: '5.22', hideCodes: ['5.22.ma12'],
       series: [{ code: '5.22', label: 'Темп' }, { code: '5.22.ma12', label: 'МА-12' }] },
     { label: 'Уровень потребности в жилье для достижения минимально приемлемых условий комфорта проживания', url: 'housing-need-chart.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [
+        { code: '5.12.33', label: '33 кв.м' },
+        { code: '5.12.38', label: '38 кв.м' },
+      ] },
     { label: 'Скорость удовлетворения потребности при текущем объеме ввода', url: 'housing-pace-chart.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [
+        { code: '5.13.33', label: '33 кв.м' },
+        { code: '5.13.38', label: '38 кв.м' },
+      ] },
     { label: 'Уровень реальной потребности в жилье для достижения минимально приемлемых условий комфорта проживания', url: 'housing-need-real-chart.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [
+        { code: '5.14.33', label: '33 кв.м' },
+        { code: '5.14.38', label: '38 кв.м' },
+      ] },
     { label: 'Скорость удовлетворения реальной потребности при текущем объеме ввода', url: 'housing-pace-real-chart.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [
+        { code: '5.15.33', label: '33 кв.м' },
+        { code: '5.15.38', label: '38 кв.м' },
+      ] },
   ],
   mortgage_base: [
     // parentCode — первичный рынок (6.7–6.12); вторичный — 6.13–6.18
@@ -86,9 +110,19 @@ const COMBO_OVERRIDES = {
     { label: 'Средняя цена 1 м²', url: 'subsidy-price-per-sqm.html', parentCode: null, hideCodes: [],
       series: [{ code: '6.46.7', label: 'Все' }, { code: '6.48.7', label: 'Семейная' }, { code: '6.47.7', label: 'Льготная' }, { code: '6.49.7', label: 'ДВ' }, { code: '6.50.7', label: 'IT' }, { code: '6.51.7', label: 'Регионы' }] },
     { label: 'Цели кредитования по программам', url: 'subsidy-purpose-structure.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [
+        { code: '6.52.1.1', label: 'ДДУ' },
+        { code: '6.52.2.1', label: 'ДКП' },
+        { code: '6.52.3.1', label: 'ИЖС' },
+        { code: '6.52.5.1', label: 'Вторичка' },
+      ] },
     { label: 'Семейная ипотека: типы семей', url: 'subsidy-family-types.html', parentCode: null, hideCodes: [],
-      series: [] },
+      series: [],
+      derivedSeries: [
+        { code: '__pct:6.58.1:6.36', label: 'До 7 лет',     numerator: '6.58.1', denominator: '6.36' },
+        { code: '__pct:6.58.2:6.36', label: '7–18 лет',     numerator: '6.58.2', denominator: '6.36' },
+        { code: '__pct:6.58.3:6.36', label: 'Инвалидность', numerator: '6.58.3', denominator: '6.36' },
+      ] },
   ],
   mortgage_igs: [
     // 6.70–6.75 всего; 6.76–6.81 строительство объектов ИЖС; 6.82–6.87 покупка готовых объектов ИЖС
@@ -137,6 +171,19 @@ const COMBO_OVERRIDES = {
   ],
 };
 
+// Преобразует derivedSeries-запись в элементы _series с метаданными для вычисления
+function _buildEffectiveSeries(rule) {
+  if (rule.derivedSeries?.length) {
+    return rule.derivedSeries.map(d => ({
+      code:        d.code,
+      label:       d.label,
+      _numerator:  d.numerator,
+      _denominator: d.denominator,
+    }));
+  }
+  return rule.series || [];
+}
+
 function applyComboOverrides(catCode, indicators) {
   const rules = COMBO_OVERRIDES[catCode];
   if (!rules || !rules.length) return indicators;
@@ -160,7 +207,7 @@ function applyComboOverrides(catCode, indicators) {
 
     if (parentMap[ind.code]) {
       const rule = parentMap[ind.code];
-      const series = rule.series || [];
+      const series = _buildEffectiveSeries(rule);
       const sparkCode = series.length ? series[0].code : (rule.sparkCode || null);
       result.push({
         ...ind,
@@ -176,7 +223,7 @@ function applyComboOverrides(catCode, indicators) {
   }
 
   for (const rule of appendRules) {
-    const series = rule.series || [];
+    const series = _buildEffectiveSeries(rule);
     const sparkCode = series.length ? series[0].code : (rule.sparkCode || null);
     result.push({
       _isComboOnly: true,
