@@ -61,7 +61,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 | Таблица | Назначение |
 |---------|-----------|
-| `sources` | Источники данных (ЦБ РФ, ДОМ.РФ и т.д.) |
+| `sources` | Источники данных (ЦБ РФ, ДОМ.РФ и т.д.). Действующие коды: `cbr`, `domrf`, `rosstat`, `emiss`, `rosreestr`, `domclick`, `sberindex`, `calc` (расчётные индикаторы). |
 | `categories` | Тематические разделы (mortgage_base, prices, demand …) |
 | `indicators` | Метаданные временного ряда: `code`, `unit`, `periodicity`, `period_type`, `chart_type` |
 | `data_points` | Только абсолютные значения: `(indicator_id, period_date)` — UNIQUE |
@@ -77,6 +77,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 - YoY для `unit='%'` — абсолютная разность в п.п., не относительная
 - `period_date` = первый день периода: 2024-01-01 = январь 2024 / год 2024
 - `is_public=false` скрывает индикатор из списков разделов, но он доступен через `/api/multi/data` и прямые запросы
+- `period_label` **обязательно** заполнять при любом upsert (формат: `'2025'` для годовых, `'Январь 2025'` для месячных). Пустой `period_label` приводит к пустому полю периода в таблице раздела
 
 ## Backend
 
@@ -100,7 +101,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 ### Три «системных» страницы
 
 - **`index.html`** — сетка категорий + поиск (через `/api/categories` и `/api/search`). Счётчики карточек разделов считаются по тем же видимым карточкам, что и страницы разделов: главная загружает `/api/categories/{code}/indicators` и применяет `applyComboOverrides()`. Блок «Обновление данных» на главной не показывается.
-- **`category.html`** — список показателей раздела. Использует `js/category-overrides.js` (`COMBO_OVERRIDES` + `applyComboOverrides`) — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется). Константа `SUBSECTIONS` задаёт подразделы (section-headers) внутри страниц отдельных категорий; коды в ней — это «эффективные» коды карточек после применения `COMBO_OVERRIDES`. Категории с подразделами: `demand` (5 групп), `prices` (2 группы), `mortgage_subsidy` (3 группы). Таблица раздела имеет 5 колонок (`Показатель`, `Последнее значение`, `Изм. г/г`, `Динамика`, `Источник`) и загружает данные для значений/спарклайнов/источников одним батчем через `/api/multi/data` с `rangeStart(5)`. Строки комбо с `_series` кликабельны и циклически переключают активную серию. Значение в колонке «Последнее значение» отображается числом в крупном моно-шрифте (без единиц); единицы с учётом масштаба (млн/млрд) — рядом с периодом через `·`. Функция `fmtValueSplit(v, unit)` реализована инлайн в `category.html` и разделяет значение на числовую и единичную части. Для страниц-долей без реальных кодов в БД используется механизм `derivedSeries` (виртуальные серии, вычисляемые на фронте как отношение двух существующих рядов).
+- **`category.html`** — список показателей раздела. Использует `js/category-overrides.js` (`COMBO_OVERRIDES` + `applyComboOverrides`) — правила замены/добавления карточек на ссылки комбо-страниц (логика только во frontend, БД не меняется). Константа `SUBSECTIONS` задаёт подразделы (section-headers) внутри страниц отдельных категорий; коды в ней — это «эффективные» коды карточек после применения `COMBO_OVERRIDES`. Категории с подразделами: `demand` (5 групп), `prices` (2 группы), `mortgage_subsidy` (3 группы). Таблица раздела имеет 5 колонок (`Показатель`, `Последнее значение`, `Изм. г/г`, `Динамика`, `Источник`) и загружает данные для значений/спарклайнов/источников одним батчем через `/api/multi/data` с `rangeStart(5)`. Строки комбо с `_series` кликабельны и циклически переключают активную серию. Значение в колонке «Последнее значение» отображается числом в крупном моно-шрифте (без единиц); единицы с учётом масштаба (млн/млрд) — рядом с периодом через `·`. Функция `fmtValueSplit(v, unit, decimals?)` реализована инлайн в `category.html` и разделяет значение на числовую и единичную части; опциональный параметр `decimals` переопределяет автоматическую точность (приходит из `ind._decimals`). Для страниц-долей без реальных кодов в БД используется механизм `derivedSeries` (виртуальные серии, вычисляемые на фронте как отношение двух существующих рядов); при вычислении последнего значения trailing-нули пропускаются — берётся последняя ненулевая позиция числителя.
 - **`chart.html`** — график одного показателя (`?code=6.1`). Поддерживает переключатели периода (1г/3г/5л/Всё), режима (Значения/г-г/м-м), переключатель Квартал/Год для квартальных индикаторов, таблицу, KPI-блок, блок «Связанные показатели». Для квартальных показателей в режиме «Год» загружает official companion-индикатор `<code>.y` (если существует) вместо агрегации кварталов.
 
 ### Комбо-страницы и специальные графики
@@ -127,7 +128,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 |------|-----------|
 | `api.js` | `api.{categories,categoryIndicators,indicator,indicatorData,multiIndicatorData,...}` |
 | `utils.js` | `fmtNum`, `fmtValue`, `fmtPct`, `fmtDate`, `fmtDateInline`, `formatXAxisLabel`, `xAxisLabelInterval`, `cleanAxisLabel`, `deltaHtml`, `rangeStart`, `cleanName` |
-| `category-overrides.js` | Общие правила `COMBO_OVERRIDES` и `applyComboOverrides()` для видимых карточек категорий. Подключается на `index.html` и `category.html`, чтобы счётчики главной совпадали со страницами разделов. Каждая запись `COMBO_OVERRIDES` содержит поле `series: [{code, label}, …]` — массив реальных серий для цикличного переключения значений в таблице (первый элемент = `_sparkCode`). Для страниц-долей без собственных кодов в БД — поле `derivedSeries: [{code, label, numerator, denominator}, …]`: виртуальные серии с `__`-префиксом кода, вычисляемые на фронте как `numerator / denominator × 100`. Хелпер `_buildEffectiveSeries(rule)` возвращает `derivedSeries` (если задано) или `series`; `applyComboOverrides()` записывает результат в `_series` каждого индикатора. |
+| `category-overrides.js` | Общие правила `COMBO_OVERRIDES` и `applyComboOverrides()` для видимых карточек категорий. Подключается на `index.html` и `category.html`, чтобы счётчики главной совпадали со страницами разделов. Каждая запись `COMBO_OVERRIDES` содержит поле `series: [{code, label}, …]` — массив реальных серий для цикличного переключения значений в таблице (первый элемент = `_sparkCode`). Опциональное поле `decimals: N` задаёт точность числа в колонке «Последнее значение» (переопределяет автоматическую логику `fmtValueSplit`); propagates в `ind._decimals` и `row.dataset.seriesDecimals`. Для страниц-долей без собственных кодов в БД — поле `derivedSeries: [{code, label, numerator, denominator}, …]`: виртуальные серии с `__`-префиксом кода, вычисляемые на фронте как `numerator / denominator × 100`. Хелпер `_buildEffectiveSeries(rule)` возвращает `derivedSeries` (если задано) или `series`; `applyComboOverrides()` записывает результат в `_series` каждого индикатора. |
 | `sparkline.js` | Мини-графики для карточек на `category.html` |
 | `chart-page.js` | Вся логика `chart.html`. Для квартальных показателей автоматически пытается загрузить companion-индикатор `<code>.y` (официальный годовой ряд из Росстата). |
 | `combo-page.js` | Общий модуль многоcерийных страниц: загрузка `/api/multi/data`, фильтр серий, KPI/table hooks, агрегация через `PeriodToggle`, `preProcess`, `trimToCommonDateKeys`/`trimToCommonDateCodes`, `trimToNonZeroDateKeys`/`trimToNonZeroDateCodes`; `init()` возвращает управляющий объект `{ cfg, state, rebuild }` для страниц с дополнительными переключателями. |
@@ -251,7 +252,7 @@ Companion-индикаторы обновляются автоматически
 | `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` | `day20_domrf` (через domrf.py, 20-е) |
 | `5.10` Доступность (зарплата/цена) | `calc_affordability.py` | `day20_domrf` (20-е + retry) |
 | `5.11` Доступность (ФЦП) | `calc_affordability_fcp.py` | `day20_domrf` (20-е + retry) |
-| `5.12–5.15 (.33/.38)` Потребность в жилье | `calc_housing_need.py` | `annual_housing_stats` (после calc_housing_provision) |
+| `5.12–5.15 (.33/.38)` Потребность в жилье (`млн кв. м`) | `calc_housing_need.py` | `annual_housing_stats` (после calc_housing_provision) |
 | `5.22`, `5.22.ma12` Темп продаж машиномест | `calc_sales_pace_mm.py` | `day20_domrf` (через domrf.py, 20-е) |
 
 **Ручной запуск:** все показатели обновляются автоматически. `load_rosstat_annual.py` оставлен как инструмент отладки, в scheduler не используется.
