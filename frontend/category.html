@@ -379,11 +379,17 @@ async function loadPage() {
   const allBatchCodes = new Set();
   // derivedMeta: virtualCode → { numerator, denominator } — для пост-обработки
   const derivedMeta  = new Map();
+  // sumMeta: virtualCode → { sumCodes[] } — для sum-серий
+  const sumMeta      = new Map();
 
   for (const ind of indicators) {
     if (ind._series?.length > 0) {
       for (const s of ind._series) {
-        if (s._numerator) {
+        if (s._sumCodes) {
+          // Sum-серия: добавляем все коды-составляющие
+          s._sumCodes.forEach(c => allBatchCodes.add(c));
+          sumMeta.set(s.code, { sumCodes: s._sumCodes });
+        } else if (s._numerator) {
           // Вычисляемая серия: добавляем реальные коды-составляющие
           allBatchCodes.add(s._numerator);
           allBatchCodes.add(s._denominator);
@@ -420,6 +426,7 @@ async function loadPage() {
           source:  entry.indicator?.source?.name       || '',
           history: points.map(p => p.value != null ? parseFloat(p.value) : null),
           periods: points.map(p => p.label || ''),
+          dates:   points.map(p => p.date  || ''),
         });
       }
     } catch (e) {
@@ -474,6 +481,43 @@ async function loadPage() {
       period:  lastPeriod,
       source:  numE.source,
       history,
+    });
+  }
+
+  // ── Вычисление sum-серий (суммы нескольких кодов) ───────────────────────
+  for (const [vcode, { sumCodes }] of sumMeta) {
+    const entries = sumCodes.map(c => seriesCache.get(c)).filter(Boolean);
+    if (!entries.length) continue;
+    // Опорный ряд — наидлиннейший (обычно активная программа)
+    const ref = entries.reduce((a, b) => a.dates.length >= b.dates.length ? a : b);
+    // date → value для каждого компонента
+    const dateMaps = entries.map(e => {
+      const m = {};
+      e.dates.forEach((d, i) => { if (d) m[d] = e.history[i]; });
+      return m;
+    });
+    // Суммируем по датам опорного ряда
+    const history = [], periods = [];
+    ref.dates.forEach((d, i) => {
+      let s = 0;
+      dateMaps.forEach(m => { if (m[d] != null) s += m[d]; });
+      history.push(s);
+      periods.push(ref.periods[i] || '');
+    });
+    // Последний индекс с ненулевым значением
+    let lastIdx = history.length - 1;
+    while (lastIdx >= 0 && !history[lastIdx]) lastIdx--;
+    const lastVal = lastIdx >= 0 ? history[lastIdx] : null;
+    const lastPeriod = lastIdx >= 0 ? periods[lastIdx] : '';
+    // YoY
+    let yoy = null;
+    if (lastIdx >= 12 && history[lastIdx - 12] > 0) {
+      yoy = (history[lastIdx] - history[lastIdx - 12]) / history[lastIdx - 12] * 100;
+    }
+    seriesCache.set(vcode, {
+      value: lastVal, yoy,
+      unit: entries[0].unit, period: lastPeriod, source: entries[0].source,
+      history, periods,
     });
   }
 

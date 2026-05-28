@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="css/combo-page.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
   <style>
-    .kpi-cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .kpi-cards-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 28px; }
   </style>
 </head>
 <body>
@@ -55,6 +55,12 @@
 
         <!-- KPI -->
         <div class="kpi-cards-row">
+          <div class="kpi-card-sm">
+            <div class="kpi-label">Все программы</div>
+            <div class="kpi-value" id="kpi-all-value">—</div>
+            <div class="kpi-period" id="kpi-all-period">ед. · —</div>
+            <div class="kpi-deltas" id="kpi-all-deltas"></div>
+          </div>
           <div class="kpi-card-sm">
             <div class="kpi-label"><span class="kpi-dot" style="background:#E8341C"></span>Семейная</div>
             <div class="kpi-value" id="kpi-semya-value">—</div>
@@ -171,6 +177,34 @@ ComboPage.init({
         `<span>г/г: ${deltaHtml(last.yoy_change_pct)}</span>` +
         `<span>м/м: ${deltaHtml(last.mom_change_pct)}</span>`;
     });
+
+    // «Все программы»: сумма по последней общей дате активных программ
+    const allPKeys = Object.keys(window.CODES);
+    const maps = {};
+    allPKeys.forEach(k => {
+      maps[k] = {};
+      (allData[window.CODES[k]]?.series||[]).forEach(p => {
+        if (p.value != null) maps[k][p.date] = p;
+      });
+    });
+    const activeDates = ['semya','dalvos','it','regions'].map(k => new Set(Object.keys(maps[k])));
+    const commonDates = Object.keys(maps['semya']).filter(d => activeDates.every(s => s.has(d))).sort();
+    const lastDate = commonDates[commonDates.length - 1];
+    if (!lastDate) return;
+    const sum = allPKeys.reduce((s, k) => s + (maps[k][lastDate]?.value != null ? +maps[k][lastDate].value : 0), 0);
+    const label = maps['semya'][lastDate]?.label || '—';
+    const sumPrevYear = allPKeys.reduce((s, k) => s + (maps[k][lastDate]?.prev_year_value != null ? +maps[k][lastDate].prev_year_value : 0), 0);
+    const yoyPct = sumPrevYear > 0 ? (sum - sumPrevYear) / sumPrevYear * 100 : null;
+    const d = new Date(lastDate); d.setMonth(d.getMonth() - 1);
+    const prevMonthDate = d.toISOString().slice(0, 10);
+    const sumPrevMonth = allPKeys.reduce((s, k) => s + (maps[k][prevMonthDate]?.value != null ? +maps[k][prevMonthDate].value : 0), 0);
+    const momPct = sumPrevMonth > 0 ? (sum - sumPrevMonth) / sumPrevMonth * 100 : null;
+    const elV = document.getElementById('kpi-all-value');
+    const elP = document.getElementById('kpi-all-period');
+    const elD = document.getElementById('kpi-all-deltas');
+    if (elV) elV.textContent = fmtNum(sum, 0);
+    if (elP) elP.textContent = `ед. · ${label}`;
+    if (elD) elD.innerHTML = `<span>г/г: ${deltaHtml(yoyPct)}</span><span>м/м: ${deltaHtml(momPct)}</span>`;
   },
 }).catch(console.error);
 </script>
