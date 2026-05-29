@@ -100,6 +100,10 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 
 ⚠️ Если `ihh-chart` или `prices-chart` не поддаются ComboPage без значительного расширения модуля — оставить с кастомным `init()` и просто удалить AnnualToggle-зависимость (PeriodToggle напрямую).
 
+**Актуализация после миграции complex-страниц:**
+- `share-chart` использует `ComboPage.aggregateSeries`: квартальные и годовые доли МЖС/ИЖС считаются от сумм исходных рядов `2.2` и `2.3`, а не как сумма/среднее уже посчитанных месячных процентов.
+- `ihh-chart` использует `pointInTime: true` и `stackBars: false`: переключатель `Месяц/Квартал/Год` скрыт, агрегация ИХХ не выполняется, tooltip не показывает строку «Итого».
+
 ---
 
 ## Phase 5: Удаление AnnualToggle shim
@@ -117,7 +121,7 @@ Phase 1–3 перенесли 10 страниц на `ComboPage.init()`. Цел
 
 | Файл | Роль |
 |------|------|
-| `frontend/js/combo-page.js` | Модуль — добавить `onData` hook если не поддерживается |
+| `frontend/js/combo-page.js` | Общий модуль ComboPage: `onData`, `preProcess`, `aggregateSeries`, period toggle, таблица, tooltip |
 | `frontend/js/period-toggle.js` | Содержит shim (строки 375–608) — удалить в Phase 5 |
 | `frontend/js/annual-toggle.js` | Устаревший файл — удалить в Phase 5 |
 | `frontend/*.html` (27 файлов) | По батчам выше |
