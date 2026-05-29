@@ -374,7 +374,7 @@ window.ComboPage = (function () {
       return formatXAxisLabel('', d, axisPeriodicity);
     });
 
-    const xInterval = xAxisLabelInterval(xData.length, axisPeriodicity);
+    const xAxisCfg = xAxisLabelInterval(xData.length, axisPeriodicity);
 
     // Series
     const seriesArr = [...activeSeries].map(key => {
@@ -463,10 +463,10 @@ window.ComboPage = (function () {
           fontSize: 11,
           color: '#7A8B9A',
           rotate: 0,
-          interval: xInterval,
+          interval: xAxisCfg.interval,
           lineHeight: 16,
-          showMinLabel: false,
-          showMaxLabel: true,
+          showMinLabel: xAxisCfg.showMinLabel,
+          showMaxLabel: xAxisCfg.showMaxLabel,
           hideOverlap: false,
         },
         axisLine: { lineStyle: { color: '#DDE2E8' } }, axisTick: { show: false },

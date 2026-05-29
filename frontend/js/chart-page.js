@@ -332,7 +332,7 @@
       return `<b>${axisLabel}</b><br/>Значение: <b>${valStr}</b>`;
     };
 
-    const xInterval = xAxisLabelInterval(xData.length, effPeriodicity);
+    const xAxisCfg = xAxisLabelInterval(xData.length, effPeriodicity);
 
     chartInstance.setOption({
       animation: true,
@@ -388,10 +388,10 @@
           fontSize: 11,
           color: '#7A8B9A',
           rotate: 0,           // всегда горизонтально
-          interval: xInterval,
+          interval: xAxisCfg.interval,
           lineHeight: 16,      // для двустрочных меток
-          showMinLabel: false,
-          showMaxLabel: true,
+          showMinLabel: xAxisCfg.showMinLabel,
+          showMaxLabel: xAxisCfg.showMaxLabel,
           hideOverlap: false,
         },
         axisLine: { lineStyle: { color: '#DDE2E8' } },

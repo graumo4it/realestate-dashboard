@@ -87,58 +87,56 @@ function formatXAxisLabel(label, dateStr, periodicity = 'monthly') {
   return rawDate;
 }
 
+// Возвращает { interval, showMinLabel, showMaxLabel } для axisLabel ECharts.
+// Главный принцип: между ВСЕМИ подписями — строго одинаковое расстояние (= шаг),
+// последний период всегда подписан. Слева допустим небольшой отступ (первая
+// подпись может оказаться на 1–N-м периоде) — это плата за идеально равные
+// промежутки. showMinLabel/showMaxLabel вычисляются детерминированно, чтобы
+// ECharts не форсировал «лишнюю» подпись на индексе 0 вне равномерной сетки.
 function xAxisLabelInterval(total, periodicity = 'monthly') {
-  let targetStep = 1;
-  if (periodicity === 'monthly') {
-    if (total >= 84) targetStep = 12;
-    else if (total >= 60) targetStep = 6;
-    else if (total > 24) targetStep = 3;
-  } else if (periodicity === 'quarterly') {
-    if (total > 20) targetStep = 4;
-    else if (total > 8) targetStep = 2;
+  if (total <= 1) return { interval: 0, showMinLabel: true, showMaxLabel: true };
+
+  // Круглые шаги-кандидаты (от плотного к редкому) и комфортный максимум
+  // числа подписей. Шаг выбираем как наименьший круглый, при котором подписей
+  // не больше максимума — так они не слипаются, но и не разрежены сверх меры.
+  let candidates, maxLabels;
+  if (periodicity === 'quarterly') {
+    candidates = [1, 2, 4, 8];
+    maxLabels = 16;
   } else if (periodicity === 'annual') {
-    if (total > 40) targetStep = 5;
-    else if (total > 24) targetStep = 3;
-    else if (total > 12) targetStep = 2;
+    candidates = [1, 2, 5, 10];
+    maxLabels = 12;
+  } else { // monthly
+    candidates = [1, 2, 3, 6, 12];
+    maxLabels = 20;
   }
 
-  if (targetStep <= 1) return 0;
-
-  const lastIndex = Math.max(0, total - 1);
-  if (!lastIndex) return 0;
-
-  const minStep = Math.ceil(targetStep * 0.75);
-  const maxStep = Math.floor(targetStep * 1.5);
-
-  // Ищем шаг в диапазоне [minStep, maxStep] с минимальным смещением первой метки
-  // (offset = lastIndex % step). Гарантирует идеально равные промежутки между
-  // всеми подписями: первая метка смещена на offset позиций от края (0–3),
-  // последняя всегда на lastIndex.
-  // При равном offset предпочитаем шаг, ближайший к targetStep;
-  // при равном diff — больший шаг (меньше меток на оси).
-  let bestStep = minStep;
-  let bestOffset = lastIndex % minStep;
-  let bestDiff   = Math.abs(minStep - targetStep);
-
-  for (let s = minStep + 1; s <= maxStep; s++) {
-    const offset = lastIndex % s;
-    const diff   = Math.abs(s - targetStep);
-    if (offset < bestOffset ||
-        (offset === bestOffset && diff < bestDiff) ||
-        (offset === bestOffset && diff === bestDiff && s > bestStep)) {
-      bestStep   = s;
-      bestOffset = offset;
-      bestDiff   = diff;
-    }
+  const lastIndex = total - 1;
+  let step = candidates[candidates.length - 1];
+  for (const s of candidates) {
+    if (Math.floor(lastIndex / s) + 1 <= maxLabels) { step = s; break; }
   }
 
-  // Метки от bestOffset до lastIndex с шагом bestStep.
-  // lastIndex ≡ bestOffset (mod bestStep) → последняя метка всегда на lastIndex,
-  // все промежутки строго равны bestStep.
+  if (step <= 1) {
+    return { interval: 0, showMinLabel: true, showMaxLabel: true };
+  }
+
+  // Равномерная сетка с привязкой к правому краю: offset = lastIndex % step.
+  // Метки на offset, offset+step, …, lastIndex — все промежутки равны step,
+  // последняя точка подписана. offset (0..step-1) — отступ слева.
+  const offset = lastIndex % step;
   const labels = new Set();
-  for (let i = bestOffset; i <= lastIndex; i += bestStep) labels.add(i);
+  for (let i = offset; i <= lastIndex; i += step) labels.add(i);
 
-  return index => labels.has(index);
+  // showMinLabel/showMaxLabel = true: иначе ECharts гасит первую/последнюю
+  // ВЫБРАННУЮ interval-ом метку у края (даже если это не индекс 0/последний),
+  // из-за чего слева образуется большая пустота. interval сам решает состав
+  // меток — индекс 0 при offset>0 не форсируется.
+  return {
+    interval: index => labels.has(index),
+    showMinLabel: true,
+    showMaxLabel: true,
+  };
 }
 
 function cleanAxisLabel(label) {

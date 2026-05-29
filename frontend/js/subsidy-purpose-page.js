@@ -363,7 +363,7 @@
       return formatXAxisLabel('', dateKey, state.currentPeriodicity);
     });
 
-    const xInterval = xAxisLabelInterval(xData.length, state.currentPeriodicity);
+    const xAxisCfg = xAxisLabelInterval(xData.length, state.currentPeriodicity);
 
     const series = active.map(goalKey => {
       const goal = GOALS[goalKey];
@@ -458,10 +458,10 @@
           fontSize: 11,
           color: '#7A8B9A',
           rotate: 0,
-          interval: xInterval,
+          interval: xAxisCfg.interval,
           lineHeight: 16,
-          showMinLabel: false,
-          showMaxLabel: true,
+          showMinLabel: xAxisCfg.showMinLabel,
+          showMaxLabel: xAxisCfg.showMaxLabel,
           hideOverlap: false,
         },
         axisLine: { lineStyle: { color: '#DDE2E8' } },
