@@ -254,6 +254,7 @@ const COMBO_ICON_SVG = `<svg class="combo-icon" width="16" height="16" viewBox="
 // ── Основная логика страницы ───────────────────────────────────────────────
 const params  = new URLSearchParams(location.search);
 const catCode = params.get('code') || 'mortgage_total';
+const STALE_SPARKLINE_CODES = new Set(['2.13.ext']);
 
 // ── Форматирование: число отдельно, единица (с масштабом) отдельно ──────────
 // Возвращает { num, effectiveUnit } — num идёт крупным шрифтом,
@@ -390,6 +391,21 @@ async function loadPage() {
 
   // code → { value, yoy, unit, period, source, history[] }
   const seriesCache = new Map();
+  function cacheSeriesEntry(code, entry) {
+    const points = entry.series || [];
+    const last   = points.length ? points[points.length - 1] : null;
+    seriesCache.set(code, {
+      value:   last?.value          != null ? parseFloat(last.value)            : null,
+      yoy:     last?.yoy_change_pct != null ? parseFloat(last.yoy_change_pct)   : null,
+      unit:    entry.indicator?.unit               || '',
+      period:  last?.label                         || '',
+      source:  entry.indicator?.source?.name       || '',
+      history: points.map(p => p.value != null ? parseFloat(p.value) : null),
+      periods: points.map(p => p.label || ''),
+      dates:   points.map(p => p.date  || ''),
+    });
+  }
+
   if (allBatchCodes.size > 0) {
     try {
       // rangeStart(5): 5 лет — достаточно для ежемесячных (60 т.) и ежегодных (5 т.)
@@ -397,18 +413,16 @@ async function loadPage() {
       for (const code of allBatchCodes) {
         const entry = resp[code];
         if (!entry) continue;
-        const points = entry.series || [];
-        const last   = points.length ? points[points.length - 1] : null;
-        seriesCache.set(code, {
-          value:   last?.value          != null ? parseFloat(last.value)            : null,
-          yoy:     last?.yoy_change_pct != null ? parseFloat(last.yoy_change_pct)   : null,
-          unit:    entry.indicator?.unit               || '',
-          period:  last?.label                         || '',
-          source:  entry.indicator?.source?.name       || '',
-          history: points.map(p => p.value != null ? parseFloat(p.value) : null),
-          periods: points.map(p => p.label || ''),
-          dates:   points.map(p => p.date  || ''),
-        });
+        cacheSeriesEntry(code, entry);
+      }
+
+      // Исторические ряды без свежих точек не попадают в 5-летнее окно,
+      // но для них всё равно нужен спарклайн по последнему доступному периоду.
+      for (const code of STALE_SPARKLINE_CODES) {
+        if (!allBatchCodes.has(code)) continue;
+        if ((seriesCache.get(code)?.history || []).filter(v => v != null).length > 1) continue;
+        const entry = await api.indicatorData(code);
+        cacheSeriesEntry(code, entry);
       }
     } catch (e) {
       console.error('Batch data load failed:', e);

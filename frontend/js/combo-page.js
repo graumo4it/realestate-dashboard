@@ -21,6 +21,8 @@
  *   hideSeriesForPeriodicity {Object} { key: ['quarterly','annual'] } — hide series for specific periods
  *   initialActiveSeries {Array}  keys active in chart filter on load (default: all keys)
  *   preProcess   {Function} (allData) => void — called before every render; mutate allData to inject virtual series
+ *   aggregateSeries {Function} optional custom aggregation hook:
+ *                   (key, raw, periodicity, allData) => Array | null
  *   seriesTypes  {Object}   { key: 'bar'|'line' } — per-series type override (default: cfg.chartType)
  *   stack100     {boolean}  render bars as 100%-stacked; data must already be in % (0–100)
  *   labelGroups  {Array}    [{ header, keys[] }] — group separators in the series dropdown
@@ -122,6 +124,7 @@ window.ComboPage = (function () {
       onData:        typeof config.onData        === 'function' ? config.onData        : null,
       onTableHeader: typeof config.onTableHeader === 'function' ? config.onTableHeader : null,
       preProcess:    typeof config.preProcess    === 'function' ? config.preProcess    : null,
+      aggregateSeries: typeof config.aggregateSeries === 'function' ? config.aggregateSeries : null,
       seriesTypes:     config.seriesTypes   || null,
       stack100:        Boolean(config.stack100),
       labelGroups:     config.labelGroups   || null,
@@ -206,6 +209,16 @@ window.ComboPage = (function () {
     // Non-monthly aggregation (quarterly or annual)
     const periodicity = state.currentPeriodicity;
     if (periodicity !== 'monthly') {
+      if (cfg.aggregateSeries) {
+        const customAgg = cfg.aggregateSeries(key, raw, periodicity, state.allData);
+        if (Array.isArray(customAgg)) {
+          if (!state.currentRange) return customAgg;
+          const cutoff = new Date();
+          cutoff.setFullYear(cutoff.getFullYear() - state.currentRange);
+          return customAgg.filter(p => new Date(p.date) >= cutoff);
+        }
+      }
+
       let agg;
       if (cfg.aggType === 'wavg') {
         agg = window.PeriodToggle.aggregateWavg(raw, weight, periodicity);
