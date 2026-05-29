@@ -530,22 +530,30 @@ window.ComboPage = (function () {
     // Update header cells if the table has them
     const thCells = document.querySelectorAll('.data-table thead th');
     if (thCells.length >= 2) thCells[1].textContent = valHeader;
+    if (thCells.length >= 3) thCells[2].textContent = 'Изм. г/г';
+    const showPeriodDelta = state.currentPeriodicity !== 'annual';
+    if (thCells.length >= 4) {
+      thCells[3].textContent = state.currentPeriodicity === 'quarterly'
+        ? 'Изм. кв./кв.'
+        : 'Изм. м/м';
+      thCells[3].style.display = showPeriodDelta ? '' : 'none';
+    }
 
     body.innerHTML = series.map(p => {
       const valStr = p.value != null
-        ? fmtNum(Number(p.value), cfg.decimals) + cfg.sfx
+        ? fmtNum(Number(p.value), cfg.decimals)
         : '—';
       const yoyStr = deltaHtml(p.yoy_change_pct, cfg.isPp);
-      const momStr = state.currentPeriodicity !== 'monthly' ? '—' : deltaHtml(p.mom_change_pct, cfg.isPp);
+      const momStr = deltaHtml(p.mom_change_pct, cfg.isPp);
       const label  = p.label || (p.date ? fmtDate(p.date, 'monthly') : '—');
       return `<tr>
         <td>${label}</td>
         <td class="num">${valStr}</td>
         <td class="num">${yoyStr}</td>
-        <td class="num">${momStr}</td>
+        ${showPeriodDelta ? `<td class="num">${momStr}</td>` : ''}
       </tr>`;
     }).join('') ||
-      '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+      `<tr><td colspan="${showPeriodDelta ? 4 : 3}" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>`;
   }
 
   // ── 10. _bindEvents ───────────────────────────────────────────────────

@@ -10,7 +10,7 @@ migration/migrate_under_construction_domrf.py
 Показатели:
   uc_area_total      — Жилая площадь всего строящегося, млн кв. м (point_in_time, monthly)
   uc_area_active     — Жилая площадь активного строительства, млн кв. м (point_in_time, monthly)
-  uc_dev_activity    — Девелоперская активность, кв. м на 1 чел. (point_in_time, annual)
+  uc_dev_activity    — Девелоперская активность, кв. м на 1 чел. (period_start, annual)
   uc_new_total       — Новые проекты (все), млн кв. м (period, monthly)
   uc_new_active      — Новые проекты (активные), млн кв. м (period, monthly)
   uc_new_vs_input    — Новые проекты / ввод МЖС, % (calculated, monthly)  [2 варианта]
@@ -603,7 +603,7 @@ BEGIN
     VALUES
       ('uc_area_total',          cat_id, src_id, 'Жилая площадь возводимых МЖД на отчётную дату',                                        'млн кв. м', 'monthly', 'point_in_time', true, 'bar',  1),
       ('uc_area_active',         cat_id, src_id, 'Жилая площадь МЖД в стадии активного строительства или продаж',                        'млн кв. м', 'monthly', 'point_in_time', true, 'bar',  2),
-      ('uc_dev_activity',        cat_id, src_id, 'Девелоперская активность по текущему строительству',                                    'кв. м / чел.', 'annual', 'point_in_time', true, 'line', 3),
+      ('uc_dev_activity',        cat_id, src_id, 'Девелоперская активность по текущему строительству',                                    'кв. м / чел.', 'annual', 'period_start', true, 'line', 3),
       ('uc_new_total',           cat_id, src_id, 'Новые проекты (все)',                                                                    'млн кв. м', 'monthly', 'period',         true, 'bar',  4),
       ('uc_new_active',          cat_id, src_id, 'Новые проекты (активные)',                                                              'млн кв. м', 'monthly', 'period',         true, 'bar',  5),
       ('uc_new_vs_input_total',  cat_id, src_id, 'Новые проекты / ввод МЖС (все проекты)',                                               '%',          'monthly', 'point_in_time', false, 'line', 6),

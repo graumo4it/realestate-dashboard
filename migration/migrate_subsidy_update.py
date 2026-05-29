@@ -111,7 +111,7 @@ def main():
     # 2. Создать/обновить индикаторы 6.44 и 6.45
     cur.execute("SELECT id FROM categories WHERE code = 'mortgage_subsidy'")
     cat_id = cur.fetchone()[0]
-    cur.execute("SELECT id FROM sources WHERE code = 'cbr'")
+    cur.execute("SELECT id FROM sources WHERE code = 'domrf'")
     src_id = cur.fetchone()[0]
 
     for code, name, unit, sort_order in [

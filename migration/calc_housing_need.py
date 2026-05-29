@@ -143,16 +143,16 @@ def delete_old_indicators(cur):
 
 def create_new_indicators(cur):
     """Создаём новые коды если их ещё нет."""
-    # Получаем category_id и source_id из одного из старых или соседних показателей
+    # Расчётные показатели потребности относятся к разделу demand и источнику calc.
     cur.execute("""
-        SELECT category_id, source_id
-        FROM indicators
-        WHERE code IN ('5.9', '5.10', '5.11', '5.3')
-        LIMIT 1
+        SELECT c.id, s.id
+        FROM categories c
+        CROSS JOIN sources s
+        WHERE c.code = 'demand' AND s.code = 'calc'
     """)
     row = cur.fetchone()
     if not row:
-        raise ValueError("Не удалось определить category_id и source_id для новых индикаторов")
+        raise ValueError("Не удалось определить category_id/source_id для расчётных индикаторов")
     category_id, source_id = row
 
     new_indicators = [
@@ -176,7 +176,7 @@ def create_new_indicators(cur):
             INSERT INTO indicators
                 (code, category_id, source_id, name, unit, periodicity,
                  period_type, is_public, chart_type, sort_order)
-            VALUES (%s, %s, %s, %s, %s, 'annual', 'period', false, 'line', %s)
+            VALUES (%s, %s, %s, %s, %s, 'annual', 'period_end', false, 'line', %s)
             """,
             (code, category_id, source_id, name, unit, sort_order),
         )

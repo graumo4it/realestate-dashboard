@@ -141,8 +141,8 @@
               <tr>
                 <th style="width:28%">Период</th>
                 <th style="width:24%;text-align:right">Доля, %</th>
-                <th style="width:24%;text-align:right">Изм. г/г, п.п.</th>
-                <th style="width:24%;text-align:right">Изм. м/м, п.п.</th>
+                <th style="width:24%;text-align:right">Изм. г/г</th>
+                <th style="width:24%;text-align:right">Изм. м/м</th>
               </tr>
             </thead>
             <tbody id="data-table-body">
@@ -178,7 +178,7 @@ ComboPage.init({
   decimals:   1,
   unit:       '%',
   fileName:   'share-mzhs-izhs',
-  onTableHeader: (mode) => mode === 'absolute' ? 'Доля, %' : 'Изм., п.п.',
+  onTableHeader: () => 'Доля, %',
 
   aggregateSeries(key, raw, periodicity, allData) {
     if (!['mzhs', 'izhs'].includes(key)) return null;

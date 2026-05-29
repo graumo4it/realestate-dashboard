@@ -171,7 +171,7 @@ def ensure_indicator(cur) -> int:
             ('1.1', %s, %s,
              'Численность постоянного населения на 1 января',
              'тыс. чел.',
-             'annual', 'point_in_time', 'russia',
+             'annual', 'period_start', 'russia',
              'Численность постоянного населения Российской Федерации на начало года. '
              'Источник: Росстат (fedstat.ru/indicator/31557).',
              'https://www.fedstat.ru/indicator/31557',

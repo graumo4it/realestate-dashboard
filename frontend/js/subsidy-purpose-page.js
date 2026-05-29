@@ -273,6 +273,14 @@
     const metric = metricConfig();
     const thCells = document.querySelectorAll('.data-table thead th');
     if (thCells.length >= 2) thCells[1].textContent = `Значение, ${metric.unit}`;
+    if (thCells.length >= 3) thCells[2].textContent = 'Изм. г/г';
+    const showPeriodDelta = state.currentPeriodicity !== 'annual';
+    if (thCells.length >= 4) {
+      thCells[3].textContent = state.currentPeriodicity === 'quarterly'
+        ? 'Изм. кв./кв.'
+        : 'Изм. м/м';
+      thCells[3].style.display = showPeriodDelta ? '' : 'none';
+    }
   }
 
   function filteredSeries(goalKey) {
@@ -490,17 +498,18 @@
 
     const metric = metricConfig();
     const series = filteredSeries(state.currentTable).slice().reverse();
+    const showPeriodDelta = state.currentPeriodicity !== 'annual';
     body.innerHTML = series.map(point => {
-      const value = point.value != null ? `${fmtNum(Number(point.value), metric.decimals)} ${metric.unit}` : '—';
-      const mom = state.currentPeriodicity === 'monthly' ? deltaHtml(point.mom_change_pct) : '—';
+      const value = point.value != null ? fmtNum(Number(point.value), metric.decimals) : '—';
+      const mom = deltaHtml(point.mom_change_pct);
       const label = point.label || (point.date ? fmtDateInline(point.date, state.currentPeriodicity) : '—');
       return `<tr>
         <td>${label}</td>
         <td class="num">${value}</td>
         <td class="num">${deltaHtml(point.yoy_change_pct)}</td>
-        <td class="num">${mom}</td>
+        ${showPeriodDelta ? `<td class="num">${mom}</td>` : ''}
       </tr>`;
-    }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>';
+    }).join('') || `<tr><td colspan="${showPeriodDelta ? 4 : 3}" style="text-align:center;color:var(--color-muted);padding:24px">Нет данных</td></tr>`;
   }
 
   function rebuild() {

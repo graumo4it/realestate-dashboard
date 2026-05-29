@@ -255,6 +255,10 @@ const COMBO_ICON_SVG = `<svg class="combo-icon" width="16" height="16" viewBox="
 const params  = new URLSearchParams(location.search);
 const catCode = params.get('code') || 'mortgage_total';
 const STALE_SPARKLINE_CODES = new Set(['2.13.ext']);
+const INDICATOR_VALUE_DECIMALS = {
+  '2.11': 1,
+  '2.12': 1,
+};
 
 // ── Форматирование: число отдельно, единица (с масштабом) отдельно ──────────
 // Возвращает { num, effectiveUnit } — num идёт крупным шрифтом,
@@ -614,7 +618,11 @@ async function loadPage() {
       const cache = seriesCache.get(ind.code) || {};
       const source = cache.source || '—';
 
-      const { num: numS, effectiveUnit: euS } = fmtValueSplit(ind.last_value, ind.unit);
+      const { num: numS, effectiveUnit: euS } = fmtValueSplit(
+        ind.last_value,
+        ind.unit,
+        INDICATOR_VALUE_DECIMALS[ind.code],
+      );
       const periodTextS = (ind.last_period_label || '') + (euS ? ' · ' + euS : '');
 
       row.innerHTML = `

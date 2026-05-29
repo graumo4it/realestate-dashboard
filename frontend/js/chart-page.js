@@ -5,7 +5,7 @@
  *   - ось X: горизонтальные двухстрочные метки (янв\n2024), без наклона
  *   - ось Y: знак «-» для отрицательных, «%» если ед. изм. %, разделитель разрядов
  *   - tooltip: единица только в значении, не в названии серии
- *   - таблица: заголовки «Значение, ед.» / «ИЗМ. Г/Г» / «ИЗМ. М/М», значения динамики с ед.
+ *   - таблица: единица только в заголовке значения; динамика с ед. в ячейках
  */
 (function () {
   const params  = new URLSearchParams(location.search);
@@ -444,6 +444,11 @@
 
     // Единица для динамики: п.п. для процентных, % для остальных
     const dynUnit = pp ? 'п.п.' : '%';
+    const fmtTableValue = (val) => {
+      if (val == null || isNaN(Number(val))) return '—';
+      const n = Number(val);
+      return fmtNum(n, Math.abs(n) >= 1000 ? 0 : 2);
+    };
 
     const thead = document.querySelector('.data-table thead tr');
     if (thead) {
@@ -470,7 +475,7 @@
     elTableBody.innerHTML = series.map(p => `
       <tr>
         <td>${p.label ? p.label.replace('\n', ' ') : fmtDateInline(p.date, indicator.periodicity)}</td>
-        <td class="num ${p.is_preliminary ? 'prelim' : ''}">${p.value != null ? fmtValue(p.value) : '—'}</td>
+        <td class="num ${p.is_preliminary ? 'prelim' : ''}">${fmtTableValue(p.value)}</td>
         <td class="num">${fmtDyn(p.yoy_change_pct, pp)}</td>
         ${showMom ? `<td class="num">${fmtDyn(p.mom_change_pct, pp)}</td>` : ''}
       </tr>

@@ -18,8 +18,10 @@ ALTER TABLE indicators ADD CONSTRAINT chk_period_type CHECK (
 -- under_construction (3.x), concentration (3.x), mortgage_debt (6.19–6.27)
 UPDATE indicators SET period_type = 'period_start'
 WHERE code IN (
+  '1.1',
   '3.1','3.2','3.3','3.4','3.5','3.7',
   '3.6','3.17','3.18','3.19',
+  'uc_dev_activity',
   '6.19','6.20','6.21','6.22','6.23','6.24','6.25','6.26','6.27'
 );
 
@@ -43,7 +45,7 @@ WHERE code IN (
   'apartments_count_1k','apartments_count_2k','apartments_count_3k','apartments_count_4k','apartments_count_total',
   'apartments_share_1k','apartments_share_2k','apartments_share_3k','apartments_share_4k',
   'uc_stock_years_active','uc_stock_years_total',
-  'uc_area_active','uc_area_total','uc_dev_activity',
+  'uc_area_active','uc_area_total',
   'uc_sold_vs_ready'
 );
 
