@@ -1,20 +1,23 @@
 """
 migration/calc_developer_activity.py
-Расчёт показателя 3.7 — Девелоперская активность по текущему строительству
+Расчёт показателей девелоперской активности по текущему строительству
 
 Формула:
-    3.7 = 3.3[январь года] * 1000 / 1.1[год]
+    3.7             = 3.3[январь года] * 1000 / 1.1[год]
+    uc_dev_activity = uc_area_total[январь года] * 1000 / 1.1[год]
 
 где:
     3.3 — жилая площадь возводимых МЖД на отчётную дату, млн кв. м
           берём значение за январь каждого года
+    uc_area_total — жилая площадь возводимых МЖД из платной базы ДОМ.РФ,
+                    млн кв. м; берём значение за январь каждого года
     1.1 — численность постоянного населения на 1 января, тыс. чел.
 
 Результат: кв. м / чел.
     млн кв. м × 1000 / тыс. чел. = кв. м / чел.
 
-Периодичность: annual
-period_date = YYYY-01-01, period_label = 'YYYY'
+Периодичность: annual, period_date = YYYY-01-01.
+period_label: 'YYYY' для 3.7, 'Январь YYYY' для uc_dev_activity.
 
 Запуск:
     python migration/calc_developer_activity.py [--dry-run]
@@ -42,6 +45,38 @@ log = logging.getLogger(__name__)
 
 DRY_RUN = "--dry-run" in sys.argv
 
+MONTHS_RU = {
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь",
+}
+
+CALCULATIONS = [
+    {
+        "area_code": "3.3",
+        "out_code": "3.7",
+        "name": "3.7 — открытые данные ДОМ.РФ",
+        "decimals": 4,
+        "period_label": lambda year: str(year),
+    },
+    {
+        "area_code": "uc_area_total",
+        "out_code": "uc_dev_activity",
+        "name": "uc_dev_activity — платная база ДОМ.РФ",
+        "decimals": 2,
+        "period_label": lambda year: f"{MONTHS_RU[1]} {year}",
+    },
+]
+
 
 def get_connection():
     return psycopg2.connect(
@@ -61,6 +96,12 @@ def get_indicator_id(cur, code: str) -> int:
     return row[0]
 
 
+def get_optional_indicator_id(cur, code: str) -> int | None:
+    cur.execute("SELECT id FROM indicators WHERE code = %s", (code,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def fetch_january_values(cur, indicator_id: int) -> dict:
     """Возвращает {year: value} — только январские значения."""
     cur.execute(
@@ -75,6 +116,55 @@ def fetch_january_values(cur, indicator_id: int) -> dict:
         (indicator_id,),
     )
     return {row[0]: float(row[1]) for row in cur.fetchall()}
+
+
+def calculate_rows(cur, population: dict) -> tuple[list[tuple], list[str]]:
+    rows = []
+    output_codes = []
+
+    for cfg in CALCULATIONS:
+        area_code = cfg["area_code"]
+        out_code = cfg["out_code"]
+        id_area = get_optional_indicator_id(cur, area_code)
+        id_out = get_optional_indicator_id(cur, out_code)
+
+        if id_area is None:
+            log.warning(f"{cfg['name']}: входной индикатор {area_code} не найден, пропускаем")
+            continue
+        if id_out is None:
+            log.warning(f"{cfg['name']}: выходной индикатор {out_code} не найден, пропускаем")
+            continue
+
+        area_jan = fetch_january_values(cur, id_area)
+        common_years = sorted(set(area_jan) & set(population))
+
+        log.info(f"{area_code} (январь) — данные за годы: {sorted(area_jan.keys())}")
+        log.info(f"{cfg['name']}: совпадающих лет с 1.1: {len(common_years)}")
+
+        if not common_years:
+            log.warning(f"{cfg['name']}: нет общих лет с населением 1.1")
+            continue
+
+        output_codes.append(out_code)
+
+        for year in common_years:
+            area = area_jan[year]
+            pop = population[year]
+            value = round(area * 1000 / pop, cfg["decimals"])
+            log.info(
+                f"{year}: {area_code}[янв]={area:.4f} млн кв.м × 1000 / "
+                f"{pop:.1f} тыс.чел. = {value:.4f} кв.м/чел. → {out_code}"
+            )
+            rows.append((
+                id_out,
+                date(year, 1, 1),
+                cfg["period_label"](year),
+                value,
+                False,
+                datetime.now(),
+            ))
+
+    return rows, output_codes
 
 
 def fetch_annual(cur, indicator_id: int) -> dict:
@@ -92,7 +182,7 @@ def fetch_annual(cur, indicator_id: int) -> dict:
 
 
 def main():
-    log.info("=== Расчёт 3.7 — Девелоперская активность по текущему строительству ===")
+    log.info("=== Расчёт девелоперской активности по текущему строительству ===")
     if DRY_RUN:
         log.info("Режим DRY RUN — данные в БД не записываются")
 
@@ -101,29 +191,12 @@ def main():
     try:
         with conn:
             with conn.cursor() as cur:
-                id_area  = get_indicator_id(cur, "3.3")
-                id_pop   = get_indicator_id(cur, "1.1")
-                id_out   = get_indicator_id(cur, "3.7")
-
-                area_jan   = fetch_january_values(cur, id_area)
+                id_pop = get_indicator_id(cur, "1.1")
                 population = fetch_annual(cur, id_pop)
 
-                log.info(f"3.3 (январь) — данные за годы: {sorted(area_jan.keys())}")
                 log.info(f"1.1 — население: данные за годы: {sorted(population.keys())}")
 
-                common_years = sorted(set(area_jan) & set(population))
-                log.info(f"Совпадающих лет: {len(common_years)}")
-
-                rows = []
-                for year in common_years:
-                    a   = area_jan[year]
-                    pop = population[year]
-                    value = round(a * 1000 / pop, 4)
-                    log.info(
-                        f"{year}: 3.3[янв]={a:.4f} млн кв.м × 1000 / "
-                        f"{pop:.1f} тыс.чел. = {value:.4f} кв.м/чел."
-                    )
-                    rows.append((id_out, date(year, 1, 1), str(year), value, False, datetime.now()))
+                rows, output_codes = calculate_rows(cur, population)
 
                 if not rows:
                     log.error("Нет данных для записи")
@@ -136,7 +209,15 @@ def main():
                     return
 
                 # Сначала удаляем старые данные
-                cur.execute("DELETE FROM data_points WHERE indicator_id = %s", (id_out,))
+                cur.execute(
+                    """
+                    DELETE FROM data_points
+                    WHERE indicator_id IN (
+                        SELECT id FROM indicators WHERE code = ANY(%s)
+                    )
+                    """,
+                    (output_codes,),
+                )
                 log.info(f"Удалено старых точек: {cur.rowcount}")
 
                 execute_values(
@@ -158,9 +239,10 @@ def main():
 
                 # Обновляем periodicity на annual
                 cur.execute(
-                    "UPDATE indicators SET periodicity = 'annual' WHERE code = '3.7'"
+                    "UPDATE indicators SET periodicity = 'annual' WHERE code = ANY(%s)",
+                    (output_codes,),
                 )
-                log.info("periodicity обновлён на 'annual'")
+                log.info(f"periodicity обновлён на 'annual' для {', '.join(output_codes)}")
 
                 try:
                     log.info("Обновляем materialized view...")
@@ -171,7 +253,7 @@ def main():
                 except Exception as e:
                     log.warning(f"Не удалось обновить view: {e}")
 
-        log.info("=== Готово. Проверьте: http://localhost:3000/chart.html?code=3.7 ===")
+        log.info("=== Готово. Проверьте: http://localhost:3000/chart.html?code=3.7 и ?code=uc_dev_activity ===")
         print(f"Upserted: {_n_rows} rows")
 
     finally:

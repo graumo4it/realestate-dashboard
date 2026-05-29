@@ -226,9 +226,9 @@ CALC_SCHEDULED = [
     {
         "script": "calc_developer_activity.py",
         "schedule": "15 мар, в составе annual_population_dev (retry 15-е кажд. мес.)",
-        "codes": ["3.7"],
-        "formula": "3.7 = 3.3[янв] × 1000 / 1.1",
-        "inputs": "3.3 (жилая площадь МЖД), 1.1 (население)",
+        "codes": ["3.7", "uc_dev_activity"],
+        "formula": "3.7 = 3.3[янв] × 1000 / 1.1; uc_dev_activity = uc_area_total[янв] × 1000 / 1.1",
+        "inputs": "3.3 / uc_area_total (жилая площадь МЖД), 1.1 (население)",
         "trigger": "annual_population_dev → migrate_population завершился",
     },
     {

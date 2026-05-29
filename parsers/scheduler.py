@@ -22,7 +22,7 @@
     1 фев,  08:30 — annual_companion      : calc_annual_companion (1.3.y)
                                             retry 1-е кажд. мес. пока нет новых данных 1.3.y
    15 мар,  08:00 — annual_population_dev : migrate_population (1.1)
-                                            + calc_developer_activity (3.7)
+                                            + calc_developer_activity (3.7, uc_dev_activity)
                                             + calc_demand_activity (5.3)
                                             retry 15-е кажд. мес. пока нет новых данных 1.1
     5 июн,  08:00 — annual_housing_stats  : Rosstat 2.9/2.11/2.12/2.13
@@ -265,7 +265,7 @@ def _do_annual_population_dev():
     log.info("=== annual_population_dev: население (1.1) ===")
     _run_script("migrate_population_1990_2010.py", "--all-years")
 
-    log.info("=== annual_population_dev: calc_developer_activity (3.7) ===")
+    log.info("=== annual_population_dev: calc_developer_activity (3.7, uc_dev_activity) ===")
     _run_script("calc_developer_activity.py")
 
     log.info("=== annual_population_dev: calc_demand_activity (5.3) ===")
@@ -425,7 +425,7 @@ def run_annual_population_dev():
     15 марта, 08:00 UTC.
     Ежегодные расчёты:
       1.1  — численность населения (migrate_population)
-      3.7  — девелоперская активность (calc_developer_activity)
+      3.7, uc_dev_activity — девелоперская активность (calc_developer_activity)
       5.3  — активность спроса (calc_demand_activity)
     Retry: 15-е число каждого следующего месяца пока 1.1 не обновится.
     """

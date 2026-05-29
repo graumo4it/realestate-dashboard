@@ -191,7 +191,7 @@ psql -U postgres -d realestate -f migration/001_init.sql
 
 *Ежегодно:*
 - 1 фев,  08:30 UTC — `annual_companion`: calc_annual_companion (1.3.y); retry 1-е кажд. мес.
-- 15 мар, 08:00 UTC — `annual_population_dev`: migrate_population (1.1) + calc_developer_activity (3.7) + calc_demand_activity (5.3); retry 15-е кажд. мес.
+- 15 мар, 08:00 UTC — `annual_population_dev`: migrate_population (1.1) + calc_developer_activity (3.7, uc_dev_activity) + calc_demand_activity (5.3); retry 15-е кажд. мес.
 - 5 июн,  08:00 UTC — `annual_housing_stats`: Rosstat 2.9/2.11/2.12/2.13 → calc_housing_provision (2.10) → calc_housing_need (5.12–5.15); retry +10д
 
 Все job'ы с retry проверяют `MAX(period_date)` в БД после каждого запуска и добавляют one-shot повтор если данных нет. `CBRParser(group=...)` принимает `'primary'` или `'ihc'`. `RosstatParser(codes=[...])` принимает список кодов для fetch_fedstat.py.
@@ -249,7 +249,7 @@ Companion-индикаторы обновляются автоматически
 | `2.6`, `2.7`, `2.8` Ввод жилья на душу | `calc_housing_per_capita.py` | `monthly_rosstat` (20-е + retry) |
 | `2.10` Обеспеченность жильём | `calc_housing_provision.py` | `annual_housing_stats` (5 июн + retry) |
 | `3.5` Средняя площадь квартир | `calc_avg_apt_area.py` | `day5_domrf_web` (5-е + retry) |
-| `3.7` Девелоперская активность | `calc_developer_activity.py` | `annual_population_dev` (15 мар + retry) |
+| `3.7`, `uc_dev_activity` Девелоперская активность | `calc_developer_activity.py` | `annual_population_dev` (15 мар + retry) |
 | `5.3` Активность спроса | `calc_demand_activity.py` | `annual_population_dev` (15 мар + retry) |
 | `5.9`, `5.9.ma12` Темп продаж квартир | `calc_sales_pace.py` | `day20_domrf` (через domrf.py, 20-е) |
 | `5.10` Доступность (зарплата/цена) | `calc_affordability.py` | `day20_domrf` (20-е + retry) |

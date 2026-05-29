@@ -149,7 +149,7 @@ SCHEDULE = [
         "run_months": [2],
     },
     {   # Население + девелоперская активность — 15 марта
-        "codes": ["1.1","3.7","5.3"],
+        "codes": ["1.1","3.7","uc_dev_activity","5.3"],
         "periodicity": "annual",
         "run_day": 15,
         "run_months": [3],
